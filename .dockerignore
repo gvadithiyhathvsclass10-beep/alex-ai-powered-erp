@@ -1,0 +1,64 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.*
+.yarn
+
+# Build outputs
+.next
+out
+build
+dist
+lib
+
+# Package build outputs
+apps/web/out
+apps/web/.next
+functions/lib
+packages/*/dist
+
+# Prisma
+prisma/migrations
+apps/web/prisma/migrations
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+firebase-debug.log
+
+# Testing
+coverage
+
+# Misc
+*.pem
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

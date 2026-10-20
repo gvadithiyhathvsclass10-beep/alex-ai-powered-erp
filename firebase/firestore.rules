@@ -1,0 +1,409 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isLecturerOrAdmin(userId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(userId)) 
+        && get(/databases/$(database)/documents/users/$(userId)).data.role in ['LECTURER', 'ADMIN'];
+    }
+    
+    function isEnrolledInSubject(userId, subjectId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/subjectEnrollments/$(userId)_$(subjectId)) 
+        && get(/databases/$(database)/documents/subjectEnrollments/$(userId)_$(subjectId)).data.isActive == true;
+    }
+    
+    function isProjectMember(userId, projectId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/projectMembers/$(userId)_$(projectId));
+    }
+    
+    function isNotebookOwner(userId, notebookId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/researchNotebooks/$(notebookId)) 
+        && get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.ownerId == userId;
+    }
+
+    // Users - users can read their own profile, admins can read all
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isLecturerOrAdmin(userId);
+      allow write: if isOwner(userId);
+    }
+
+    // College Memberships
+    match /collegeMemberships/{membershipId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isLecturerOrAdmin(request.auth.uid));
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Subjects
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Subject Enrollments
+    match /subjectEnrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isLecturerOrAdmin(request.auth.uid));
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Lecturer Assignments
+    match /lecturerAssignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Documents
+    match /documents/{documentId} {
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.subjectId != null && isEnrolledInSubject(request.auth.uid, resource.data.subjectId)) ||
+        (resource.data.projectId != null && isProjectMember(request.auth.uid, resource.data.projectId)) ||
+        (resource.data.notebookId != null && isNotebookOwner(request.auth.uid, resource.data.notebookId))
+      );
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isOwner(resource.data.ownerId);
+      allow delete: if isOwner(resource.data.ownerId);
+    }
+
+    // Document Chunks
+    match /documentChunks/{chunkId} {
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/documents/$(resource.data.documentId)) 
+        && (get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.ownerId == request.auth.uid 
+          || (get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.subjectId != null 
+            && isEnrolledInSubject(request.auth.uid, get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.subjectId))
+          || (get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.projectId != null 
+            && isProjectMember(request.auth.uid, get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.projectId))
+        );
+      allow write: if isOwner(get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.ownerId);
+    }
+
+    // Document Processing Jobs
+    match /documentProcessingJobs/{jobId} {
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow write: if isOwner(resource.data.ownerId);
+    }
+
+    // Conversations
+    match /conversations/{conversationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // User Memories
+    match /userMemories/{memoryId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if isSignedIn() && (resource.data.assigneeId == request.auth.uid || resource.data.creatorId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.assigneeId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.assigneeId == request.auth.uid || resource.data.creatorId == request.auth.uid);
+      allow delete: if isOwner(resource.data.creatorId);
+    }
+
+    // Planner Events
+    match /plannerEvents/{eventId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // Notification Preferences
+    match /notificationPreferences/{prefId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // Notification Configs (Admin only)
+    match /notificationConfigs/{configId} {
+      allow read: if isLecturerOrAdmin(request.auth.uid);
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Notification Deliveries
+    match /notificationDeliveries/{deliveryId} {
+      allow read: if isSignedIn() && (resource.data.recipient == request.auth.uid || isLecturerOrAdmin(request.auth.uid));
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // AI Credentials
+    match /aiCredentials/{credentialId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // AI Model Configs
+    match /aiModelConfigs/{configId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOwner(resource.data.userId);
+    }
+
+    // Research Notebooks
+    match /researchNotebooks/{notebookId} {
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.projectId != null && isProjectMember(request.auth.uid, resource.data.projectId))
+      );
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.ownerId);
+
+      match /sources/{sourceId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.ownerId == request.auth.uid ||
+          (get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.projectId != null 
+            && isProjectMember(request.auth.uid, get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.projectId))
+        );
+        allow write: if isOwner(get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.ownerId);
+      }
+
+      match /notes/{noteId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.ownerId == request.auth.uid ||
+          (get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.projectId != null 
+            && isProjectMember(request.auth.uid, get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.projectId))
+        );
+        allow write: if isOwner(get(/databases/$(database)/documents/researchNotebooks/$(notebookId)).data.ownerId);
+      }
+    }
+
+    // Projects
+    match /projects/{projectId} {
+      allow read: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isProjectMember(request.auth.uid, projectId));
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.ownerId);
+
+      match /members/{memberId} {
+        allow read: if isProjectMember(request.auth.uid, projectId);
+        allow write: if isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId);
+      }
+
+      match /mentors/{mentorId} {
+        allow read: if isProjectMember(request.auth.uid, projectId);
+        allow write: if isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId);
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isProjectMember(request.auth.uid, projectId);
+        allow write: if isProjectMember(request.auth.uid, projectId);
+      }
+
+      match /milestones/{milestoneId} {
+        allow read: if isProjectMember(request.auth.uid, projectId);
+        allow write: if isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId);
+      }
+
+      match /discussions/{discussionId} {
+        allow read: if isProjectMember(request.auth.uid, projectId);
+        allow create: if isProjectMember(request.auth.uid, projectId) && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isOwner(resource.data.userId);
+      }
+    }
+
+    // Attendance
+    match /attendanceSessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        isLecturerOrAdmin(request.auth.uid) || 
+        isEnrolledInSubject(request.auth.uid, resource.data.subjectId)
+      );
+      allow create, update: if isLecturerOrAdmin(request.auth.uid);
+      allow delete: if isLecturerOrAdmin(request.auth.uid);
+
+      match /records/{recordId} {
+        allow read: if isSignedIn() && (
+          resource.data.userId == request.auth.uid || 
+          isLecturerOrAdmin(request.auth.uid)
+        );
+        allow create, update: if isLecturerOrAdmin(request.auth.uid);
+      }
+    }
+
+    // Assessments
+    match /assessments/{assessmentId} {
+      allow read: if isSignedIn() && (
+        isLecturerOrAdmin(request.auth.uid) || 
+        (resource.data.isPublished == true && isEnrolledInSubject(request.auth.uid, resource.data.subjectId))
+      );
+      allow create, update, delete: if isLecturerOrAdmin(request.auth.uid);
+
+      match /results/{resultId} {
+        allow read: if isSignedIn() && (
+          resource.data.userId == request.auth.uid || 
+          isLecturerOrAdmin(request.auth.uid)
+        );
+        allow create, update: if isLecturerOrAdmin(request.auth.uid);
+        allow delete: if isLecturerOrAdmin(request.auth.uid);
+      }
+    }
+
+    // Assignments
+    match /assignments/{assignmentId} {
+      allow read: if isSignedIn() && (
+        isLecturerOrAdmin(request.auth.uid) || 
+        (resource.data.isPublished == true && isEnrolledInSubject(request.auth.uid, resource.data.subjectId))
+      );
+      allow create, update, delete: if isLecturerOrAdmin(request.auth.uid);
+
+      match /submissions/{submissionId} {
+        allow read: if isSignedIn() && (
+          resource.data.userId == request.auth.uid || 
+          isLecturerOrAdmin(request.auth.uid)
+        );
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isLecturerOrAdmin(request.auth.uid));
+      }
+    }
+
+    // Student Achievements
+    match /studentAchievements/{achievementId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isLecturerOrAdmin(request.auth.uid));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isLecturerOrAdmin(request.auth.uid) || isOwner(resource.data.userId);
+    }
+
+    // Guardian Contacts
+    match /guardianContacts/{contactId} {
+      allow read: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid || 
+        isLecturerOrAdmin(request.auth.uid)
+      );
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isLecturerOrAdmin(request.auth.uid);
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Subject Resources
+    match /subjectResources/{resourceId} {
+      allow read: if isSignedIn() && (
+        isLecturerOrAdmin(request.auth.uid) || 
+        (resource.data.isPublished == true && isEnrolledInSubject(request.auth.uid, resource.data.subjectId))
+      );
+      allow create, update, delete: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Study Materials
+    match /studyMaterials/{materialId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        (resource.data.subjectId != null && isEnrolledInSubject(request.auth.uid, resource.data.subjectId))
+      );
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Flashcard Decks
+    match /flashcardDecks/{deckId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isEnrolledInSubject(request.auth.uid, resource.data.subjectId));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+
+      match /cards/{cardId} {
+        allow read: if isSignedIn() && get(/databases/$(database)/documents/flashcardDecks/$(deckId)).data.userId == request.auth.uid;
+        allow write: if isOwner(get(/databases/$(database)/documents/flashcardDecks/$(deckId)).data.userId);
+      }
+    }
+
+    // Flashcard Reviews
+    match /flashcardReviews/{reviewId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Mind Maps
+    match /mindMaps/{mindMapId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isEnrolledInSubject(request.auth.uid, resource.data.subjectId));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Diagrams
+    match /diagrams/{diagramId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isEnrolledInSubject(request.auth.uid, resource.data.subjectId));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Quizzes
+    match /quizzes/{quizId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        (resource.data.isPublished == true && resource.data.subjectId != null && isEnrolledInSubject(request.auth.uid, resource.data.subjectId))
+      );
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+
+      match /attempts/{attemptId} {
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // Generated Images
+    match /generatedImages/{imageId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isEnrolledInSubject(request.auth.uid, resource.data.subjectId));
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // Study Plans
+    match /studyPlans/{planId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Academic Years
+    match /academicYears/{yearId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Semesters
+    match /semesters/{semesterId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Courses
+    match /courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Departments
+    match /departments/{departmentId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+
+    // Institutions
+    match /institutions/{institutionId} {
+      allow read: if isSignedIn();
+      allow write: if isLecturerOrAdmin(request.auth.uid);
+    }
+  }
+}
