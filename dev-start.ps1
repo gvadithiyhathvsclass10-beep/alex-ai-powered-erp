@@ -98,8 +98,8 @@ if (-not (Test-Path "node_modules") -or (Get-Item "package.json").LastWriteTime 
 
 # Generate Prisma client
 Write-Host "🔧 Generating Prisma client..." -ForegroundColor Green
-$schemaPath = Join-Path $ProjectRoot 'prisma\schema.prisma'
-$prismaPath = Join-Path $ProjectRoot 'node_modules\.bin\prisma.cmd'
+$schemaPath = Join-Path $ProjectRoot 'apps', 'web', 'prisma', 'schema.prisma'
+$prismaPath = Join-Path $ProjectRoot 'node_modules', '.bin', 'prisma.cmd'
 if (-not (Test-Path -LiteralPath $prismaPath)) { throw "Prisma executable not found at $prismaPath. Run pnpm install --ignore-scripts first." }
 & $prismaPath generate --schema=$schemaPath
 
@@ -116,7 +116,7 @@ try {
 
 if ([int]$userCount -eq 0) {
     Write-Host "🌱 Database is empty. Seeding demo data..." -ForegroundColor Green
-    & (Join-Path $ProjectRoot 'node_modules\.bin\tsx.cmd') (Join-Path $ProjectRoot 'prisma\seed.ts')
+    & (Join-Path $ProjectRoot 'node_modules', '.bin', 'tsx.cmd') (Join-Path $ProjectRoot 'apps', 'web', 'prisma', 'seed.ts')
 } else {
     Write-Host "✅ Database already has $userCount users. Skipping seed." -ForegroundColor Green
 }
@@ -128,6 +128,6 @@ Write-Host "📊 Prisma Studio: pnpm db:studio" -ForegroundColor Cyan
 Write-Host "📋 Demo credentials are in README.md" -ForegroundColor Cyan
 
 # Start the dev server
-$nextPath = Join-Path $ProjectRoot 'node_modules\.bin\next.cmd'
+$nextPath = Join-Path $ProjectRoot 'node_modules', '.bin', 'next.cmd'
 if (-not (Test-Path -LiteralPath $nextPath)) { throw "Next.js executable not found at $nextPath." }
 & $nextPath dev
