@@ -711,15 +711,23 @@ function AddCredentialForm({ onSuccess }: { onSuccess: () => void }) {
     }
     setIsLoading(true)
     try {
-      await fetch("/api/ai/credentials", {
+      const response = await fetch("/api/ai/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider, providerName: providerName || provider, apiKey, models, isDefault }),
       })
+      if (!response.ok) {
+        const result = await response.json().catch(() => null)
+        throw new Error(result?.error || "Failed to add credential")
+      }
       toast({ title: "Credential added successfully" })
       onSuccess()
     } catch (error) {
-      toast({ title: "Error", description: "Failed to add credential", variant: "destructive" })
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add credential",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
