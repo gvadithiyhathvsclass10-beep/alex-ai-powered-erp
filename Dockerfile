@@ -64,9 +64,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
 # Copy standalone output
 COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
-COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/public ./public
-COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/prisma ./prisma
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/prisma ./apps/web/prisma
 
 # Copy node_modules for Prisma and other deps
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
@@ -94,9 +94,9 @@ RUN apk add --no-cache openssl tesseract-ocr
 
 # Copy built application
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./
-COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/static ./.next/static
-COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./public
-COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./prisma
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./apps/web/public
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./apps/web/prisma
 COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
 
 # Copy worker entry point
