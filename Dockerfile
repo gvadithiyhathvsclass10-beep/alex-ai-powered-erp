@@ -12,7 +12,12 @@
 FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+# Prisma is used during the Next.js build to prerender authenticated-aware
+# routes. Install OpenSSL in every build stage so Prisma selects the Alpine
+# OpenSSL 3 engine, matching the production runtime.
+RUN apk add --no-cache openssl \
+ && corepack enable \
+ && corepack prepare pnpm@9.0.0 --activate
 WORKDIR /app
 
 # -----------------------------------------------------------------------------
