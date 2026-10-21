@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -143,27 +143,27 @@ enum AIProviderType {
 }
 
 model Institution {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  domain      String?  @unique
-  address     String?
-  phone       String?
-  email       String?
-  logoUrl     String?
-  settings    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  domain    String?  @unique
+  address   String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  departments     Department[]
-  courses         Course[]
-  academicYears   AcademicYear[]
-  semesters       Semester[]
-  users           CollegeMembership[]
-  subjects        Subject[]
-  guardianContacts GuardianContact[]
+  departments         Department[]
+  courses             Course[]
+  academicYears       AcademicYear[]
+  semesters           Semester[]
+  users               CollegeMembership[]
+  subjects            Subject[]
+  guardianContacts    GuardianContact[]
   notificationConfigs NotificationConfig[]
-  auditLogs       AuditLog[]
+  auditLogs           AuditLog[]
 
   @@map("institutions")
 }
@@ -177,10 +177,10 @@ model Department {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  institution   Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  courses       Course[]
-  subjects      Subject[]
-  users         CollegeMembership[]
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  courses     Course[]
+  subjects    Subject[]
+  users       CollegeMembership[]
 
   @@unique([institutionId, code])
   @@map("departments")
@@ -197,10 +197,10 @@ model Course {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  institution   Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  department    Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  semesters     Semester[]
-  users         CollegeMembership[]
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  department  Department          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  semesters   Semester[]
+  users       CollegeMembership[]
 
   @@unique([institutionId, code])
   @@map("courses")
@@ -216,117 +216,135 @@ model AcademicYear {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  institution   Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  semesters     Semester[]
-  memberships   CollegeMembership[]
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  semesters   Semester[]
+  memberships CollegeMembership[]
 
   @@unique([institutionId, name])
   @@map("academic_years")
 }
 
 model Semester {
-  id            String   @id @default(cuid())
-  name          String
-  number        Int
-  institutionId String
+  id             String   @id @default(cuid())
+  name           String
+  number         Int
+  institutionId  String
   academicYearId String
-  courseId      String
-  startDate     DateTime
-  endDate       DateTime
-  isActive      Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  courseId       String
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  institution   Institution     @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  academicYear  AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  subjects      Subject[]
-  enrollments   SubjectEnrollment[]
+  institution        Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subjects           Subject[]
+  enrollments        SubjectEnrollment[]
   attendanceSessions AttendanceSession[]
-  assessments   Assessment[]
-  memberships   CollegeMembership[]
+  assessments        Assessment[]
+  memberships        CollegeMembership[]
 
   @@unique([institutionId, academicYearId, courseId, number])
   @@map("semesters")
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String    @id @default(cuid())
+  email         String    @unique
   emailVerified DateTime?
   passwordHash  String?
   firstName     String
   lastName      String
   avatarUrl     String?
-  role          UserRole @default(STUDENT)
-  isActive      Boolean  @default(true)
+  role          UserRole  @default(STUDENT)
+  isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  memberships      CollegeMembership[]
-  documents        Document[]          @relation("DocumentOwner")
-  processedDocs    Document[]          @relation("DocumentProcessor")
-  conversations    Conversation[]
-  messages         Message[]           @relation("MessageSender")
-  memories         UserMemory[]
-  tasks            Task[]              @relation("TaskAssignee")
-  createdTasks     Task[]              @relation("TaskCreator")
-  plannerEvents    PlannerEvent[]
-  notifications    Notification[]
-  notificationPrefs NotificationPreference[]
-  aiCredentials    AICredential[]
-  researchNotebooks ResearchNotebook[] @relation("NotebookOwner")
-  researchNotes    ResearchNote[]
-  projects         ProjectMember[]
-  projectTasks     ProjectTask[]       @relation("ProjectTaskAssignee")
-  attendanceRecords AttendanceRecord[]
-  assessments      AssessmentResult[]
-  assignments      AssignmentSubmission[]
-  achievements     StudentAchievement[]
-  guardianContacts GuardianContact[]   @relation("GuardianStudent")
-  auditLogs        AuditLog[]          @relation("AuditLogUser")
-  subjectResources SubjectResource[]   @relation("ResourceUploader")
-  assignedSubjects LecturerAssignment[]
-  projectMentorships ProjectMentor[]   @relation("ProjectMentorships")
-  studyMaterials   StudyMaterial[]
-  flashcardDecks   FlashcardDeck[]
-  mindMaps         MindMap[]
-  diagrams         Diagram[]
-  quizzes          Quiz[]
-  generatedImages  GeneratedImage[]
-  subjectEnrollments SubjectEnrollment[] @relation("SubjectEnrollmentUser")
-  projectOwned     Project[]           @relation("ProjectOwner")
-  projectTasksCreated ProjectTask[]    @relation("ProjectTaskCreator")
-  projectDiscussions ProjectDiscussion[] @relation("ProjectDiscussionUser")
+  memberships         CollegeMembership[]
+  documents           Document[]               @relation("DocumentOwner")
+  processedDocs       Document[]               @relation("DocumentProcessor")
+  conversations       Conversation[]
+  messages            Message[]                @relation("MessageSender")
+  memories            UserMemory[]
+  tasks               Task[]                   @relation("TaskAssignee")
+  createdTasks        Task[]                   @relation("TaskCreator")
+  plannerEvents       PlannerEvent[]
+  notifications       Notification[]
+  notificationPrefs   NotificationPreference[]
+  aiCredentials       AICredential[]
+  researchNotebooks   ResearchNotebook[]       @relation("NotebookOwner")
+  researchNotes       ResearchNote[]
+  projects            ProjectMember[]
+  projectTasks        ProjectTask[]            @relation("ProjectTaskAssignee")
+  attendanceRecords   AttendanceRecord[]
+  assessments         AssessmentResult[]
+  assignments         AssignmentSubmission[]
+  achievements        StudentAchievement[]
+  guardianContacts    GuardianContact[]        @relation("GuardianStudent")
+  auditLogs           AuditLog[]               @relation("AuditLogUser")
+  subjectResources    SubjectResource[]        @relation("ResourceUploader")
+  assignedSubjects    LecturerAssignment[]
+  projectMentorships  ProjectMentor[]          @relation("ProjectMentorships")
+  studyMaterials      StudyMaterial[]
+  flashcardDecks      FlashcardDeck[]
+  mindMaps            MindMap[]
+  diagrams            Diagram[]
+  quizzes             Quiz[]
+  generatedImages     GeneratedImage[]
+  subjectEnrollments  SubjectEnrollment[]      @relation("SubjectEnrollmentUser")
+  projectOwned        Project[]                @relation("ProjectOwner")
+  projectTasksCreated ProjectTask[]            @relation("ProjectTaskCreator")
+  projectDiscussions  ProjectDiscussion[]      @relation("ProjectDiscussionUser")
+  dropboxConnection   DropboxConnection?
 
   @@map("users")
 }
 
-model CollegeMembership {
-  id            String           @id @default(cuid())
-  userId        String
-  institutionId String
-  departmentId  String?
-  courseId      String?
-  semesterId    String?
-  academicYearId String?
-  role          UserRole
-  status        MembershipStatus @default(PENDING)
-  studentId     String?          @unique
-  employeeId    String?          @unique
-  enrolledAt    DateTime         @default(now())
-  verifiedAt    DateTime?
-  verifiedBy    String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+model DropboxConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  accountEmail String?
+  accountName  String?
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  rootPath     String    @default("")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  institution   Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  department    Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  course        Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  semester      Semester?        @relation(fields: [semesterId], references: [id], onDelete: SetNull)
-  academicYear  AcademicYear?    @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("dropbox_connections")
+}
+
+model CollegeMembership {
+  id             String           @id @default(cuid())
+  userId         String
+  institutionId  String
+  departmentId   String?
+  courseId       String?
+  semesterId     String?
+  academicYearId String?
+  role           UserRole
+  status         MembershipStatus @default(PENDING)
+  studentId      String?          @unique
+  employeeId     String?          @unique
+  enrolledAt     DateTime         @default(now())
+  verifiedAt     DateTime?
+  verifiedBy     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution  Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  course       Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  semester     Semester?     @relation(fields: [semesterId], references: [id], onDelete: SetNull)
+  academicYear AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
 
   @@unique([userId, institutionId])
   @@map("college_memberships")
@@ -346,54 +364,54 @@ model Subject {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  institution   Institution           @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  department    Department            @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  semester      Semester              @relation(fields: [semesterId], references: [id], onDelete: Cascade)
-  enrollments   SubjectEnrollment[]
-  lecturers     LecturerAssignment[]
-  resources     SubjectResource[]
+  institution        Institution          @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  department         Department           @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  semester           Semester             @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  enrollments        SubjectEnrollment[]
+  lecturers          LecturerAssignment[]
+  resources          SubjectResource[]
   attendanceSessions AttendanceSession[]
-  assessments   Assessment[]
-  assignments   Assignment[]
-  documents     Document[]            @relation("SubjectDocuments")
-  plannerEvents PlannerEvent[]
-  studyMaterials StudyMaterial[]
-  flashcardDecks FlashcardDeck[]
-  mindMaps      MindMap[]
-  diagrams      Diagram[]
-  quizzes       Quiz[]
-  generatedImages GeneratedImage[]
+  assessments        Assessment[]
+  assignments        Assignment[]
+  documents          Document[]           @relation("SubjectDocuments")
+  plannerEvents      PlannerEvent[]
+  studyMaterials     StudyMaterial[]
+  flashcardDecks     FlashcardDeck[]
+  mindMaps           MindMap[]
+  diagrams           Diagram[]
+  quizzes            Quiz[]
+  generatedImages    GeneratedImage[]
 
   @@unique([institutionId, semesterId, code])
   @@map("subjects")
 }
 
 model SubjectEnrollment {
-  id          String   @id @default(cuid())
-  userId      String
-  subjectId   String
-  semesterId  String
-  enrolledAt  DateTime @default(now())
-  isActive    Boolean  @default(true)
+  id         String   @id @default(cuid())
+  userId     String
+  subjectId  String
+  semesterId String
+  enrolledAt DateTime @default(now())
+  isActive   Boolean  @default(true)
 
-  user        User     @relation("SubjectEnrollmentUser", fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  semester    Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  user     User     @relation("SubjectEnrollmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  semester Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
 
   @@unique([userId, subjectId])
   @@map("subject_enrollments")
 }
 
 model LecturerAssignment {
-  id          String   @id @default(cuid())
-  userId      String
-  subjectId   String
-  assignedAt  DateTime @default(now())
-  assignedBy  String?
-  isPrimary   Boolean  @default(false)
+  id         String   @id @default(cuid())
+  userId     String
+  subjectId  String
+  assignedAt DateTime @default(now())
+  assignedBy String?
+  isPrimary  Boolean  @default(false)
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, subjectId])
   @@map("lecturer_assignments")
@@ -423,20 +441,20 @@ model Document {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  owner         User           @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  processor     User?          @relation("DocumentProcessor", fields: [processorId], references: [id], onDelete: SetNull)
-  subject       Subject?       @relation("SubjectDocuments", fields: [subjectId], references: [id], onDelete: SetNull)
-  project       Project?       @relation("ProjectDocuments", fields: [projectId], references: [id], onDelete: SetNull)
-  notebook      ResearchNotebook? @relation("NotebookDocuments", fields: [notebookId], references: [id], onDelete: SetNull)
-  chunks        DocumentChunk[]
-  processingJobs DocumentProcessingJob[]
-  versions      DocumentVersion[]
-  studyMaterials StudyMaterial[] @relation("StudyMaterialSourceDoc")
-  flashcardDecks FlashcardDeck[] @relation("FlashcardDeckSourceDoc")
-  mindMaps      MindMap[]       @relation("MindMapSourceDoc")
-  diagrams      Diagram[]       @relation("DiagramSourceDoc")
-  quizzes       Quiz[]          @relation("QuizSourceDoc")
-  generatedImages GeneratedImage[] @relation("GeneratedImageSourceDoc")
+  owner           User                    @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  processor       User?                   @relation("DocumentProcessor", fields: [processorId], references: [id], onDelete: SetNull)
+  subject         Subject?                @relation("SubjectDocuments", fields: [subjectId], references: [id], onDelete: SetNull)
+  project         Project?                @relation("ProjectDocuments", fields: [projectId], references: [id], onDelete: SetNull)
+  notebook        ResearchNotebook?       @relation("NotebookDocuments", fields: [notebookId], references: [id], onDelete: SetNull)
+  chunks          DocumentChunk[]
+  processingJobs  DocumentProcessingJob[]
+  versions        DocumentVersion[]
+  studyMaterials  StudyMaterial[]         @relation("StudyMaterialSourceDoc")
+  flashcardDecks  FlashcardDeck[]         @relation("FlashcardDeckSourceDoc")
+  mindMaps        MindMap[]               @relation("MindMapSourceDoc")
+  diagrams        Diagram[]               @relation("DiagramSourceDoc")
+  quizzes         Quiz[]                  @relation("QuizSourceDoc")
+  generatedImages GeneratedImage[]        @relation("GeneratedImageSourceDoc")
   researchSources ResearchSource[]
 
   @@index([ownerId])
@@ -448,35 +466,35 @@ model Document {
 }
 
 model DocumentVersion {
-  id            String   @id @default(cuid())
-  documentId    String
-  version       Int
-  fileName      String
-  fileSize      BigInt
-  storagePath   String
-  checksum      String
-  createdBy     String
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  documentId  String
+  version     Int
+  fileName    String
+  fileSize    BigInt
+  storagePath String
+  checksum    String
+  createdBy   String
+  createdAt   DateTime @default(now())
 
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, version])
   @@map("document_versions")
 }
 
 model DocumentChunk {
-  id            String   @id @default(cuid())
-  documentId    String
-  content       String   @db.Text
-  chunkIndex    Int
-  pageNumber    Int?
-  sectionTitle  String?
-  tokenCount    Int
-  embedding     Bytes?
-  metadata      Json?
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  documentId   String
+  content      String   @db.Text
+  chunkIndex   Int
+  pageNumber   Int?
+  sectionTitle String?
+  tokenCount   Int
+  embedding    Bytes?
+  metadata     Json?
+  createdAt    DateTime @default(now())
 
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
   @@index([chunkIndex])
@@ -484,18 +502,18 @@ model DocumentChunk {
 }
 
 model DocumentProcessingJob {
-  id            String   @id @default(cuid())
-  documentId    String
-  step          String
-  status        DocumentStatus
-  startedAt     DateTime?
-  completedAt   DateTime?
-  errorMessage  String?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String         @id @default(cuid())
+  documentId   String
+  step         String
+  status       DocumentStatus
+  startedAt    DateTime?
+  completedAt  DateTime?
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
   @@index([status])
@@ -503,19 +521,19 @@ model DocumentProcessingJob {
 }
 
 model Conversation {
-  id          String   @id @default(cuid())
-  title       String?
-  userId      String
-  projectId   String?
-  notebookId  String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  title      String?
+  userId     String
+  projectId  String?
+  notebookId String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  notebook    ResearchNotebook? @relation("NotebookConversations", fields: [notebookId], references: [id], onDelete: SetNull)
-  messages    Message[]
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  notebook ResearchNotebook? @relation("NotebookConversations", fields: [notebookId], references: [id], onDelete: SetNull)
+  messages Message[]
 
   @@index([userId])
   @@index([projectId])
@@ -524,18 +542,18 @@ model Conversation {
 }
 
 model Message {
-  id            String   @id @default(cuid())
+  id             String   @id @default(cuid())
   conversationId String
-  senderId      String
-  role          String
-  content       String   @db.Text
-  metadata      Json?
-  toolCalls     Json?
-  toolResults   Json?
-  createdAt     DateTime @default(now())
+  senderId       String
+  role           String
+  content        String   @db.Text
+  metadata       Json?
+  toolCalls      Json?
+  toolResults    Json?
+  createdAt      DateTime @default(now())
 
-  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender        User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([senderId])
@@ -543,19 +561,19 @@ model Message {
 }
 
 model UserMemory {
-  id          String        @id @default(cuid())
-  userId      String
-  category    MemoryCategory
-  key         String
-  value       String        @db.Text
-  confidence  Float         @default(1.0)
-  source      String?
-  isVerified  Boolean       @default(false)
-  expiresAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id         String         @id @default(cuid())
+  userId     String
+  category   MemoryCategory
+  key        String
+  value      String         @db.Text
+  confidence Float          @default(1.0)
+  source     String?
+  isVerified Boolean        @default(false)
+  expiresAt  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category, key])
   @@index([userId, category])
@@ -563,21 +581,21 @@ model UserMemory {
 }
 
 model Task {
-  id          String       @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   description String?
   assigneeId  String
   creatorId   String
   dueDate     DateTime?
   completedAt DateTime?
-  isCompleted Boolean      @default(false)
-  priority    Int          @default(0)
+  isCompleted Boolean   @default(false)
+  priority    Int       @default(0)
   metadata    Json?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  assignee    User         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
-  creator     User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee      User           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  creator       User           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   plannerEvents PlannerEvent[]
 
   @@index([assigneeId])
@@ -601,9 +619,9 @@ model PlannerEvent {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([userId, startTime])
   @@index([eventType])
@@ -611,19 +629,19 @@ model PlannerEvent {
 }
 
 model Notification {
-  id          String              @id @default(cuid())
-  userId      String
-  category    NotificationCategory
-  title       String
-  message     String
-  referenceId String?
+  id            String               @id @default(cuid())
+  userId        String
+  category      NotificationCategory
+  title         String
+  message       String
+  referenceId   String?
   referenceType String?
-  isRead      Boolean             @default(false)
-  readAt      DateTime?
-  metadata    Json?
-  createdAt   DateTime            @default(now())
+  isRead        Boolean              @default(false)
+  readAt        DateTime?
+  metadata      Json?
+  createdAt     DateTime             @default(now())
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([createdAt])
@@ -631,47 +649,47 @@ model Notification {
 }
 
 model NotificationPreference {
-  id              String               @id @default(cuid())
-  userId          String
-  category        NotificationCategory
-  inAppEnabled    Boolean              @default(true)
-  emailEnabled    Boolean              @default(false)
-  pushEnabled     Boolean              @default(false)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id           String               @id @default(cuid())
+  userId       String
+  category     NotificationCategory
+  inAppEnabled Boolean              @default(true)
+  emailEnabled Boolean              @default(false)
+  pushEnabled  Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category])
   @@map("notification_preferences")
 }
 
 model NotificationConfig {
-  id            String   @id @default(cuid())
-  institutionId String
-  provider      String
+  id             String   @id @default(cuid())
+  institutionId  String
+  provider       String
   providerConfig Json
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
 
   @@unique([institutionId, provider])
   @@map("notification_configs")
 }
 
 model NotificationDelivery {
-  id            String   @id @default(cuid())
-  notificationId String
-  provider      String
-  recipient     String
-  status        String
+  id               String    @id @default(cuid())
+  notificationId   String
+  provider         String
+  recipient        String
+  status           String
   providerResponse Json?
-  sentAt        DateTime?
-  deliveredAt   DateTime?
-  errorMessage  String?
-  createdAt     DateTime @default(now())
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
 
   @@index([notificationId])
   @@index([status])
@@ -679,37 +697,37 @@ model NotificationDelivery {
 }
 
 model AICredential {
-  id            String         @id @default(cuid())
-  userId        String
-  provider      AIProviderType
-  providerName  String
-  encryptedKey  String
-  keyHash       String
-  isActive      Boolean        @default(true)
-  isDefault     Boolean        @default(false)
-  models        Json?
-  usageLimit    Int?
-  usageCount    Int            @default(0)
-  lastUsedAt    DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id           String         @id @default(cuid())
+  userId       String
+  provider     AIProviderType
+  providerName String
+  encryptedKey String
+  keyHash      String
+  isActive     Boolean        @default(true)
+  isDefault    Boolean        @default(false)
+  models       Json?
+  usageLimit   Int?
+  usageCount   Int            @default(0)
+  lastUsedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, provider])
   @@map("ai_credentials")
 }
 
 model AIModelConfig {
-  id            String   @id @default(cuid())
-  userId        String
-  provider      AIProviderType
-  modelId       String
-  taskType      String
-  isDefault     Boolean  @default(false)
-  parameters    Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         String         @id @default(cuid())
+  userId     String
+  provider   AIProviderType
+  modelId    String
+  taskType   String
+  isDefault  Boolean        @default(false)
+  parameters Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@unique([userId, provider, modelId, taskType])
   @@index([userId, taskType])
@@ -726,12 +744,12 @@ model ResearchNotebook {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner       User     @relation("NotebookOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  project     Project? @relation("ProjectResearchNotebooks", fields: [projectId], references: [id], onDelete: SetNull)
-  sources     ResearchSource[]
-  notes       ResearchNote[]
-  conversations Conversation[] @relation("NotebookConversations")
-  documents   Document[] @relation("NotebookDocuments")
+  owner         User             @relation("NotebookOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  project       Project?         @relation("ProjectResearchNotebooks", fields: [projectId], references: [id], onDelete: SetNull)
+  sources       ResearchSource[]
+  notes         ResearchNote[]
+  conversations Conversation[]   @relation("NotebookConversations")
+  documents     Document[]       @relation("NotebookDocuments")
 
   @@index([ownerId])
   @@index([projectId])
@@ -739,38 +757,38 @@ model ResearchNotebook {
 }
 
 model ResearchSource {
-  id            String   @id @default(cuid())
-  notebookId    String
-  documentId    String?
-  title         String
-  authors       Json?
+  id              String   @id @default(cuid())
+  notebookId      String
+  documentId      String?
+  title           String
+  authors         Json?
   publicationYear Int?
-  doi           String?
-  url           String?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  doi             String?
+  url             String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  notebook      ResearchNotebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
-  document      Document?        @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  notebook ResearchNotebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  document Document?        @relation(fields: [documentId], references: [id], onDelete: SetNull)
 
   @@index([notebookId])
   @@map("research_sources")
 }
 
 model ResearchNote {
-  id            String   @id @default(cuid())
-  notebookId    String
-  userId        String
-  title         String
-  content       String   @db.Text
-  sourceIds     String[]
-  tags          String[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         String   @id @default(cuid())
+  notebookId String
+  userId     String
+  title      String
+  content    String   @db.Text
+  sourceIds  String[]
+  tags       String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  notebook      ResearchNotebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notebook ResearchNotebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([notebookId])
   @@index([userId])
@@ -778,28 +796,28 @@ model ResearchNote {
 }
 
 model Project {
-  id            String       @id @default(cuid())
-  title         String
-  description   String?
-  category      String?
-  tags          String[]
-  ownerId       String
-  status        ProjectStatus @default(PLANNING)
-  startDate     DateTime?
-  endDate       DateTime?
-  metadata      Json?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  category    String?
+  tags        String[]
+  ownerId     String
+  status      ProjectStatus @default(PLANNING)
+  startDate   DateTime?
+  endDate     DateTime?
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  owner         User         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members       ProjectMember[]
-  mentors       ProjectMentor[]
-  tasks         ProjectTask[]
-  milestones    ProjectMilestone[]
-  discussions   ProjectDiscussion[]
-  documents     Document[]   @relation("ProjectDocuments")
-  conversations Conversation[]
-  researchNotebooks ResearchNotebook[] @relation("ProjectResearchNotebooks")
+  owner             User                @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members           ProjectMember[]
+  mentors           ProjectMentor[]
+  tasks             ProjectTask[]
+  milestones        ProjectMilestone[]
+  discussions       ProjectDiscussion[]
+  documents         Document[]          @relation("ProjectDocuments")
+  conversations     Conversation[]
+  researchNotebooks ResearchNotebook[]  @relation("ProjectResearchNotebooks")
 
   @@index([ownerId])
   @@index([status])
@@ -807,52 +825,52 @@ model Project {
 }
 
 model ProjectMember {
-  id          String      @id @default(cuid())
-  projectId   String
-  userId      String
-  role        ProjectRole @default(MEMBER)
-  joinedAt    DateTime    @default(now())
-  invitedBy   String?
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+  invitedBy String?
 
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@map("project_members")
 }
 
 model ProjectMentor {
-  id          String   @id @default(cuid())
-  projectId   String
-  userId      String
-  assignedAt  DateTime @default(now())
-  assignedBy  String?
+  id         String   @id @default(cuid())
+  projectId  String
+  userId     String
+  assignedAt DateTime @default(now())
+  assignedBy String?
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User     @relation("ProjectMentorships", fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("ProjectMentorships", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@map("project_mentors")
 }
 
 model ProjectTask {
-  id            String   @id @default(cuid())
-  projectId     String
-  title         String
-  description   String?
-  assigneeId    String?
-  creatorId     String
-  status        String   @default("TODO")
-  priority      Int      @default(0)
-  dueDate       DateTime?
-  completedAt   DateTime?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String    @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  assigneeId  String?
+  creatorId   String
+  status      String    @default("TODO")
+  priority    Int       @default(0)
+  dueDate     DateTime?
+  completedAt DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee      User?    @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator       User     @relation("ProjectTaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator  User    @relation("ProjectTaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([assigneeId])
@@ -861,18 +879,18 @@ model ProjectTask {
 }
 
 model ProjectMilestone {
-  id            String   @id @default(cuid())
-  projectId     String
-  title         String
-  description   String?
-  dueDate       DateTime
-  completedAt   DateTime?
-  isCompleted   Boolean  @default(false)
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String    @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  dueDate     DateTime
+  completedAt DateTime?
+  isCompleted Boolean   @default(false)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([dueDate])
@@ -880,19 +898,19 @@ model ProjectMilestone {
 }
 
 model ProjectDiscussion {
-  id            String   @id @default(cuid())
-  projectId     String
-  userId        String
-  title         String
-  content       String   @db.Text
-  parentId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  title     String
+  content   String   @db.Text
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user          User     @relation("ProjectDiscussionUser", fields: [userId], references: [id], onDelete: Cascade)
-  parent        ProjectDiscussion? @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies       ProjectDiscussion[] @relation("DiscussionReplies")
+  project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User                @relation("ProjectDiscussionUser", fields: [userId], references: [id], onDelete: Cascade)
+  parent  ProjectDiscussion?  @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies ProjectDiscussion[] @relation("DiscussionReplies")
 
   @@index([projectId])
   @@index([parentId])
@@ -900,20 +918,20 @@ model ProjectDiscussion {
 }
 
 model AttendanceSession {
-  id            String   @id @default(cuid())
-  subjectId     String
-  semesterId    String
-  date          DateTime
-  period        Int
-  topic         String?
-  conductedBy   String
-  isCancelled   Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  subjectId   String
+  semesterId  String
+  date        DateTime
+  period      Int
+  topic       String?
+  conductedBy String
+  isCancelled Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  subject       Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  semester      Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
-  records       AttendanceRecord[]
+  subject  Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  semester Semester           @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  records  AttendanceRecord[]
 
   @@unique([subjectId, date, period])
   @@index([semesterId, date])
@@ -921,18 +939,18 @@ model AttendanceSession {
 }
 
 model AttendanceRecord {
-  id            String           @id @default(cuid())
-  sessionId     String
-  userId        String
-  status        AttendanceStatus
-  markedBy      String
-  markedAt      DateTime         @default(now())
-  notes         String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id        String           @id @default(cuid())
+  sessionId String
+  userId    String
+  status    AttendanceStatus
+  markedBy  String
+  markedAt  DateTime         @default(now())
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  session       AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
   @@index([userId])
@@ -940,24 +958,24 @@ model AttendanceRecord {
 }
 
 model Assessment {
-  id            String         @id @default(cuid())
-  subjectId     String
-  semesterId    String
-  name          String
-  type          AssessmentType
-  maxMarks      Int
-  weight        Float          @default(1.0)
+  id             String         @id @default(cuid())
+  subjectId      String
+  semesterId     String
+  name           String
+  type           AssessmentType
+  maxMarks       Int
+  weight         Float          @default(1.0)
   assessmentDate DateTime
-  description   String?
-  isPublished   Boolean        @default(false)
-  publishedAt   DateTime?
-  createdBy     String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  description    String?
+  isPublished    Boolean        @default(false)
+  publishedAt    DateTime?
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  subject       Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  semester      Semester       @relation(fields: [semesterId], references: [id], onDelete: Cascade)
-  results       AssessmentResult[]
+  subject  Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  semester Semester           @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  results  AssessmentResult[]
 
   @@index([subjectId])
   @@index([semesterId])
@@ -965,20 +983,20 @@ model Assessment {
 }
 
 model AssessmentResult {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   assessmentId  String
   userId        String
   marksObtained Float
   feedback      String?
   gradedBy      String?
   gradedAt      DateTime?
-  isPublished   Boolean  @default(false)
+  isPublished   Boolean   @default(false)
   publishedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([assessmentId, userId])
   @@index([userId])
@@ -986,26 +1004,26 @@ model AssessmentResult {
 }
 
 model Assignment {
-  id            String   @id @default(cuid())
-  subjectId     String
-  title         String
-  description   String?
-  instructions  String?
-  maxMarks      Int
-  weight        Float    @default(1.0)
-  assignedDate  DateTime
-  dueDate       DateTime
-  allowedFormats String[]
-  allowResubmission Boolean @default(false)
-  maxSubmissions Int     @default(1)
-  isPublished   Boolean  @default(false)
-  createdBy     String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  subjectId         String
+  title             String
+  description       String?
+  instructions      String?
+  maxMarks          Int
+  weight            Float    @default(1.0)
+  assignedDate      DateTime
+  dueDate           DateTime
+  allowedFormats    String[]
+  allowResubmission Boolean  @default(false)
+  maxSubmissions    Int      @default(1)
+  isPublished       Boolean  @default(false)
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  subject       Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  submissions   AssignmentSubmission[]
-  attachments   AssignmentAttachment[]
+  subject     Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions AssignmentSubmission[]
+  attachments AssignmentAttachment[]
 
   @@index([subjectId])
   @@index([dueDate])
@@ -1013,37 +1031,37 @@ model Assignment {
 }
 
 model AssignmentAttachment {
-  id            String   @id @default(cuid())
-  assignmentId  String
-  fileName      String
-  storagePath   String
-  fileSize      BigInt
-  mimeType      String
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  assignmentId String
+  fileName     String
+  storagePath  String
+  fileSize     BigInt
+  mimeType     String
+  createdAt    DateTime @default(now())
 
-  assignment    Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
   @@map("assignment_attachments")
 }
 
 model AssignmentSubmission {
-  id            String            @id @default(cuid())
-  assignmentId  String
-  userId        String
-  status        AssignmentStatus  @default(DRAFT)
-  submissionNumber Int           @default(1)
-  content       String?
-  submittedAt   DateTime?
-  gradedAt      DateTime?
-  marksObtained Float?
-  feedback      String?
-  gradedBy      String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id               String           @id @default(cuid())
+  assignmentId     String
+  userId           String
+  status           AssignmentStatus @default(DRAFT)
+  submissionNumber Int              @default(1)
+  content          String?
+  submittedAt      DateTime?
+  gradedAt         DateTime?
+  marksObtained    Float?
+  feedback         String?
+  gradedBy         String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  assignment    Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attachments   SubmissionAttachment[]
+  assignment  Assignment             @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments SubmissionAttachment[]
 
   @@unique([assignmentId, userId, submissionNumber])
   @@index([userId])
@@ -1052,38 +1070,38 @@ model AssignmentSubmission {
 }
 
 model SubmissionAttachment {
-  id              String @id @default(cuid())
-  submissionId    String
-  fileName        String
-  storagePath     String
-  fileSize        BigInt
-  mimeType        String
-  createdAt       DateTime @default(now())
+  id           String   @id @default(cuid())
+  submissionId String
+  fileName     String
+  storagePath  String
+  fileSize     BigInt
+  mimeType     String
+  createdAt    DateTime @default(now())
 
-  submission      AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@map("submission_attachments")
 }
 
 model StudentAchievement {
-  id            String              @id @default(cuid())
-  userId        String
-  title         String
-  category      AchievementCategory
-  organization  String?
-  startDate     DateTime?
-  endDate       DateTime?
-  description   String?
-  status        String              @default("COMPLETED")
-  verificationStatus String         @default("UNVERIFIED")
-  verifiedBy    String?
-  verifiedAt    DateTime?
-  certificateUrl String?
-  metadata      Json?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id                 String              @id @default(cuid())
+  userId             String
+  title              String
+  category           AchievementCategory
+  organization       String?
+  startDate          DateTime?
+  endDate            DateTime?
+  description        String?
+  status             String              @default("COMPLETED")
+  verificationStatus String              @default("UNVERIFIED")
+  verifiedBy         String?
+  verifiedAt         DateTime?
+  certificateUrl     String?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([category])
@@ -1092,7 +1110,7 @@ model StudentAchievement {
 }
 
 model GuardianContact {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   institutionId String
   studentId     String
   name          String
@@ -1100,14 +1118,14 @@ model GuardianContact {
   email         String?
   phone         String?
   whatsapp      String?
-  isPrimary     Boolean  @default(false)
-  consentGiven  Boolean  @default(false)
+  isPrimary     Boolean   @default(false)
+  consentGiven  Boolean   @default(false)
   consentAt     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  student       User        @relation("GuardianStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     User        @relation("GuardianStudent", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([institutionId, studentId, email])
   @@unique([institutionId, studentId, phone])
@@ -1128,8 +1146,8 @@ model AuditLog {
   userAgent     String?
   createdAt     DateTime @default(now())
 
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  user          User?       @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  user        User?       @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([institutionId])
   @@index([userId])
@@ -1139,24 +1157,24 @@ model AuditLog {
 }
 
 model SubjectResource {
-  id            String   @id @default(cuid())
-  subjectId     String
-  title         String
-  description   String?
-  category      String
-  fileName      String
-  storagePath   String
-  fileSize      BigInt
-  mimeType      String
-  version       Int      @default(1)
-  isPublished   Boolean  @default(false)
-  publishedAt   DateTime?
-  uploadedBy    String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String    @id @default(cuid())
+  subjectId   String
+  title       String
+  description String?
+  category    String
+  fileName    String
+  storagePath String
+  fileSize    BigInt
+  mimeType    String
+  version     Int       @default(1)
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  uploadedBy  String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  subject       Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  uploader      User     @relation("ResourceUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
+  subject  Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  uploader User    @relation("ResourceUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
 
   @@index([subjectId])
   @@index([isPublished])
@@ -1164,22 +1182,22 @@ model SubjectResource {
 }
 
 model StudyMaterial {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String
-  content       String   @db.Text
-  type          String
-  sourceDocId   String?
-  subjectId     String?
-  topic         String?
-  tags          String[]
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  content     String   @db.Text
+  type        String
+  sourceDocId String?
+  subjectId   String?
+  topic       String?
+  tags        String[]
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceDoc     Document? @relation("StudyMaterialSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDoc Document? @relation("StudyMaterialSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([subjectId])
@@ -1188,20 +1206,20 @@ model StudyMaterial {
 }
 
 model FlashcardDeck {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String
-  description   String?
-  subjectId     String?
-  sourceDocId   String?
-  algorithm     String   @default("SM2")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  subjectId   String?
+  sourceDocId String?
+  algorithm   String   @default("SM2")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  sourceDoc     Document? @relation("FlashcardDeckSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  cards         Flashcard[]
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   Subject?    @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  sourceDoc Document?   @relation("FlashcardDeckSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  cards     Flashcard[]
 
   @@index([userId])
   @@index([subjectId])
@@ -1209,22 +1227,22 @@ model FlashcardDeck {
 }
 
 model Flashcard {
-  id            String   @id @default(cuid())
-  deckId        String
-  front         String   @db.Text
-  back          String   @db.Text
-  difficulty    Float    @default(0)
-  interval      Int      @default(0)
-  repetitions   Int      @default(0)
-  easeFactor    Float    @default(2.5)
-  nextReview    DateTime @default(now())
-  lastReviewed  DateTime?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default(cuid())
+  deckId       String
+  front        String    @db.Text
+  back         String    @db.Text
+  difficulty   Float     @default(0)
+  interval     Int       @default(0)
+  repetitions  Int       @default(0)
+  easeFactor   Float     @default(2.5)
+  nextReview   DateTime  @default(now())
+  lastReviewed DateTime?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  deck          FlashcardDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  reviews       FlashcardReview[]
+  deck    FlashcardDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  reviews FlashcardReview[]
 
   @@index([deckId])
   @@index([nextReview])
@@ -1232,17 +1250,17 @@ model Flashcard {
 }
 
 model FlashcardReview {
-  id            String   @id @default(cuid())
-  cardId        String
-  userId        String
-  rating        Int
-  previousEase  Float
-  newEase       Float
+  id               String   @id @default(cuid())
+  cardId           String
+  userId           String
+  rating           Int
+  previousEase     Float
+  newEase          Float
   previousInterval Int
-  newInterval   Int
-  reviewedAt    DateTime @default(now())
+  newInterval      Int
+  reviewedAt       DateTime @default(now())
 
-  card          Flashcard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  card Flashcard @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([cardId])
   @@index([userId, reviewedAt])
@@ -1250,21 +1268,21 @@ model FlashcardReview {
 }
 
 model MindMap {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String
-  sourceDocId   String?
-  subjectId     String?
-  topic         String?
-  nodes         Json
-  edges         Json
-  viewport      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  sourceDocId String?
+  subjectId   String?
+  topic       String?
+  nodes       Json
+  edges       Json
+  viewport    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceDoc     Document? @relation("MindMapSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDoc Document? @relation("MindMapSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([subjectId])
@@ -1272,20 +1290,20 @@ model MindMap {
 }
 
 model Diagram {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String
-  type          String
-  sourceDocId   String?
-  subjectId     String?
-  definition    Json
-  renderedUrl   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  type        String
+  sourceDocId String?
+  subjectId   String?
+  definition  Json
+  renderedUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceDoc     Document? @relation("DiagramSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDoc Document? @relation("DiagramSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([subjectId])
@@ -1293,24 +1311,24 @@ model Diagram {
 }
 
 model Quiz {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String
-  description   String?
-  subjectId     String?
-  sourceDocId   String?
-  topic         String?
-  difficulty    String
-  questions     Json
-  timeLimit     Int?
-  isPublished   Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  subjectId   String?
+  sourceDocId String?
+  topic       String?
+  difficulty  String
+  questions   Json
+  timeLimit   Int?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  sourceDoc     Document? @relation("QuizSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  attempts      QuizAttempt[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  sourceDoc Document?     @relation("QuizSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  attempts  QuizAttempt[]
 
   @@index([userId])
   @@index([subjectId])
@@ -1318,17 +1336,17 @@ model Quiz {
 }
 
 model QuizAttempt {
-  id            String   @id @default(cuid())
-  quizId        String
-  userId        String
-  answers       Json
-  score         Float
-  maxScore      Float
-  startedAt     DateTime @default(now())
-  completedAt   DateTime?
-  metadata      Json?
+  id          String    @id @default(cuid())
+  quizId      String
+  userId      String
+  answers     Json
+  score       Float
+  maxScore    Float
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  metadata    Json?
 
-  quiz          Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([quizId])
   @@index([userId])
@@ -1336,19 +1354,19 @@ model QuizAttempt {
 }
 
 model GeneratedImage {
-  id            String   @id @default(cuid())
-  userId        String
-  prompt        String
-  sourceDocId   String?
-  subjectId     String?
-  imageUrl      String
-  model         String
-  parameters    Json?
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  prompt      String
+  sourceDocId String?
+  subjectId   String?
+  imageUrl    String
+  model       String
+  parameters  Json?
+  createdAt   DateTime @default(now())
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sourceDoc     Document? @relation("GeneratedImageSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDoc Document? @relation("GeneratedImageSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@map("generated_images")

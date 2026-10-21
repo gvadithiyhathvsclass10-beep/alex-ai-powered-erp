@@ -256,7 +256,7 @@ export default function SettingsPage() {
                             </Button>
                           </>
                         ) : (
-                          <Button variant="outline" size="sm" onClick={() => {}}>
+                          <Button variant="outline" size="sm" onClick={() => setActiveTab("ai")}>
                             <Key className="mr-2 h-4 w-4" />
                             Add API Key
                           </Button>

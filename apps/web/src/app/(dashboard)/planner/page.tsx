@@ -98,6 +98,16 @@ export default function PlannerPage() {
     onError: () => toast({ title: "Error", description: "Failed to create task", variant: "destructive" }),
   })
 
+  const updateTask = useMutation({
+    mutationFn: async (task: Task) => {
+      const res = await fetch('/api/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, isCompleted: !task.isCompleted }) })
+      if (!res.ok) throw new Error('Failed to update task')
+      return res.json()
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['tasks'] }); toast({ title: 'Task updated' }) },
+    onError: () => toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' }),
+  })
+
   const todayEvents = events?.events?.filter((e: PlannerEvent) => {
     const eventDate = new Date(e.startTime)
     return eventDate.toDateString() === new Date().toDateString()
@@ -217,7 +227,7 @@ export default function PlannerPage() {
                             Due {formatRelativeTime(task.dueDate!)}
                           </p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => {}}>
+                        <Button variant="ghost" size="sm" onClick={() => updateTask.mutate(task)}>
                           <CheckCircle className="h-4 w-4" />
                         </Button>
                       </div>
@@ -257,7 +267,7 @@ export default function PlannerPage() {
         <TabsContent value="tasks" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Tasks</h2>
-            <Button onClick={() => {}}>
+            <Button onClick={() => setActiveTab("ai-planner")}>
               <Plus className="mr-2 h-4 w-4" />
               New Task
             </Button>
@@ -268,7 +278,7 @@ export default function PlannerPage() {
                 <div className="text-center py-12">
                   <Target className="mx-auto h-12 w-12 text-muted-foreground" />
                   <p className="mt-2 text-muted-foreground">No tasks yet. Create one to get started.</p>
-                  <Button className="mt-4" onClick={() => {}}>Create Task</Button>
+                  <Button className="mt-4" onClick={() => setActiveTab("ai-planner")}>Create Task</Button>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -277,7 +287,7 @@ export default function PlannerPage() {
                       <Button
                         variant={task.isCompleted ? "default" : "outline"}
                         size="icon"
-                        onClick={() => {}}
+                        onClick={() => updateTask.mutate(task)}
                         className={task.isCompleted ? "text-green-500" : ""}
                       >
                         <CheckCircle className="h-4 w-4" />
@@ -338,7 +348,7 @@ export default function PlannerPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={() => toast({ title: "Feature coming soon" })}>
+              <Button onClick={() => toast({ title: "Study plan generation requires task generation setup", description: "Add your subjects and tasks first; AI generation will use those records when enabled." })}>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Generate Study Plan
               </Button>

@@ -49,3 +49,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requireAuth()
+    const { id, isCompleted } = await request.json()
+    if (!id || typeof isCompleted !== 'boolean') return NextResponse.json({ error: 'id and isCompleted are required' }, { status: 400 })
+    const result = await prisma.task.updateMany({ where: { id, assigneeId: user.id }, data: { isCompleted, completedAt: isCompleted ? new Date() : null } })
+    if (!result.count) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    return NextResponse.json({ success: true })
+  } catch (error) { console.error('Task update error:', error); return NextResponse.json({ error: 'Failed to update task' }, { status: 500 }) }
+}

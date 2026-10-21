@@ -126,7 +126,7 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold tracking-tight">Everything You Need to Excel</h2>
             <p className="text-xl text-muted-foreground mt-4 max-w-2xl mx-auto">
-              ALEX is built for real academic workflows — not demos. Every feature works end-to-end with your data.
+              ALEX is built for real academic workflows with connected documents, planning, assessment, and AI tools.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -203,36 +203,36 @@ export default function LandingPage() {
             <div>
               <h4 className="font-medium mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground">AI Assistant</Link></li>
-                <li><Link href="#" className="hover:text-foreground">RAG Pipeline</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Study Studio</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Smart Planner</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Research Lab</Link></li>
+                <li><Link href="/assistant" className="hover:text-foreground">AI Assistant</Link></li>
+                <li><Link href="/documents" className="hover:text-foreground">RAG Pipeline</Link></li>
+                <li><Link href="/study-studio" className="hover:text-foreground">Study Studio</Link></li>
+                <li><Link href="/planner" className="hover:text-foreground">Smart Planner</Link></li>
+                <li><Link href="/research" className="hover:text-foreground">Research Lab</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="font-medium mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground">Documentation</Link></li>
-                <li><Link href="#" className="hover:text-foreground">API Reference</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Blog</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Community</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Changelog</Link></li>
+                <li><Link href="/#how-it-works" className="hover:text-foreground">Documentation</Link></li>
+                <li><Link href="/api/health" className="hover:text-foreground">API Reference</Link></li>
+                <li><Link href="/#features" className="hover:text-foreground">Blog</Link></li>
+                <li><Link href="/#features" className="hover:text-foreground">Community</Link></li>
+                <li><Link href="/roadmap" className="hover:text-foreground">Roadmap</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="font-medium mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground">About</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Careers</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Privacy</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Terms</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Security</Link></li>
+                <li><Link href="/#features" className="hover:text-foreground">About</Link></li>
+                <li><Link href="mailto:contact@alex-ai.example" className="hover:text-foreground">Careers</Link></li>
+                <li><Link href="/#privacy" className="hover:text-foreground">Privacy</Link></li>
+                <li><Link href="/#terms" className="hover:text-foreground">Terms</Link></li>
+                <li><Link href="/api/health" className="hover:text-foreground">Security</Link></li>
               </ul>
             </div>
           </div>
           <div className="mt-8 border-t pt-8 text-center text-sm text-muted-foreground">
-            © 2024 ALEX. All rights reserved.
+            © 2024 ALEX. Built by G V Adithiyha and Harsha K.
           </div>
         </div>
       </footer>

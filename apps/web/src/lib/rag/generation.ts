@@ -49,10 +49,12 @@ async function getCredentialKey(credential: AICredential): Promise<string> {
 export class OpenAIChatProvider {
   private apiKey: string
   private model: string
+  private baseUrl: string
 
-  constructor(apiKey: string, model = 'gpt-4o-mini') {
+  constructor(apiKey: string, model = 'gpt-4o-mini', baseUrl = 'https://api.openai.com/v1') {
     this.apiKey = apiKey
     this.model = model
+    this.baseUrl = baseUrl
   }
 
   async generate(options: GenerationOptions): Promise<RAGResponse> {
@@ -72,7 +74,7 @@ export class OpenAIChatProvider {
       { role: 'user', content: `Question: ${options.query}\n\nSources:\n${contextText}` },
     ]
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -120,7 +122,7 @@ export class OpenAIChatProvider {
       { role: 'user', content: `Question: ${options.query}\n\nSources:\n${contextText}` },
     ]
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -517,6 +519,8 @@ export function createChatProvider(
   switch (provider) {
     case 'OPENAI':
       return new OpenAIChatProvider(apiKey, model)
+    case 'GROQ':
+      return new OpenAIChatProvider(apiKey, model || 'qwen/qwen3.8-27b', 'https://api.groq.com/openai/v1')
     case 'GOOGLE_GEMINI':
       return new GoogleChatProvider(apiKey, model)
     case 'ANTHROPIC':

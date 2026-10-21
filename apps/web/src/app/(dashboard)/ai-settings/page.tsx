@@ -89,7 +89,7 @@ const PROVIDER_INFO: Record<string, { name: string; icon: React.ReactNode; model
   GROQ: {
     name: "Groq",
     icon: <Wifi className="h-5 w-5" />,
-    models: ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+    models: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"],
     capabilities: ["chat", "fast-inference"],
   },
   MISTRAL: {
@@ -703,6 +703,14 @@ function AddCredentialForm({ onSuccess }: { onSuccess: () => void }) {
   const [isDefault, setIsDefault] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
+  const resetForm = () => {
+    setProvider("")
+    setProviderName("")
+    setApiKey("")
+    setModels([])
+    setIsDefault(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!provider || !apiKey) {
@@ -795,7 +803,7 @@ function AddCredentialForm({ onSuccess }: { onSuccess: () => void }) {
       </div>
 
       <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" onClick={() => {}}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
         <Button type="submit" disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Add Credential

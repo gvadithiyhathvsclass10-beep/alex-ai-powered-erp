@@ -302,6 +302,7 @@ export default function DocumentStudioPage() {
   const [includeTables, setIncludeTables] = useState(true)
   const [includeCitations, setIncludeCitations] = useState(true)
   const [generatedDoc, setGeneratedDoc] = useState<GeneratedDocument | null>(null)
+  const [documentHistory, setDocumentHistory] = useState<GeneratedDocument[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -338,6 +339,7 @@ export default function DocumentStudioPage() {
     },
     onSuccess: (data) => {
       setGeneratedDoc(data)
+      setDocumentHistory(prev => [data, ...prev.filter(item => item.id !== data.id)])
       queryClient.invalidateQueries({ queryKey: ["document-history"] })
       toast({ title: "Document generated successfully!" })
     },
@@ -852,7 +854,7 @@ export default function DocumentStudioPage() {
               <CardTitle>Generation History</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-12">History feature coming soon</p>
+              {documentHistory.length === 0 ? <p className="text-muted-foreground text-center py-12">Generated documents will appear here during this session.</p> : <div className="space-y-3">{documentHistory.map(doc => <Card key={doc.id}><CardHeader><CardTitle>{doc.title}</CardTitle><CardDescription>{doc.metadata.wordCount} words · {formatRelativeTime(doc.metadata.createdAt)}</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={() => { setGeneratedDoc(doc); setActiveTab('generate') }}>Open document</Button></CardContent></Card>)}</div>}
             </CardContent>
           </Card>
         </TabsContent>

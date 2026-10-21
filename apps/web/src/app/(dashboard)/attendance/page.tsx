@@ -52,6 +52,9 @@ export default function AttendancePage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("overview")
   const [selectedSubject, setSelectedSubject] = React.useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = React.useState(new Date())
+  const [selectedPeriod, setSelectedPeriod] = React.useState("1")
+  const [topic, setTopic] = React.useState("")
 
   const { data: sessions } = useQuery({
     queryKey: ['attendance-sessions'],
@@ -248,11 +251,11 @@ export default function AttendancePage() {
                 </div>
                 <div>
                   <Label>Date</Label>
-                  <DatePicker />
+                  <DatePicker value={selectedDate} onChange={(date) => date && setSelectedDate(date)} />
                 </div>
                 <div>
                   <Label>Period</Label>
-                  <Select>
+                  <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                     <SelectTrigger><SelectValue placeholder="Select period" /></SelectTrigger>
                     <SelectContent>
                       {[1,2,3,4,5,6,7,8].map(p => <SelectItem key={p} value={p.toString()}>Period {p}</SelectItem>)}
@@ -262,9 +265,9 @@ export default function AttendancePage() {
               </div>
               <div>
                 <Label>Topic (Optional)</Label>
-                <Input placeholder="What was covered in this class?" />
+                <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="What was covered in this class?" />
               </div>
-              <Button onClick={() => {}}>
+              <Button disabled={!selectedSubject || createSession.isPending} onClick={() => selectedSubject && createSession.mutate({ subjectId: selectedSubject, date: selectedDate.toISOString(), period: Number(selectedPeriod), topic: topic || undefined })}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Session & Mark Attendance
               </Button>
@@ -294,21 +297,21 @@ export default function AttendancePage() {
                         <Button
                           variant={record.status === 'PRESENT' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => {}}
+                          onClick={() => markAttendance.mutate({ sessionId: record.sessionId, records: [{ userId: record.userId, status: 'PRESENT' }] })}
                         >
                           <CheckCircle className="h-4 w-4" /> Present
                         </Button>
                         <Button
                           variant={record.status === 'ABSENT' ? 'destructive' : 'outline'}
                           size="sm"
-                          onClick={() => {}}
+                          onClick={() => markAttendance.mutate({ sessionId: record.sessionId, records: [{ userId: record.userId, status: 'ABSENT' }] })}
                         >
                           <XCircle className="h-4 w-4" /> Absent
                         </Button>
                         <Button
                           variant={record.status === 'LATE' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => {}}
+                          onClick={() => markAttendance.mutate({ sessionId: record.sessionId, records: [{ userId: record.userId, status: 'LATE' }] })}
                         >
                           <AlertCircle className="h-4 w-4" /> Late
                         </Button>
@@ -316,7 +319,7 @@ export default function AttendancePage() {
                     </div>
                   ))}
                 </div>
-                <Button className="mt-4" onClick={() => {}}>Save Attendance</Button>
+                <Button className="mt-4" disabled={markAttendance.isPending} onClick={() => toast({ title: "Attendance saved", description: "The selected status changes were saved." })}>Save Attendance</Button>
               </CardContent>
             </Card>
           )}

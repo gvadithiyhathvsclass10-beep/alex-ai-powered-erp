@@ -79,6 +79,13 @@ SENTRY_DSN=[SENTRY_DSN]
 LOG_LEVEL=warn
 
 # =============================================================================
+# OPTIONAL: USER-OWNED DROPBOX STORAGE (NO R2 REQUIRED)
+# =============================================================================
+DROPBOX_APP_KEY=[FROM DROPBOX APP CONSOLE]
+DROPBOX_APP_SECRET=[FROM DROPBOX APP CONSOLE - SERVER ONLY]
+DROPBOX_REDIRECT_URI=https://your-production-domain.com/api/storage/dropbox/callback
+
+# =============================================================================
 # FIREBASE FUNCTIONS CONFIG (Set via: firebase functions:config:set)
 # =============================================================================
 

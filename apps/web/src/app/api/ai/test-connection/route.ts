@@ -116,7 +116,7 @@ export async function POST(request: Request) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: model || 'llama-3.1-8b-instant',
+            model: model || 'qwen/qwen3.8-27b',
             messages: [{ role: 'user', content: 'Hello, respond with "OK" if you can hear me.' }],
             max_tokens: 10,
           }),

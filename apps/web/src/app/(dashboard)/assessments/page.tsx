@@ -171,7 +171,7 @@ export default function AssessmentsPage() {
           <p className="text-muted-foreground mt-1">Track and manage academic performance</p>
         </div>
         {isLecturer && (
-          <Dialog open={false} onOpenChange={() => {}}>
+          <Dialog>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -546,6 +546,11 @@ function CreateAssessmentForm({ onSuccess }: { onSuccess: () => void }) {
   })
   const [isLoading, setIsLoading] = React.useState(false)
 
+  const resetForm = () => setFormData({
+    subjectId: '', name: '', type: 'INTERNAL_ASSESSMENT', maxMarks: 100,
+    weight: 1, assessmentDate: undefined, description: '',
+  })
+
   const { data: subjects = [] } = useQuery({
     queryKey: ['subjects', 'my'],
     queryFn: async () => {
@@ -641,7 +646,7 @@ function CreateAssessmentForm({ onSuccess }: { onSuccess: () => void }) {
         <textarea value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} className="w-full p-2 border rounded-md min-h-[80px]" rows={3} />
       </div>
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={() => {}}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
         <Button type="submit" disabled={isLoading || createAssessmentMutation.isPending}>
           {isLoading || createAssessmentMutation.isPending ? 'Creating...' : 'Create Assessment'}
         </Button>

@@ -150,7 +150,7 @@ export default function AssignmentsPage() {
                         <Button onClick={() => setSelectedAssignment(assignment.id)} disabled={isSubmitted}>
                           {isSubmitted ? 'View Submission' : 'Submit Assignment'}
                         </Button>
-                        <Button variant="outline" onClick={() => {}}>View Details</Button>
+                        <Button variant="outline" onClick={() => { setSelectedAssignment(assignment.id); setActiveTab("submissions") }}>View Details</Button>
                       </div>
                     </div>
                   </CardContent>
@@ -175,7 +175,7 @@ export default function AssignmentsPage() {
                       <div className="mt-4 space-y-4">
                         <Textarea placeholder="Your submission content..." rows={6} className="max-w-md mx-auto" />
                         <DocumentUpload />
-                        <Button onClick={() => {}}>
+                        <Button onClick={() => toast({ title: "Select your content or document first", description: "The submission form is ready above; enter content or attach a file before submitting." })}>
                           <Upload className="mr-2 h-4 w-4" />
                           Submit Assignment
                         </Button>
@@ -214,7 +214,7 @@ export default function AssignmentsPage() {
                             </div>
                           )}
                           {submission.status !== 'EVALUATED' && assignments?.assignments?.find((a: Assignment) => a.id === selectedAssignment)?.allowResubmission && (
-                            <Button variant="outline" onClick={() => {}}>Resubmit</Button>
+                            <Button variant="outline" onClick={() => { setActiveTab("submissions"); toast({ title: "Resubmission ready", description: "Replace the submission content or upload a new document below." }) }}>Resubmit</Button>
                           )}
                         </div>
                       ))}

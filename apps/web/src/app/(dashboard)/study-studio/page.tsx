@@ -59,6 +59,18 @@ export default function StudyStudioPage() {
   const [reviewMode, setReviewMode] = React.useState(false)
   const [currentCardIndex, setCurrentCardIndex] = React.useState(0)
   const [showAnswer, setShowAnswer] = React.useState(false)
+  const [selectedSourceDoc, setSelectedSourceDoc] = React.useState("")
+  const [generatedOutput, setGeneratedOutput] = React.useState<string | null>(null)
+  const generateStructured = async (kind: 'mindmaps' | 'diagrams' | 'quizzes') => {
+    if (!selectedSourceDoc) { toast({ title: "Select a document first" }); return }
+    const endpoint = kind === 'mindmaps' ? '/api/mindmaps/generate' : kind === 'quizzes' ? '/api/quizzes/generate' : '/api/diagrams/generate'
+    const body = kind === 'diagrams' ? { customType: 'mermaid', customCode: 'flowchart TD\n  A[Source document] --> B[Key concepts]', title: 'Document overview', sourceDocId: selectedSourceDoc } : { sourceDocId: selectedSourceDoc }
+    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { toast({ title: 'Generation failed', description: data.error, variant: 'destructive' }); return }
+    setGeneratedOutput(JSON.stringify(data, null, 2))
+    toast({ title: `${kind.slice(0, -1)} generated` })
+  }
 
   const { data: notes } = useQuery({
     queryKey: ['study-materials'],
@@ -74,6 +86,15 @@ export default function StudyStudioPage() {
     queryFn: async () => {
       const res = await fetch('/api/flashcards/decks')
       if (!res.ok) throw new Error('Failed to fetch')
+      return res.json()
+    },
+  })
+
+  const { data: documents } = useQuery({
+    queryKey: ['documents', 'study-studio'],
+    queryFn: async () => {
+      const res = await fetch('/api/documents')
+      if (!res.ok) throw new Error('Failed to fetch documents')
       return res.json()
     },
   })
@@ -174,7 +195,7 @@ export default function StudyStudioPage() {
               { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
               { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
             ].map(item => (
-              <Card key={item.type} className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card key={item.type} onClick={() => { if (selectedSourceDoc) generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }); else toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." }) }} className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4">
                     <div className="p-3 rounded-lg bg-primary/10 text-primary">
@@ -190,6 +211,14 @@ export default function StudyStudioPage() {
             ))}
           </div>
 
+          <div className="flex items-center gap-3">
+            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+              <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+              <SelectContent>
+                {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <DocumentUpload />
           <DocumentList documents={[]} showUpload={false} />
 
@@ -230,10 +259,10 @@ export default function StudyStudioPage() {
                   </div>
                   <div>
                     <Label>Source Document</Label>
-                    <Select>
+                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
                       <SelectTrigger><SelectValue placeholder="Select document" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="doc1">Document 1</SelectItem>
+                        {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -241,7 +270,7 @@ export default function StudyStudioPage() {
                     <Label>Number of Cards</Label>
                     <Input type="number" defaultValue="20" min="5" max="100" />
                   </div>
-                  <Button type="submit" onClick={e => { e.preventDefault(); generateFlashcards.mutate({ sourceDocId: 'doc1', count: 20 }) }}>
+                  <Button type="submit" disabled={!selectedSourceDoc} onClick={e => { e.preventDefault(); generateFlashcards.mutate({ sourceDocId: selectedSourceDoc, count: 20 }) }}>
                     Generate Flashcards
                   </Button>
                 </form>
@@ -340,7 +369,7 @@ export default function StudyStudioPage() {
               <CardTitle>Mind Maps</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">Mind map generation coming soon</p>
+              <div className="space-y-4"><p className="text-muted-foreground">Generate a saved mind map from the selected processed document.</p><Button onClick={() => generateStructured('mindmaps')}>Generate Mind Map</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -351,7 +380,7 @@ export default function StudyStudioPage() {
               <CardTitle>Diagrams</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">Diagram generation coming soon</p>
+              <div className="space-y-4"><p className="text-muted-foreground">Generate and save a Mermaid overview diagram.</p><Button onClick={() => generateStructured('diagrams')}>Generate Diagram</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -362,7 +391,7 @@ export default function StudyStudioPage() {
               <CardTitle>Quizzes</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">Quiz generation coming soon</p>
+              <div className="space-y-4"><p className="text-muted-foreground">Generate a saved quiz from the selected processed document.</p><Button onClick={() => generateStructured('quizzes')}>Generate Quiz</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
             </CardContent>
           </Card>
         </TabsContent>
