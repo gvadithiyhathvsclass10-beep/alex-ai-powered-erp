@@ -43,8 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const refreshUser = async () => {
-    const userData = await fetchUser()
-    setUser(userData)
+    try {
+      const userData = await fetchUser()
+      setUser(userData)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
