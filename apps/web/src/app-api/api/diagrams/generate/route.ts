@@ -1,16 +1,11 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { generateDiagramFromTemplate, saveDiagram } from '@/lib/diagrams/generator'
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const body = await request.json()
     const { templateId, variables, customCode, customType, title, sourceDocId, subjectId } = body
@@ -48,12 +43,7 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const { searchParams } = new URL(request.url)
     const diagramId = searchParams.get('id')

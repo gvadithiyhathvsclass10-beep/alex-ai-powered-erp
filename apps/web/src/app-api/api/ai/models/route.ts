@@ -1,15 +1,10 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const configs = await prisma.aIModelConfig.findMany({
       where: { userId: user.id },
@@ -25,12 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const body = await request.json()
     const { provider, modelId, taskType, isDefault, parameters } = body

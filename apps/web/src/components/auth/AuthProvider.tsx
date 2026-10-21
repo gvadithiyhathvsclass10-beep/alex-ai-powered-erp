@@ -1,10 +1,10 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
 
-interface ExtendedUser extends User {
+interface ExtendedUser {
+  id: string
+  email: string
   firstName?: string
   lastName?: string
   avatarUrl?: string | null
@@ -27,29 +27,36 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+async function fetchUser(): Promise<ExtendedUser | null> {
+  try {
+    const response = await fetch('/api/auth/me', { credentials: 'include' })
+    if (!response.ok) return null
+    const data = await response.json()
+    return data.user
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ExtendedUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const supabase = createClient()
-
   const refreshUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user as ExtendedUser | null)
+    const userData = await fetchUser()
+    setUser(userData)
   }
 
   useEffect(() => {
     refreshUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: { user: User | null } | null) => {
-      setUser(session?.user as ExtendedUser | null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase])
+  }, [])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      await fetch('/api/auth/logout', { method: 'GET', credentials: 'include' })
+    } catch {
+      // Ignore errors
+    }
     setUser(null)
   }
 

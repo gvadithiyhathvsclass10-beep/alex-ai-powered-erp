@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { getLocalUserId, LOCAL_AUTH_COOKIE } from '@/lib/local-auth'
 
 const PUBLIC_API_ROUTES = [
   '/api/auth/',
@@ -31,10 +32,11 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 }
 
 export async function middleware(request: NextRequest) {
-  const supabaseResponse = NextResponse.next({
-    request,
-  })
-  const user = request.cookies.get('alex_local_session')?.value ? { id: 'local' } : null
+  const response = NextResponse.next({ request })
+  
+  const sessionCookie = request.cookies.get(LOCAL_AUTH_COOKIE)?.value
+  const userId = getLocalUserId(sessionCookie)
+  const isAuthenticated = !!userId
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/register") ||
@@ -46,25 +48,24 @@ export async function middleware(request: NextRequest) {
   const isPublicPage = request.nextUrl.pathname === '/' || isAuthPage
   const isApiRoute = request.nextUrl.pathname.startsWith("/api/")
 
-  if (!isApiRoute && !isPublicPage && !user) {
+  if (!isApiRoute && !isPublicPage && !isAuthenticated) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     url.searchParams.set("redirect", request.nextUrl.pathname)
     return addSecurityHeaders(NextResponse.redirect(url))
   }
 
-  if (isAuthPage && user) {
+  if (isAuthPage && isAuthenticated) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return addSecurityHeaders(NextResponse.redirect(url))
   }
 
-  if (isApiRoute && !isPublicApiRoute(request.nextUrl.pathname) && !user) {
+  if (isApiRoute && !isPublicApiRoute(request.nextUrl.pathname) && !isAuthenticated) {
     return addSecurityHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
   }
 
-  // Add security headers to all responses
-  return addSecurityHeaders(supabaseResponse)
+  return addSecurityHeaders(response)
 }
 
 export const config = {

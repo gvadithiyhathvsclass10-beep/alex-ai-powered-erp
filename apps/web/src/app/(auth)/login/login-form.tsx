@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { GraduationCap } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 
 const loginSchema = z.object({
@@ -40,16 +39,18 @@ export default function LoginForm() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include',
       })
+      const result = await response.json()
 
-      if (error) {
+      if (!response.ok) {
         toast({
           title: "Error",
-          description: error.message,
+          description: result.error || 'Login failed',
           variant: "destructive",
         })
         return

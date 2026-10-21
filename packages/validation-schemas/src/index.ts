@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type {
+import {
   UserRole,
   MembershipStatus,
   DocumentStatus,
@@ -38,7 +38,7 @@ export const institutionSchema = z.object({
   phone: z.string().max(50).nullable().optional(),
   email: z.string().email().nullable().optional(),
   logoUrl: z.string().url().nullable().optional(),
-  settings: z.record(z.unknown()).nullable().optional(),
+  settings: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -133,7 +133,7 @@ export const subjectSchema = z.object({
   credits: z.number().int().positive().default(3),
   description: z.string().max(2000).nullable().optional(),
   syllabus: z.string().max(10000).nullable().optional(),
-  textbooks: z.record(z.unknown()).nullable().optional(),
+  textbooks: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -170,7 +170,7 @@ export const documentSchema = z.object({
   status: documentStatusSchema.default(DocumentStatus.UPLOADED),
   errorMessage: z.string().max(2000).nullable().optional(),
   pageCount: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   ownerId: z.string().cuid(),
   subjectId: z.string().cuid().nullable().optional(),
   projectId: z.string().cuid().nullable().optional(),
@@ -189,8 +189,8 @@ export const documentChunkSchema = z.object({
   pageNumber: z.number().int().positive().nullable().optional(),
   sectionTitle: z.string().max(500).nullable().optional(),
   tokenCount: z.number().int().positive(),
-  embedding: z.instanceof(Buffer).nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  embedding: z.instanceof(Uint8Array).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
 });
 
@@ -202,7 +202,7 @@ export const documentProcessingJobSchema = z.object({
   startedAt: z.date().nullable().optional(),
   completedAt: z.date().nullable().optional(),
   errorMessage: z.string().max(2000).nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -213,7 +213,7 @@ export const conversationSchema = z.object({
   userId: z.string().cuid(),
   projectId: z.string().cuid().nullable().optional(),
   notebookId: z.string().cuid().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -224,9 +224,9 @@ export const messageSchema = z.object({
   senderId: z.string().cuid(),
   role: z.string().min(1).max(50),
   content: z.string(),
-  metadata: z.record(z.unknown()).nullable().optional(),
-  toolCalls: z.record(z.unknown()).nullable().optional(),
-  toolResults: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  toolCalls: z.record(z.string(), z.unknown()).nullable().optional(),
+  toolResults: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
 });
 
@@ -254,7 +254,7 @@ export const taskSchema = z.object({
   completedAt: z.date().nullable().optional(),
   isCompleted: z.boolean().default(false),
   priority: z.number().int().default(0),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -270,7 +270,7 @@ export const plannerEventSchema = z.object({
   eventType: z.string().min(1).max(100),
   subjectId: z.string().cuid().nullable().optional(),
   taskId: z.string().cuid().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -285,7 +285,7 @@ export const notificationSchema = z.object({
   referenceType: z.string().max(100).nullable().optional(),
   isRead: z.boolean().default(false),
   readAt: z.date().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
 });
 
@@ -309,7 +309,7 @@ export const aiCredentialSchema = z.object({
   keyHash: z.string().min(1).max(128),
   isActive: z.boolean().default(true),
   isDefault: z.boolean().default(false),
-  models: z.record(z.unknown()).nullable().optional(),
+  models: z.record(z.string(), z.unknown()).nullable().optional(),
   usageLimit: z.number().int().positive().nullable().optional(),
   usageCount: z.number().int().nonnegative().default(0),
   lastUsedAt: z.date().nullable().optional(),
@@ -324,7 +324,7 @@ export const aiModelConfigSchema = z.object({
   modelId: z.string().min(1).max(255),
   taskType: z.string().min(1).max(100),
   isDefault: z.boolean().default(false),
-  parameters: z.record(z.unknown()).nullable().optional(),
+  parameters: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -345,11 +345,11 @@ export const researchSourceSchema = z.object({
   notebookId: z.string().cuid(),
   documentId: z.string().cuid().nullable().optional(),
   title: z.string().min(1).max(500),
-  authors: z.record(z.unknown()).nullable().optional(),
+  authors: z.record(z.string(), z.unknown()).nullable().optional(),
   publicationYear: z.number().int().positive().nullable().optional(),
   doi: z.string().max(255).nullable().optional(),
   url: z.string().url().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -376,7 +376,7 @@ export const projectSchema = z.object({
   status: projectStatusSchema.default(ProjectStatus.PLANNING),
   startDate: z.date().nullable().optional(),
   endDate: z.date().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -409,7 +409,7 @@ export const projectTaskSchema = z.object({
   priority: z.number().int().default(0),
   dueDate: z.date().nullable().optional(),
   completedAt: z.date().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -422,7 +422,7 @@ export const projectMilestoneSchema = z.object({
   dueDate: z.date(),
   completedAt: z.date().nullable().optional(),
   isCompleted: z.boolean().default(false),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -563,7 +563,7 @@ export const studentAchievementSchema = z.object({
   verifiedBy: z.string().cuid().nullable().optional(),
   verifiedAt: z.date().nullable().optional(),
   certificateUrl: z.string().url().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -591,8 +591,8 @@ export const auditLogSchema = z.object({
   action: z.string().min(1).max(100),
   entityType: z.string().min(1).max(100),
   entityId: z.string().cuid().nullable().optional(),
-  oldValues: z.record(z.unknown()).nullable().optional(),
-  newValues: z.record(z.unknown()).nullable().optional(),
+  oldValues: z.record(z.string(), z.unknown()).nullable().optional(),
+  newValues: z.record(z.string(), z.unknown()).nullable().optional(),
   ipAddress: z.string().max(45).nullable().optional(),
   userAgent: z.string().max(500).nullable().optional(),
   createdAt: z.date(),
@@ -626,7 +626,7 @@ export const studyMaterialSchema = z.object({
   subjectId: z.string().cuid().nullable().optional(),
   topic: z.string().max(255).nullable().optional(),
   tags: z.array(z.string().max(50)),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -654,7 +654,7 @@ export const flashcardSchema = z.object({
   easeFactor: z.number().default(2.5),
   nextReview: z.date(),
   lastReviewed: z.date().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -678,9 +678,9 @@ export const mindMapSchema = z.object({
   sourceDocId: z.string().cuid().nullable().optional(),
   subjectId: z.string().cuid().nullable().optional(),
   topic: z.string().max(255).nullable().optional(),
-  nodes: z.record(z.unknown()),
-  edges: z.record(z.unknown()),
-  viewport: z.record(z.unknown()).nullable().optional(),
+  nodes: z.record(z.string(), z.unknown()),
+  edges: z.record(z.string(), z.unknown()),
+  viewport: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -692,7 +692,7 @@ export const diagramSchema = z.object({
   type: z.string().min(1).max(100),
   sourceDocId: z.string().cuid().nullable().optional(),
   subjectId: z.string().cuid().nullable().optional(),
-  definition: z.record(z.unknown()),
+  definition: z.record(z.string(), z.unknown()),
   renderedUrl: z.string().url().nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -707,7 +707,7 @@ export const quizSchema = z.object({
   sourceDocId: z.string().cuid().nullable().optional(),
   topic: z.string().max(255).nullable().optional(),
   difficulty: z.string().min(1).max(50),
-  questions: z.record(z.unknown()),
+  questions: z.record(z.string(), z.unknown()),
   timeLimit: z.number().int().positive().nullable().optional(),
   isPublished: z.boolean().default(false),
   createdAt: z.date(),
@@ -718,12 +718,12 @@ export const quizAttemptSchema = z.object({
   id: z.string().cuid(),
   quizId: z.string().cuid(),
   userId: z.string().cuid(),
-  answers: z.record(z.unknown()),
+  answers: z.record(z.string(), z.unknown()),
   score: z.number(),
   maxScore: z.number(),
   startedAt: z.date(),
   completedAt: z.date().nullable().optional(),
-  metadata: z.record(z.unknown()).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const generatedImageSchema = z.object({
@@ -734,7 +734,7 @@ export const generatedImageSchema = z.object({
   subjectId: z.string().cuid().nullable().optional(),
   imageUrl: z.string().url(),
   model: z.string().min(1).max(100),
-  parameters: z.record(z.unknown()).nullable().optional(),
+  parameters: z.record(z.string(), z.unknown()).nullable().optional(),
   createdAt: z.date(),
 });
 

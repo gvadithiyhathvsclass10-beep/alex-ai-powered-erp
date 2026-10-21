@@ -7,8 +7,8 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 WORKDIR /app
 
-# Install git for pnpm workspace
-RUN apk add --no-cache git
+# Install git for pnpm workspace and tesseract for OCR
+RUN apk add --no-cache git tesseract-ocr
 
 # Default command (overridden by docker-compose)
 CMD ["pnpm", "dev"]

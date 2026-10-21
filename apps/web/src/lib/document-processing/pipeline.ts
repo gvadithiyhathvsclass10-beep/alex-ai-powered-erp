@@ -225,7 +225,7 @@ export async function reprocessDocument(documentId: string, userId: string) {
   })
 
   const file = await downloadFile(document.storageBucket, document.storagePath)
-  const buffer = Buffer.from(await file.arrayBuffer())
+  const buffer = file
 
   await processDocument({
     documentId,
@@ -240,14 +240,7 @@ export async function reprocessDocument(documentId: string, userId: string) {
   })
 }
 
-async function downloadFile(bucket: string, path: string): Promise<Blob> {
-  const { createClient } = await import('@supabase/supabase-js')
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  
-  const { data, error } = await supabase.storage.from(bucket).download(path)
-  if (error) throw error
-  return data
+async function downloadFile(bucket: string, path: string): Promise<Buffer> {
+  const { downloadFile: storageDownloadFile } = await import('@/lib/storage/client')
+  return storageDownloadFile(bucket, path)
 }

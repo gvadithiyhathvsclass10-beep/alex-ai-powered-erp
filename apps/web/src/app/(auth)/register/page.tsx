@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { GraduationCap } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 
 const registerSchema = z.object({
@@ -49,24 +48,24 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            first_name: data.firstName,
-            last_name: data.lastName,
-            role: data.role,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          first_name: data.firstName,
+          last_name: data.lastName,
+          role: data.role,
+        }),
+        credentials: 'include',
       })
+      const result = await response.json()
 
-      if (error) {
+      if (!response.ok) {
         toast({
           title: "Error",
-          description: error.message,
+          description: result.error || 'Registration failed',
           variant: "destructive",
         })
         return
@@ -74,7 +73,7 @@ export default function RegisterPage() {
 
       toast({
         title: "Account created!",
-        description: "Please check your email to verify your account.",
+        description: "You have successfully created your account.",
       })
       router.push("/login")
     } catch (error) {

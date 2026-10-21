@@ -1,16 +1,11 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { AuditLogService } from '@/lib/audit-log'
 
 export async function PUT(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const body = await request.json()
     const { recordId, status, reason } = body
@@ -100,12 +95,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const { searchParams } = new URL(request.url)
     const recordId = searchParams.get('id')

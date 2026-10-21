@@ -1,8 +1,9 @@
 # =============================================================================
-# ALEX - Multi-stage Dockerfile for Next.js (static export) + Firebase Functions
+# ALEX - Multi-stage Dockerfile for Next.js (standalone) + Worker
 # =============================================================================
-# Build stage: install deps, generate Prisma, build Next.js static export + functions
-# Runtime stage: nginx for Next.js static files, Node.js for Functions
+# Targets:
+#   - runner-api: Next.js standalone server (API routes + SSR)
+#   - runner-worker: Background job worker (document processing, scheduled jobs)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -20,7 +21,6 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
-COPY functions/package.json ./functions/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY packages/validation-schemas/package.json ./packages/validation-schemas/
@@ -43,7 +43,7 @@ RUN pnpm --filter @alex/shared-types run build \
  && pnpm --filter @alex/validation-schemas run build
 
 # -----------------------------------------------------------------------------
-# Build Next.js (static export for Firebase Hosting)
+# Build Next.js (standalone output for production server)
 # -----------------------------------------------------------------------------
 FROM build-packages AS build-web
 COPY apps/web ./apps/web
@@ -51,41 +51,54 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter apps/web run build
 
 # -----------------------------------------------------------------------------
-# Build Firebase Functions
+# Production runtime: Next.js standalone server (API + SSR)
 # -----------------------------------------------------------------------------
-FROM build-packages AS build-functions
-COPY functions ./functions
-RUN pnpm --filter functions run build
-
-# -----------------------------------------------------------------------------
-# Production runtime: nginx serving Next.js static export
-# -----------------------------------------------------------------------------
-FROM nginx:alpine AS runner-web
-WORKDIR /usr/share/nginx/html
-
-# Copy static export from Next.js build
-COPY --from=build-web /app/apps/web/out/ ./
-
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 3000
-
-CMD ["nginx", "-g", "daemon off;"]
-
-# -----------------------------------------------------------------------------
-# Production runtime: Firebase Functions (optional separate image)
-# -----------------------------------------------------------------------------
-FROM node:20-alpine AS runner-functions
+FROM node:20-alpine AS runner-api
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN addgroup -g 1001 -S nodejs && adduser -S functions -u 1001 -G nodejs
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
-COPY --from=build-functions --chown=functions:nodejs /app/functions/lib ./lib
-COPY --from=build-functions --chown=functions:nodejs /app/functions/package.json ./
-COPY --from=build-functions --chown=functions:nodejs /app/node_modules ./node_modules
+# Copy standalone output
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/public ./public
+COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/prisma ./prisma
 
-USER functions
+# Copy node_modules for Prisma and other deps
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-CMD ["node", "lib/index.js"]
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]
+
+# -----------------------------------------------------------------------------
+# Production runtime: Background worker
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS runner-worker
+ENV NODE_ENV=production
+WORKDIR /app
+
+RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001 -G nodejs
+
+# Install tesseract for OCR
+RUN apk add --no-cache tesseract-ocr
+
+# Copy built application
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./public
+COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./prisma
+COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
+
+# Copy worker entry point
+COPY --chown=worker:nodejs docker/worker-entrypoint.js ./worker-entrypoint.js
+
+USER worker
+
+CMD ["node", "worker-entrypoint.js"]

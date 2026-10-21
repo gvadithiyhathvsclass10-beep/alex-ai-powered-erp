@@ -1,4 +1,4 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { getCurrentUserWithRole, requireAuth as requireAuthFn } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
@@ -9,26 +9,16 @@ export interface AuthContext {
 }
 
 export async function getAuthContext(): Promise<AuthContext | null> {
-  const supabase = await createServerClientSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUserWithRole()
   
   if (!user) {
-    return null
-  }
-
-  const membership = await prisma.collegeMembership.findFirst({
-    where: { userId: user.id, status: 'ACTIVE' },
-    include: { institution: true, department: true, course: true, semester: true },
-  })
-
-  if (!membership) {
     return null
   }
 
   return {
     userId: user.id,
     user,
-    membership,
+    membership: user.activeMembership,
   }
 }
 
@@ -42,7 +32,7 @@ export function requireRole(auth: AuthContext | null, allowedRoles: string[]): A
     throw new Error('Unauthorized')
   }
   
-  if (!allowedRoles.includes(auth.membership.role)) {
+  if (!allowedRoles.includes(auth.membership?.role)) {
     throw new Error('Forbidden')
   }
   

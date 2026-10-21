@@ -1,4 +1,4 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { NotificationService } from '@/lib/notifications'
@@ -8,12 +8,7 @@ const LOW_ATTENDANCE_THRESHOLD = 35
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const body = await request.json()
     const { action, studentId, subjectId, threshold } = body

@@ -1,16 +1,17 @@
-import { createServerClientSupabase } from './supabase/server'
 import { prisma } from './prisma'
-import { UserRole, MembershipStatus } from '@prisma/client'
-import { CollegeMembership } from '@prisma/client'
+import { getLocalUserId, LOCAL_AUTH_COOKIE } from './local-auth'
+import { UserRole, MembershipStatus, CollegeMembership } from '@prisma/client'
+import { cookies } from 'next/headers'
 
 export async function getCurrentUser() {
-  const supabase = await createServerClientSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) return null
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get(LOCAL_AUTH_COOKIE)?.value
+  const userId = getLocalUserId(sessionCookie)
+
+  if (!userId) return null
 
   const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     include: {
       memberships: {
         where: { status: MembershipStatus.ACTIVE },
@@ -24,6 +25,8 @@ export async function getCurrentUser() {
       },
     },
   })
+
+  if (!dbUser || !dbUser.isActive) return null
 
   return dbUser
 }

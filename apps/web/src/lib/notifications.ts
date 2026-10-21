@@ -29,8 +29,6 @@ export class NotificationService {
         case 'twilio-whatsapp':
           return await this.sendWhatsApp(params)
         case 'push':
-        case 'firebase':
-        case 'fcm':
           return await this.sendPush(params)
         case 'webhook':
           return await this.sendWebhook(params)
@@ -129,26 +127,27 @@ export class NotificationService {
   static async sendPush(params: NotificationMessage): Promise<NotificationResult> {
     const { config, recipient, subject, message } = params
 
-    if (config.serverKey && recipient) {
-      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `key=${config.serverKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: recipient,
-          notification: { title: subject, body: message },
-        }),
-      })
+    if (config.vapidKeys && config.endpoint) {
+      const webpush = await import('web-push')
+      webpush.setVapidDetails(
+        config.vapidSubject || 'mailto:admin@alex.example.com',
+        config.vapidKeys.publicKey,
+        config.vapidKeys.privateKey
+      )
 
-      if (response.ok) {
-        return { success: true, response: await response.json() }
+      try {
+        await webpush.sendNotification(
+          { endpoint: recipient, keys: config.keys },
+          JSON.stringify({ title: subject, body: message })
+        )
+        return { success: true }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error'
+        return { success: false, error: `Web Push error: ${message}` }
       }
-      return { success: false, error: `FCM error: ${response.statusText}` }
     }
 
-    return { success: false, error: 'Push provider not configured' }
+    return { success: false, error: 'Push provider not configured (requires VAPID keys)' }
   }
 
   static async sendWebhook(params: NotificationMessage): Promise<NotificationResult> {

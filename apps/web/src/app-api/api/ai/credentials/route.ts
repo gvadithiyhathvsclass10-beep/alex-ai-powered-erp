@@ -1,4 +1,4 @@
-import { createServerClientSupabase } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { encrypt } from '@/lib/encryption'
@@ -6,12 +6,7 @@ import { generateKeyHash } from '@/lib/encryption'
 
 export async function GET() {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const credentials = await prisma.aICredential.findMany({
       where: { userId: user.id, isActive: true },
@@ -41,12 +36,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerClientSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await requireAuth()
 
     const body = await request.json()
     const { provider, providerName, apiKey, models, isDefault, usageLimit } = body

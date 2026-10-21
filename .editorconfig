@@ -1,21 +1,27 @@
 root = true
 
 [*]
-charset = utf-8
-end_of_line = lf
 indent_style = space
 indent_size = 2
-insert_final_newline = true
-trim_trailing_whitespace = true
-
-[*.{ps1,bat,cmd}]
-end_of_line = crlf
-
-[*.{sh,yml,yaml,json,md,txt,ts,tsx,js,jsx,prisma,css,html}]
 end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{json,yaml,yml,toml,md}]
+indent_size = 2
+
+[*.{ts,tsx,js,jsx}]
+indent_size = 2
+
+[*.prisma]
+indent_size = 2
 
 [Dockerfile*]
-end_of_line = lf
+indent_size = 2
 
-[*.{png,jpg,jpeg,gif,ico,svg,woff,woff2,ttf,eot,otf,mp4,webm,pdf,zip,db,sqlite}]
-binary = true
+[Makefile]
+indent_style = tab
+
+[*.{sh,ps1}]
+end_of_line = lf

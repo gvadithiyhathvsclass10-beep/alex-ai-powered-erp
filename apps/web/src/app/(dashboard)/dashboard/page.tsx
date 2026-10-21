@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { StudentDashboard } from "./student-dashboard"
 import { LecturerDashboard } from "./lecturer-dashboard"
 import { AdminDashboard } from "./admin-dashboard"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 interface UserWithRole {
   id: string
@@ -37,56 +37,18 @@ export default function DashboardPage() {
         return
       }
 
-      try {
-        // Fetch user profile with role and membership from Firebase Function
-        const functionsUrl = process.env.NEXT_PUBLIC_FUNCTIONS_URL || ''
-        if (functionsUrl) {
-          const response = await fetch(`${functionsUrl}/getUserProfile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include'
-          })
-          if (response.ok) {
-            const data = await response.json()
-            // Merge Supabase user data with profile data
-            setUserWithRole({
-              id: user.id,
-              email: user.email || '',
-              firstName: data.firstName || user.user_metadata?.firstName || '',
-              lastName: data.lastName || user.user_metadata?.lastName || '',
-              avatarUrl: data.avatarUrl || user.user_metadata?.avatarUrl || null,
-              role: data.role || 'STUDENT',
-              activeMembership: data.activeMembership
-            })
-            setUserLoading(false)
-            return
-          }
-        }
-
-        // Fallback: use Supabase user metadata
-        setUserWithRole({
-          id: user.id,
-          email: user.email || '',
-          firstName: user.user_metadata?.firstName || '',
-          lastName: user.user_metadata?.lastName || '',
-          avatarUrl: user.user_metadata?.avatarUrl || null,
-          role: 'STUDENT',
-          activeMembership: undefined
-        })
-      } catch (error) {
-        console.error('Failed to fetch user profile:', error)
-        setUserWithRole({
-          id: user.id,
-          email: user.email || '',
-          firstName: user.user_metadata?.firstName || '',
-          lastName: user.user_metadata?.lastName || '',
-          avatarUrl: user.user_metadata?.avatarUrl || null,
-          role: 'STUDENT',
-          activeMembership: undefined
-        })
-      } finally {
-        setUserLoading(false)
-      }
+      // The user object from useAuth already contains the role and activeMembership
+      // from the server-side /api/auth/me endpoint
+      setUserWithRole({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        avatarUrl: user.avatarUrl || null,
+        role: user.role || 'STUDENT',
+        activeMembership: user.activeMembership,
+      })
+      setUserLoading(false)
     }
 
     fetchUserProfile()
