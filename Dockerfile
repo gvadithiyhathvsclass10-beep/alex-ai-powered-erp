@@ -102,3 +102,8 @@ COPY --chown=worker:nodejs docker/worker-entrypoint.js ./worker-entrypoint.js
 USER worker
 
 CMD ["node", "worker-entrypoint.js"]
+
+# Render's Docker service builds the final stage by default. Keep the API as
+# the default production target; the worker stage remains available for a
+# separately configured worker service.
+FROM runner-api AS final

@@ -13,7 +13,7 @@ import { getStorage } from './apps/web/src/lib/storage'
 import { prisma } from './apps/web/src/lib/prisma'
 
 // Simple in-memory queue for demo; replace with BullMQ + Redis in production
-const jobQueue: Array<() => Promise<void>> = []
+const jobQueue = []
 let isProcessing = false
 
 async function processQueue() {
@@ -40,7 +40,7 @@ function enqueueJob(job: () => Promise<void>) {
 }
 
 // Document processing job
-async function handleDocumentProcessing(documentId: string, userId: string) {
+async function handleDocumentProcessing(documentId, userId) {
   console.log(`[Worker] Processing document ${documentId} for user ${userId}`)
   
   const document = await prisma.document.findUnique({
@@ -155,7 +155,7 @@ function startScheduler() {
   console.log('[Worker] Scheduler started')
 }
 
-function scheduleJob(cron: string, fn: () => Promise<void>) {
+function scheduleJob(cron, fn) {
   // Simple cron implementation - in production use node-cron or similar
   const [minute, hour, day, month, weekday] = cron.split(' ')
   
@@ -174,7 +174,7 @@ function scheduleJob(cron: string, fn: () => Promise<void>) {
 }
 
 // API to enqueue jobs (called from Next.js API routes)
-export async function enqueueDocumentProcessingJob(documentId: string, userId: string) {
+export async function enqueueDocumentProcessingJob(documentId, userId) {
   enqueueJob(() => handleDocumentProcessing(documentId, userId))
 }
 
