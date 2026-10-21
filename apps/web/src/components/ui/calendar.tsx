@@ -30,24 +30,17 @@ export function Calendar({
 }: CalendarProps) {
   const [focusDate, setFocusDate] = React.useState(initialFocus || new Date())
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([])
-
-  React.useEffect(() => {
-    if (selected) {
-      if (Array.isArray(selected)) {
-        setSelectedDates(selected)
-      } else {
-        setSelectedDates([selected])
-      }
-    }
-  }, [selected])
+  
+  // Use controlled value when provided, otherwise use internal state
+  const effectiveSelected = selected ? (Array.isArray(selected) ? selected : [selected]) : selectedDates
 
   const isSelected = (date: Date) => {
-    return selectedDates.some(d => isSameDay(d, date))
+    return effectiveSelected.some(d => isSameDay(d, date))
   }
 
   const isInRange = (date: Date) => {
-    if (selectedDates.length !== 2) return false
-    const [start, end] = selectedDates.sort((a, b) => a.getTime() - b.getTime())
+    if (effectiveSelected.length !== 2) return false
+    const [start, end] = effectiveSelected.sort((a, b) => a.getTime() - b.getTime())
     return date >= start && date <= end
   }
 
@@ -65,21 +58,23 @@ export function Calendar({
     if (mode === "single") {
       newDates = [date]
     } else if (mode === "range") {
-      if (selectedDates.length === 0 || selectedDates.length === 2) {
+      if (effectiveSelected.length === 0 || effectiveSelected.length === 2) {
         newDates = [date]
       } else {
-        newDates = [...selectedDates, date].sort((a, b) => a.getTime() - b.getTime())
+        newDates = [...effectiveSelected, date].sort((a, b) => a.getTime() - b.getTime())
       }
     } else if (mode === "multiple") {
-      const index = selectedDates.findIndex(d => isSameDay(d, date))
+      const index = effectiveSelected.findIndex(d => isSameDay(d, date))
       if (index >= 0) {
-        newDates = selectedDates.filter((_, i) => i !== index)
+        newDates = effectiveSelected.filter((_, i) => i !== index)
       } else {
-        newDates = [...selectedDates, date]
+        newDates = [...effectiveSelected, date]
       }
     }
 
-    setSelectedDates(newDates)
+    if (!selected) {
+      setSelectedDates(newDates)
+    }
     onSelect?.(mode === "single" ? newDates[0] : newDates)
   }
 

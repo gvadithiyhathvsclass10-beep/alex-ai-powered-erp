@@ -36,91 +36,104 @@ export function DiagramViewer({
   const [editCode, setEditCode] = React.useState(definition.code)
   const [svgContent, setSvgContent] = React.useState<string | null>(null)
   const [isRendering, setIsRendering] = React.useState(false)
+  const [retryCount, setRetryCount] = React.useState(0)
   const containerRef = React.useRef<HTMLDivElement>(null)
 
-  const renderDiagram = async () => {
-    if (!autoRender) return
-    
-    if (definition.type === "mermaid") {
-      await renderMermaidClient()
-    } else if (definition.type === "svg") {
-      setSvgContent(definition.code)
-      setRendered(true)
-    } else if (definition.type === "description") {
-      setRendered(true)
-    } else if (definition.type === "graphviz" || definition.type === "plantuml") {
-      await renderServerSide()
-    }
-  }
-
-  const renderMermaidClient = async () => {
-    if (!containerRef.current) return
-    
-    try {
-      setIsRendering(true)
-      setError(null)
-      
-      const mermaid = await import("mermaid")
-      mermaid.default.initialize({
-        startOnLoad: false,
-        theme: "default",
-        securityLevel: "loose",
-        fontFamily: "inherit",
-      })
-
-      const { svg } = await mermaid.default.render(
-        `diagram-${Date.now()}`,
-        definition.code
-      )
-      
-      setSvgContent(svg)
-      setRendered(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to render diagram")
-      setRendered(true)
-    } finally {
-      setIsRendering(false)
-    }
-  }
-
-  const renderServerSide = async () => {
-    try {
-      setIsRendering(true)
-      setError(null)
-      
-      const response = await fetch("/api/diagrams/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: definition.type,
-          code: definition.code,
-          title: definition.title,
-        }),
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Server-side rendering failed")
-      }
-      
-      const data = await response.json()
-      setSvgContent(data.svg)
-      setRendered(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to render diagram")
-      setRendered(true)
-    } finally {
-      setIsRendering(false)
-    }
-  }
-
   React.useEffect(() => {
-    if (definition.type === "mermaid" || definition.type === "graphviz" || definition.type === "plantuml" || definition.type === "svg") {
-      renderDiagram()
-    } else if (definition.type === "description") {
-      setRendered(true)
+    let isMounted = true
+    
+    const doRender = async () => {
+      if (!autoRender) return
+      
+      if (definition.type === "mermaid" || definition.type === "graphviz" || definition.type === "plantuml" || definition.type === "svg") {
+        if (definition.type === "mermaid") {
+          if (!containerRef.current || !isMounted) return
+          
+          try {
+            setIsRendering(true)
+            setError(null)
+            
+            const mermaid = await import("mermaid")
+            mermaid.default.initialize({
+              startOnLoad: false,
+              theme: "default",
+              securityLevel: "loose",
+              fontFamily: "inherit",
+            })
+  
+            const { svg } = await mermaid.default.render(
+              `diagram-${Date.now()}`,
+              definition.code
+            )
+            
+            if (isMounted) {
+              setSvgContent(svg)
+              setRendered(true)
+            }
+          } catch (err) {
+            if (isMounted) {
+              setError(err instanceof Error ? err.message : "Failed to render diagram")
+              setRendered(true)
+            }
+          } finally {
+            if (isMounted) {
+              setIsRendering(false)
+            }
+          }
+        } else if (definition.type === "svg") {
+          if (isMounted) {
+            setSvgContent(definition.code)
+            setRendered(true)
+          }
+        } else if (definition.type === "graphviz" || definition.type === "plantuml") {
+          try {
+            setIsRendering(true)
+            setError(null)
+            
+            const response = await fetch("/api/diagrams/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: definition.type,
+                code: definition.code,
+                title: definition.title,
+              }),
+            })
+            
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(errorData.error || "Server-side rendering failed")
+            }
+            
+            const data = await response.json()
+            if (isMounted) {
+              setSvgContent(data.svg)
+              setRendered(true)
+            }
+          } catch (err) {
+            if (isMounted) {
+              setError(err instanceof Error ? err.message : "Failed to render diagram")
+              setRendered(true)
+            }
+          } finally {
+            if (isMounted) {
+              setIsRendering(false)
+            }
+          }
+        }
+      } else if (definition.type === "description") {
+        if (isMounted) {
+          setRendered(true)
+        }
+      }
     }
-  }, [definition.type, definition.code, autoRender])
+    
+    doRender()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [definition.type, definition.code, autoRender, retryCount])
 
   const handleDownload = () => {
     if (svgContent) {
@@ -156,7 +169,7 @@ export function DiagramViewer({
   const handleRetry = () => {
     setRendered(false)
     setError(null)
-    renderDiagram()
+    setRetryCount(prev => prev + 1)
   }
 
   return (

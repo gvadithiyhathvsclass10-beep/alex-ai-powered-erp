@@ -12,6 +12,52 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
+// Speech Recognition types (not in standard TypeScript lib)
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null
+}
+
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number
+  readonly results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  item(index: number): SpeechRecognitionResult
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string
+  readonly confidence: number
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string
+  readonly message: string
+}
+
+function getTimestamp() {
+  return Date.now()
+}
+
 interface AIAvatarProps {
   subjectId?: string
   projectId?: string
@@ -83,8 +129,30 @@ export function AIAvatar({
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [isMobile, setIsMobile] = React.useState(false)
-  const [conversationId, setConversationId] = React.useState<string | null>(null)
-  const [messages, setMessages] = React.useState<Array<{ role: "user" | "assistant"; content: string; timestamp: number }>>([])
+  const [conversationId, setConversationId] = React.useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("alex-avatar-conv-default")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          return parsed.conversationId || null
+        } catch {}
+      }
+    }
+    return null
+  })
+  const [messages, setMessages] = React.useState<Array<{ role: "user" | "assistant"; content: string; timestamp: number }>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("alex-avatar-conv-default")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          return parsed.messages || []
+        } catch {}
+      }
+    }
+    return []
+  })
   const [showQuickActions, setShowQuickActions] = React.useState(false)
   const panelRef = React.useRef<HTMLDivElement>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
@@ -97,18 +165,6 @@ export function AIAvatar({
     window.addEventListener("resize", checkMobile)
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
-
-  // Load conversation from localStorage
-  React.useEffect(() => {
-    const saved = localStorage.getItem(`alex-avatar-conv-${conversationId || 'default'}`)
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        setMessages(parsed.messages || [])
-        setConversationId(parsed.conversationId || null)
-      } catch {}
-    }
-  }, [conversationId])
 
   // Save conversation to localStorage
   React.useEffect(() => {
@@ -168,7 +224,8 @@ export function AIAvatar({
   const handleSendMessage = async (content: string, contextOverride?: string) => {
     if (!content.trim()) return
 
-    const userMessage = { role: "user" as const, content, timestamp: Date.now() }
+    const timestamp = getTimestamp()
+    const userMessage = { role: "user" as const, content, timestamp }
     setMessages(prev => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
@@ -236,9 +293,9 @@ export function AIAvatar({
   }
 
   const startListening = () => {
-    const win = window as Window & { 
-      SpeechRecognition?: { new(): any }; 
-      webkitSpeechRecognition?: { new(): any } 
+    const win = window as Window & {
+      SpeechRecognition?: { new(): SpeechRecognition };
+      webkitSpeechRecognition?: { new(): SpeechRecognition };
     }
     if (!("webkitSpeechRecognition" in win) && !("SpeechRecognition" in win)) {
       toast({ title: "Voice not supported", description: "Your browser doesn't support speech recognition", variant: "destructive" })
@@ -255,9 +312,9 @@ export function AIAvatar({
     recognition.onstart = () => setIsListening(true)
     recognition.onend = () => setIsListening(false)
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)
-        .map((result: any) => result[0].transcript)
+        .map((result: SpeechRecognitionResult) => result[0].transcript)
         .join("")
 
       if (event.results[0].isFinal) {
