@@ -57,6 +57,9 @@ FROM node:20-alpine AS runner-api
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Prisma 5's Linux engine requires OpenSSL at runtime on Alpine.
+RUN apk add --no-cache openssl
+
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
 # Copy standalone output
@@ -86,8 +89,8 @@ WORKDIR /app
 
 RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001 -G nodejs
 
-# Install tesseract for OCR
-RUN apk add --no-cache tesseract-ocr
+# Install runtime libraries for Prisma and OCR.
+RUN apk add --no-cache openssl tesseract-ocr
 
 # Copy built application
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./
