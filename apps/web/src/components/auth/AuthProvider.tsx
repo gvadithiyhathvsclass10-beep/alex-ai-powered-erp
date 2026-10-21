@@ -68,12 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
-  }
-
   return (
-    <AuthContext.Provider value={{ user, loading: false, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
