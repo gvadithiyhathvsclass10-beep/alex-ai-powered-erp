@@ -28,13 +28,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 async function fetchUser(): Promise<ExtendedUser | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
   try {
-    const response = await fetch('/api/auth/me', { credentials: 'include' })
+    const response = await fetch('/api/auth/me', { credentials: 'include', signal: controller.signal })
     if (!response.ok) return null
     const data = await response.json()
     return data.user
   } catch {
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
