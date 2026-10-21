@@ -78,7 +78,9 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "apps/web/server.js"]
+# Apply the Prisma schema on first deploy/start, then launch Next.js.
+# This creates the Neon tables required by registration and all API features.
+CMD ["sh", "-c", "node_modules/.bin/prisma db push --schema=apps/web/prisma/schema.prisma --skip-generate && node apps/web/server.js"]
 
 # -----------------------------------------------------------------------------
 # Production runtime: Background worker
