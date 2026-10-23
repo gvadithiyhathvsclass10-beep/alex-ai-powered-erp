@@ -53,9 +53,17 @@ export async function POST(request: Request) {
       })
 
       if (!targetSession) {
+        const subject = await prisma.subject.findUnique({
+          where: { id: String(body.subjectId) },
+          select: { semesterId: true },
+        })
+        if (!subject?.semesterId) {
+          return NextResponse.json({ error: 'Subject has no associated semester' }, { status: 400 })
+        }
         targetSession = await prisma.attendanceSession.create({
           data: {
             subjectId: String(body.subjectId),
+            semesterId: subject.semesterId,
             date: normalizedDate,
             period,
             topic: typeof body.topic === 'string' && body.topic.trim() ? body.topic.trim() : null,

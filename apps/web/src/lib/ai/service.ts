@@ -11,6 +11,7 @@ export interface TokenUsage {
   prompt: number
   completion: number
   total: number
+  [key: string]: unknown
 }
 
 export interface ProviderMetadata {

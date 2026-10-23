@@ -677,7 +677,7 @@ export default function PlannerPage() {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={(d) => d && setSelectedDate(d)}
+                  onSelect={(d) => d && setSelectedDate(Array.isArray(d) ? d[0] : d)}
                   className="rounded-md border"
                 />
               </CardContent>

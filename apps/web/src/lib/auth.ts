@@ -3,6 +3,26 @@ import { getLocalUserId, LOCAL_AUTH_COOKIE } from './local-auth'
 import { UserRole, MembershipStatus, CollegeMembership } from '@prisma/client'
 import { cookies } from 'next/headers'
 
+export interface AuthenticatedUser {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  avatarUrl: string | null
+  role: UserRole
+  isActive: boolean
+  lastLoginAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  memberships: CollegeMembership[]
+  activeMembership?: CollegeMembership
+  institutionId?: string | null
+  departmentId?: string | null
+  courseId?: string | null
+  semesterId?: string | null
+  name?: string
+}
+
 export async function getCurrentUser() {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get(LOCAL_AUTH_COOKIE)?.value

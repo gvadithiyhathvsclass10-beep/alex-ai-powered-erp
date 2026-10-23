@@ -247,7 +247,7 @@ export function validateUploadedFile(
     }
   }
 
-  const defaultMimeByType: Record<DocumentType, string> = {
+  const defaultMimeByType: Record<string, string> = {
     [DocType.PDF]: 'application/pdf',
     [DocType.DOC]: 'application/msword',
     [DocType.DOCX]: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

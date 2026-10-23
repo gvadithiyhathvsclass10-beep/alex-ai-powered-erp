@@ -438,10 +438,18 @@ export async function POST(request: Request) {
         const enrollments = await prisma.subjectEnrollment.findMany({
           where: { subjectId: String(subjectId), isActive: true },
         })
+        const subject = await tx.subject.findUnique({
+          where: { id: String(subjectId) },
+          select: { semesterId: true },
+        })
+        const fallbackSemesterId = subject?.semesterId ?? access.subject?.semesterId
+        if (!fallbackSemesterId) {
+          throw new Error('Subject has no associated semester')
+        }
         return tx.attendanceSession.create({
           data: {
             subjectId: String(subjectId),
-            semesterId: access.subject?.semesterId,
+            semesterId: fallbackSemesterId,
             date: normalizedDate,
             period: normalizedPeriod,
             topic: typeof topic === 'string' && topic.trim() ? topic.trim() : null,
@@ -457,9 +465,18 @@ export async function POST(request: Request) {
         })
       }
 
+      const subject = await tx.subject.findUnique({
+        where: { id: String(subjectId) },
+        select: { semesterId: true },
+      })
+      if (!subject?.semesterId) {
+        throw new Error('Subject has no associated semester')
+      }
+
       const session = await tx.attendanceSession.create({
         data: {
           subjectId: String(subjectId),
+          semesterId: subject?.semesterId,
           date: normalizedDate,
           period: normalizedPeriod,
           topic: typeof topic === 'string' && topic.trim() ? topic.trim() : null,

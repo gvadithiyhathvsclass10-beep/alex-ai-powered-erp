@@ -307,7 +307,7 @@ function DocumentRow({ document, onRetry, onDelete, onView, onEdit }: DocumentRo
             Download
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {document.status === DocumentStatus.FAILED && (
+          {document.status === 'FAILED' && (
             <DropdownMenuItem onClick={() => onRetry?.(document.id)}>
               <RotateCcw className="mr-2 h-4 w-4" />
               Retry Processing

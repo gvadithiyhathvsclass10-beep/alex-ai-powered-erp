@@ -26,6 +26,7 @@
     "predeploy": "npm run build && npm run lint && npm run typecheck"
   },
   "devDependencies": {
+    "@babel/preset-env": "^8.0.7",
     "concurrently": "^9.0.0",
     "eslint": "^9"
   },

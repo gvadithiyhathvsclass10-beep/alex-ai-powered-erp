@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { canAccessDocument } from '@/lib/document-processing/access'
+import { Prisma } from '@prisma/client'
 import {
   summarizeAndAnalyzeDocument,
   formatAIServiceErrorResponse,
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
           provider: summary.provider,
           model: summary.model,
           tokenUsage: summary.tokenUsage,
-        },
+        } as Prisma.InputJsonValue,
       },
     })
 
