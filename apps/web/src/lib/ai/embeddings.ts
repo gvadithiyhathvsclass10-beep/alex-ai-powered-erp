@@ -2,7 +2,6 @@ import { AICredential, AIProviderType as PrismaAIProviderType } from '@prisma/cl
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
 
-<<<<<<< HEAD
 type AIProviderType = PrismaAIProviderType | 'MOCK'
 
 const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
@@ -37,11 +36,6 @@ export async function fetchWithTimeout(
   }
 }
 
-=======
-// Extend for local development mock provider
-type AIProviderType = PrismaAIProviderType | 'MOCK'
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 export interface EmbeddingResult {
   embeddings: number[][]
   tokenCount: number
@@ -52,15 +46,6 @@ export interface EmbeddingProvider {
   generateEmbeddings(texts: string[]): Promise<EmbeddingResult>
 }
 
-<<<<<<< HEAD
-=======
-async function getActiveCredential(userId: string, provider: PrismaAIProviderType): Promise<AICredential | null> {
-  return prisma.aICredential.findFirst({
-    where: { userId, provider, isActive: true, isDefault: true },
-  })
-}
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 async function getCredentialKey(credential: AICredential): Promise<string> {
   return decrypt(credential.encryptedKey)
 }
@@ -75,7 +60,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-<<<<<<< HEAD
     if (texts.length === 0) {
       return { embeddings: [], tokenCount: 0, model: this.model }
     }
@@ -85,12 +69,6 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
-=======
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -101,22 +79,14 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     })
 
     if (!response.ok) {
-<<<<<<< HEAD
       const error = await response.json().catch(() => ({}))
-=======
-      const error = await response.json()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       throw new Error(`OpenAI embeddings error: ${error.error?.message || response.statusText}`)
     }
 
     const data = await response.json()
     return {
       embeddings: data.data.map((d: { embedding: number[] }) => d.embedding),
-<<<<<<< HEAD
       tokenCount: data.usage?.total_tokens ?? texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
-=======
-      tokenCount: data.usage.total_tokens,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       model: this.model,
     }
   }
@@ -132,7 +102,6 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-<<<<<<< HEAD
     if (texts.length === 0) {
       return { embeddings: [], tokenCount: 0, model: this.model }
     }
@@ -140,10 +109,6 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
     const baseUrl = (process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
     const response = await fetchWithTimeout(
       `${baseUrl}/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
-=======
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:embedContent?key=${this.apiKey}`,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,11 +122,7 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
     )
 
     if (!response.ok) {
-<<<<<<< HEAD
       const error = await response.json().catch(() => ({}))
-=======
-      const error = await response.json()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       throw new Error(`Google embeddings error: ${error.error?.message || response.statusText}`)
     }
 
@@ -184,7 +145,6 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-<<<<<<< HEAD
     if (texts.length === 0) {
       return { embeddings: [], tokenCount: 0, model: this.model }
     }
@@ -194,12 +154,6 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
-=======
-    const response = await fetch('https://api.mistral.ai/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -209,22 +163,14 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
     })
 
     if (!response.ok) {
-<<<<<<< HEAD
       const error = await response.json().catch(() => ({}))
-=======
-      const error = await response.json()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       throw new Error(`Mistral embeddings error: ${error.error?.message || response.statusText}`)
     }
 
     const data = await response.json()
     return {
       embeddings: data.data.map((d: { embedding: number[] }) => d.embedding),
-<<<<<<< HEAD
       tokenCount: data.usage?.total_tokens ?? texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
-=======
-      tokenCount: data.usage.total_tokens,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       model: this.model,
     }
   }
@@ -249,7 +195,6 @@ export function createEmbeddingProvider(
   }
 }
 
-<<<<<<< HEAD
 function hashTokenToIndex(token: string, seed = 0, dims = 1536): { idx: number; sign: number } {
   let h = 2166136261 ^ seed
 
@@ -302,30 +247,6 @@ export class MockEmbeddingProvider implements EmbeddingProvider {
       return vec.map(val => val / norm)
     })
 
-=======
-export class MockEmbeddingProvider implements EmbeddingProvider {
-  async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-    // Generate deterministic mock embeddings based on text content
-    const embeddings = texts.map(text => {
-      // Simple hash-based embedding for consistency
-      let hash = 0
-      for (let i = 0; i < text.length; i++) {
-        hash = ((hash << 5) - hash) + text.charCodeAt(i)
-        hash |= 0
-      }
-      
-      // Generate 1536-dimensional vector (matching OpenAI)
-      const embedding = new Array(1536).fill(0).map((_, i) => {
-        const val = Math.sin(hash + i) * 0.5
-        return val
-      })
-      
-      // Normalize
-      const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0))
-      return embedding.map(val => val / (norm || 1))
-    })
-    
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return {
       embeddings,
       tokenCount: texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
@@ -337,7 +258,6 @@ export class MockEmbeddingProvider implements EmbeddingProvider {
 export async function getUserEmbeddingProvider(
   userId: string,
   provider?: AIProviderType
-<<<<<<< HEAD
 ): Promise<{ provider: EmbeddingProvider; model: string; credential: AICredential | null }> {
   const mockAllowed =
     process.env.NODE_ENV !== 'production' &&
@@ -435,37 +355,4 @@ export async function getUserEmbeddingProvider(
       ? `No active ${requestedProvider} API credential is configured for embeddings. Add a valid key in AI Settings or choose a supported embeddings provider.`
       : 'No embeddings API key is configured. Add an OpenAI, Google Gemini, or Mistral credential and select an embeddings model in AI Settings.'
   )
-=======
-): Promise<{ provider: EmbeddingProvider; model: string; credential: AICredential } | null> {
-  const cred = await prisma.aICredential.findFirst({
-    where: {
-      userId,
-      provider: provider as PrismaAIProviderType | undefined,
-      isActive: true,
-      isDefault: true,
-    },
-  })
-
-  if (!cred) {
-    // Return mock embedding provider for local development
-    return {
-      provider: new MockEmbeddingProvider(),
-      model: 'mock',
-      credential: null as any,
-    }
-  }
-
-  const apiKey = await getCredentialKey(cred)
-  const modelConfig = await prisma.aIModelConfig.findFirst({
-    where: { userId, provider: cred.provider, taskType: 'embeddings', isDefault: true },
-  })
-
-  const embeddingProvider = createEmbeddingProvider(cred.provider, apiKey, modelConfig?.modelId)
-  
-  return {
-    provider: embeddingProvider,
-    model: modelConfig?.modelId || (cred.provider === 'OPENAI' ? 'text-embedding-3-small' : 'default'),
-    credential: cred,
-  }
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 }

@@ -1,7 +1,6 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-<<<<<<< HEAD
 import {
   verifySubjectManagementAccess,
   normalizeCalendarDate,
@@ -11,13 +10,10 @@ import { buildEnrichedSession, SESSION_INCLUDE } from '@/app/api/attendance/sess
 import { AuditLogService } from '@/lib/audit-log'
 
 const VALID_STATUSES = new Set(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'ON_DUTY'])
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
-<<<<<<< HEAD
     const body = await request.json()
 
     let sessionId: string | null = body.sessionId ? String(body.sessionId) : null
@@ -204,25 +200,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Attendance Mark] Error:', error)
-=======
-
-    const body = await request.json()
-    const { sessionId, records } = body
-
-    await prisma.$transaction(async (tx) => {
-      for (const record of records) {
-        await tx.attendanceRecord.upsert({
-          where: { sessionId_userId: { sessionId, userId: record.userId } },
-          update: { status: record.status, markedBy: user.id, markedAt: new Date() },
-          create: { sessionId, userId: record.userId, status: record.status, markedBy: user.id },
-        })
-      }
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Mark attendance error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to mark attendance' }, { status: 500 })
   }
 }

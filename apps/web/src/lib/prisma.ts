@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 
-<<<<<<< HEAD
 // Ensure BigInt values (e.g., Document.fileSize, SubjectResource.fileSize, SubmissionAttachment.fileSize)
 // never cause "TypeError: Do not know how to serialize a BigInt" in NextResponse.json()
 if (typeof (BigInt.prototype as unknown as { toJSON?: () => string }).toJSON !== 'function') {
@@ -40,23 +39,16 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://alex:alex@localhost:5432/alex'
 }
 
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-<<<<<<< HEAD
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-=======
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-<<<<<<< HEAD
 export async function checkDatabaseConnection(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
   const start = Date.now()
   try {
@@ -69,6 +61,4 @@ export async function checkDatabaseConnection(): Promise<{ ok: boolean; latencyM
   }
 }
 
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 export default prisma

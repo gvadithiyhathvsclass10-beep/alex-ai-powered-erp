@@ -95,11 +95,7 @@ export function Header({ user }: HeaderProps) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-<<<<<<< HEAD
                 <Link href="/dashboard/settings" className="flex w-full items-center justify-start">
-=======
-                <Link href="/dashboard/profile" className="flex w-full items-center justify-start">
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </Link>

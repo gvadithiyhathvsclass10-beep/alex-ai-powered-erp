@@ -7,16 +7,9 @@
  * - Notification delivery
  */
 
-<<<<<<< HEAD
 const { PrismaClient } = require('@prisma/client')
 
 const prisma = new PrismaClient()
-=======
-import { PrismaClient } from '@prisma/client'
-import { processDocument } from './apps/web/src/lib/document-processing/pipeline'
-import { getStorage } from './apps/web/src/lib/storage'
-import { prisma } from './apps/web/src/lib/prisma'
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 // Simple in-memory queue for demo; replace with BullMQ + Redis in production
 const jobQueue = []
@@ -40,54 +33,11 @@ async function processQueue() {
   isProcessing = false
 }
 
-<<<<<<< HEAD
 function enqueueJob(job) {
-=======
-function enqueueJob(job: () => Promise<void>) {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   jobQueue.push(job)
   processQueue()
 }
 
-<<<<<<< HEAD
-=======
-// Document processing job
-async function handleDocumentProcessing(documentId, userId) {
-  console.log(`[Worker] Processing document ${documentId} for user ${userId}`)
-  
-  const document = await prisma.document.findUnique({
-    where: { id: documentId },
-  })
-  
-  if (!document) {
-    console.error(`[Worker] Document ${documentId} not found`)
-    return
-  }
-  
-  if (document.ownerId !== userId) {
-    console.error(`[Worker] Unauthorized: user ${userId} not owner of document ${documentId}`)
-    return
-  }
-  
-  const storage = getStorage()
-  const file = await storage.download(document.storageBucket, document.storagePath)
-  
-  await processDocument({
-    documentId,
-    userId,
-    fileBuffer: file,
-    fileName: document.fileName,
-    mimeType: document.mimeType,
-    documentType: document.documentType,
-    subjectId: document.subjectId || undefined,
-    projectId: document.projectId || undefined,
-    notebookId: document.notebookId || undefined,
-  })
-  
-  console.log(`[Worker] Document ${documentId} processing complete`)
-}
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 // Scheduled jobs
 async function cleanupOldNotifications() {
   console.log('[Worker] Running scheduled cleanup of old notifications')
@@ -174,19 +124,11 @@ function scheduleJob(cron, fn) {
   
   setInterval(() => {
     const now = new Date()
-<<<<<<< HEAD
     const matchMinute = minute === '*' || parseInt(minute, 10) === now.getMinutes()
     const matchHour = hour === '*' || parseInt(hour, 10) === now.getHours()
     const matchDay = day === '*' || parseInt(day, 10) === now.getDate()
     const matchMonth = month === '*' || parseInt(month, 10) === now.getMonth() + 1
     const matchWeekday = weekday === '*' || parseInt(weekday, 10) === now.getDay()
-=======
-    const matchMinute = minute === '*' || parseInt(minute) === now.getMinutes()
-    const matchHour = hour === '*' || parseInt(hour) === now.getHours()
-    const matchDay = day === '*' || parseInt(day) === now.getDate()
-    const matchMonth = month === '*' || parseInt(month) === now.getMonth() + 1
-    const matchWeekday = weekday === '*' || parseInt(weekday) === now.getDay()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     
     if (matchMinute && matchHour && matchDay && matchMonth && matchWeekday) {
       fn().catch(console.error)
@@ -194,7 +136,6 @@ function scheduleJob(cron, fn) {
   }, 60000) // Check every minute
 }
 
-<<<<<<< HEAD
 if (require.main === module) {
   console.log('[Worker] Starting ALEX background worker...')
   startScheduler()
@@ -219,29 +160,3 @@ module.exports = {
   enqueueJob,
   scheduleJob,
 }
-=======
-// API to enqueue jobs (called from Next.js API routes)
-export async function enqueueDocumentProcessingJob(documentId, userId) {
-  enqueueJob(() => handleDocumentProcessing(documentId, userId))
-}
-
-// Start worker
-console.log('[Worker] Starting ALEX background worker...')
-startScheduler()
-
-// Keep process alive
-setInterval(() => {}, 1000 * 60 * 60) // Sleep forever
-
-// Handle shutdown
-process.on('SIGTERM', async () => {
-  console.log('[Worker] Shutting down...')
-  await prisma.$disconnect()
-  process.exit(0)
-})
-
-process.on('SIGINT', async () => {
-  console.log('[Worker] Shutting down...')
-  await prisma.$disconnect()
-  process.exit(0)
-})
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

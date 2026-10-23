@@ -1,5 +1,4 @@
 import { requireAuth } from '@/lib/auth'
-<<<<<<< HEAD
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import {
@@ -10,18 +9,10 @@ import { AuditLogService } from '@/lib/audit-log'
 
 export async function GET(
   _request: Request,
-=======
-import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
-
-export async function GET(
-  request: Request,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth()
-<<<<<<< HEAD
     const context = await resolveClassroomContext(user)
     const { id } = await params
 
@@ -52,19 +43,10 @@ export async function GET(
       orderBy: [{ submittedAt: 'desc' }, { submissionNumber: 'desc' }],
       include: {
         user: { select: { id: true, firstName: true, lastName: true, email: true } },
-=======
-
-    const { id } = await params
-    const submissions = await prisma.assignmentSubmission.findMany({
-      where: { assignmentId: id, userId: user.id },
-      orderBy: { submissionNumber: 'desc' },
-      include: {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         attachments: true,
       },
     })
 
-<<<<<<< HEAD
     const serialized = submissions.map((s) => ({
       ...s,
       attachments: s.attachments.map((a) => ({
@@ -190,11 +172,4 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   return PATCH(request, context)
-=======
-    return NextResponse.json({ submissions })
-  } catch (error) {
-    console.error('Assignment submissions list error:', error)
-    return NextResponse.json({ error: 'Failed to list submissions' }, { status: 500 })
-  }
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 }

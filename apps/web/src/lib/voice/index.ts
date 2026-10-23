@@ -29,13 +29,8 @@ export interface TTSOptions {
 
 export class BrowserSpeechProvider implements VoiceProvider {
   name = 'browser'
-<<<<<<< HEAD
   supportsSTT = typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
   supportsTTS = typeof window !== 'undefined' && 'speechSynthesis' in window
-=======
-  supportsSTT = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
-  supportsTTS = 'speechSynthesis' in window
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   languages = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'ja-JP', 'ko-KR', 'zh-CN']
 
   private recognition: any = null
@@ -276,7 +271,6 @@ export function createVoiceProvider(
 }
 
 export async function getUserVoiceConfig(userId: string): Promise<{
-<<<<<<< HEAD
   sttProvider: "browser" | "elevenlabs" | "openai-tts" | "google-stt"
   ttsProvider: "browser" | "elevenlabs" | "openai-tts"
   hasSttCredential?: boolean
@@ -285,70 +279,27 @@ export async function getUserVoiceConfig(userId: string): Promise<{
   defaultLanguage?: string
 } | null> {
   const { prisma } = await import("@/lib/prisma")
-=======
-  sttProvider: 'browser' | 'elevenlabs' | 'openai-tts' | 'google-stt'
-  ttsProvider: 'browser' | 'elevenlabs' | 'openai-tts'
-  sttApiKey?: string
-  ttsApiKey?: string
-  defaultVoice?: string
-  defaultLanguage?: string
-} | null> {
-  const { prisma } = await import('@/lib/prisma')
-  const { decrypt } = await import('@/lib/encryption')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   const voiceCreds = await prisma.aICredential.findFirst({
     where: {
       userId,
-<<<<<<< HEAD
       provider: "OTHER",
       providerName: { in: ["elevenlabs", "openai-tts", "google-stt"] },
-=======
-      provider: 'OTHER',
-      providerName: { in: ['elevenlabs', 'openai-tts', 'google-stt'] },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       isActive: true,
     },
   })
 
   if (!voiceCreds) {
     return {
-<<<<<<< HEAD
       sttProvider: "browser",
       ttsProvider: "browser",
       hasSttCredential: false,
       hasTtsCredential: false,
       defaultLanguage: "en-US",
-=======
-      sttProvider: 'browser',
-      ttsProvider: 'browser',
-      defaultLanguage: 'en-US',
-    }
-  }
-
-  const apiKey = await decrypt(voiceCreds.encryptedKey)
-
-  if (voiceCreds.providerName === 'elevenlabs') {
-    return {
-      sttProvider: 'browser',
-      ttsProvider: 'elevenlabs',
-      ttsApiKey: apiKey,
-      defaultLanguage: 'en-US',
-    }
-  }
-
-  if (voiceCreds.providerName === 'openai-tts') {
-    return {
-      sttProvider: 'browser',
-      ttsProvider: 'openai-tts',
-      ttsApiKey: apiKey,
-      defaultLanguage: 'en-US',
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   }
 
   return {
-<<<<<<< HEAD
     sttProvider: voiceCreds.providerName === "google-stt" ? "google-stt" : "browser",
     ttsProvider:
       voiceCreds.providerName === "elevenlabs"
@@ -361,10 +312,3 @@ export async function getUserVoiceConfig(userId: string): Promise<{
     defaultLanguage: "en-US",
   }
 }
-=======
-    sttProvider: 'browser',
-    ttsProvider: 'browser',
-    defaultLanguage: 'en-US',
-  }
-}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

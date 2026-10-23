@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 
 export async function GET() {
-<<<<<<< HEAD
   await headers()
 
   try {
@@ -27,18 +26,6 @@ export async function GET() {
 
     const subjects = await prisma.subject.findMany({
       where: whereClause,
-=======
-  // Force dynamic rendering by using headers()
-  headers()
-  
-  try {
-    const user = await requireAuth()
-
-    const subjects = await prisma.subject.findMany({
-      where: {
-        enrollments: { some: { userId: user.id, isActive: true } },
-      },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       include: {
         institution: { select: { id: true, name: true } },
         department: { select: { id: true, name: true, code: true } },
@@ -53,11 +40,7 @@ export async function GET() {
 
     return NextResponse.json({ subjects })
   } catch (error) {
-<<<<<<< HEAD
     console.error('[Subjects] My subjects list error:', error)
-=======
-    console.error('My subjects list error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to list subjects' }, { status: 500 })
   }
 }

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-<<<<<<< HEAD
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DocumentUpload } from "@/components/documents/document-upload"
@@ -26,12 +25,6 @@ import {
   Loader2,
   Link as LinkIcon,
 } from "lucide-react"
-=======
-import { DocumentUpload } from "@/components/documents/document-upload"
-import { DocumentList } from "@/components/documents/document-list"
-import { RAGChat } from "@/components/rag/rag-chat"
-import { Plus, FileText, Search, Brain, Sparkles, FlaskConical } from "lucide-react"
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { toast } from "@/hooks/use-toast"
 
 interface ResearchNotebook {
@@ -46,16 +39,11 @@ interface ResearchNotebook {
   _count: { sources: number; notes: number }
 }
 
-<<<<<<< HEAD
 interface NotebookSourceItem {
-=======
-interface ResearchSource {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   id: string
   notebookId: string
   documentId: string | null
   title: string
-<<<<<<< HEAD
   fileName: string
   fileSize: string
   mimeType: string
@@ -64,8 +52,6 @@ interface ResearchSource {
   pageCount: number | null
   chunksCount: number
   errorMessage: string | null
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   authors: Record<string, unknown> | null
   publicationYear: number | null
   doi: string | null
@@ -85,7 +71,6 @@ interface ResearchNote {
   updatedAt: string
 }
 
-<<<<<<< HEAD
 interface GeneratedQuizQuestion {
   id: string
   prompt: string
@@ -102,14 +87,11 @@ interface GeneratedQuizQuestion {
   }>
 }
 
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 export default function ResearchLabPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("notebooks")
   const [selectedNotebook, setSelectedNotebook] = React.useState<string | null>(null)
   const [showCreateNotebook, setShowCreateNotebook] = React.useState(false)
-<<<<<<< HEAD
   const [showAddTextSource, setShowAddTextSource] = React.useState(false)
   const [showCreateNote, setShowCreateNote] = React.useState(false)
   const [selectedExistingDocId, setSelectedExistingDocId] = React.useState("")
@@ -136,19 +118,10 @@ export default function ResearchLabPage() {
     queryFn: async () => {
       const res = await fetch("/api/research/notebooks")
       if (!res.ok) throw new Error("Failed to fetch notebooks")
-=======
-
-  const { data: notebooks } = useQuery({
-    queryKey: ['research-notebooks'],
-    queryFn: async () => {
-      const res = await fetch('/api/research/notebooks')
-      if (!res.ok) throw new Error('Failed to fetch')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return res.json()
     },
   })
 
-<<<<<<< HEAD
   const { data: sourcesData, isLoading: sourcesLoading } = useQuery({
     queryKey: ["research-sources", selectedNotebook],
     queryFn: async () => {
@@ -353,55 +326,11 @@ export default function ResearchLabPage() {
     (n: ResearchNotebook) => n.id === selectedNotebook
   )
 
-=======
-  const { data: sources } = useQuery({
-    queryKey: ['research-sources', selectedNotebook],
-    queryFn: async () => {
-      if (!selectedNotebook) return { sources: [] }
-      const res = await fetch(`/api/research/notebooks/${selectedNotebook}/sources`)
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
-    enabled: !!selectedNotebook,
-  })
-
-  const { data: notes } = useQuery({
-    queryKey: ['research-notes', selectedNotebook],
-    queryFn: async () => {
-      if (!selectedNotebook) return { notes: [] }
-      const res = await fetch(`/api/research/notebooks/${selectedNotebook}/notes`)
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
-    enabled: !!selectedNotebook,
-  })
-
-  const createNotebook = useMutation({
-    mutationFn: async (data: { title: string; description?: string }) => {
-      const res = await fetch('/api/research/notebooks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) throw new Error('Failed to create')
-      return res.json()
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['research-notebooks'] })
-      setSelectedNotebook(data.notebook.id)
-      setShowCreateNotebook(false)
-      toast({ title: "Notebook created" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to create notebook", variant: "destructive" }),
-  })
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Research Lab</h1>
-<<<<<<< HEAD
           <p className="text-muted-foreground mt-1">
             Source-grounded notebooks for multi-document analysis, study guides, FAQs, quizzes, and cited Q&A
           </p>
@@ -451,34 +380,6 @@ export default function ResearchLabPage() {
                 <Button type="button" variant="outline" onClick={() => setShowCreateNotebook(false)}>
                   Cancel
                 </Button>
-=======
-          <p className="text-muted-foreground mt-1">Collaborative research workspace with AI assistance</p>
-        </div>
-        <Button onClick={() => setShowCreateNotebook(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Notebook
-        </Button>
-      </div>
-
-      {showCreateNotebook && (
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>Create New Notebook</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); createNotebook.mutate({ title: fd.get('title') as string, description: fd.get('description') as string }) }} className="space-y-4">
-              <div>
-                <Label>Title</Label>
-                <Input name="title" placeholder="My Research Notebook" required />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea name="description" placeholder="What is this notebook about?" />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit">Create</Button>
-                <Button type="button" variant="outline" onClick={() => setShowCreateNotebook(false)}>Cancel</Button>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </div>
             </form>
           </CardContent>
@@ -487,23 +388,15 @@ export default function ResearchLabPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
-<<<<<<< HEAD
           <TabsTrigger value="notebooks">Notebooks ({notebooksData?.notebooks?.length || 0})</TabsTrigger>
           <TabsTrigger value="sources">Sources ({notebookSources.length})</TabsTrigger>
           <TabsTrigger value="synthesis">Summaries, Guides, FAQs & Quizzes</TabsTrigger>
           <TabsTrigger value="chat">Grounded Q&A</TabsTrigger>
           <TabsTrigger value="notes">Notes ({notesData?.notes?.length || 0})</TabsTrigger>
-=======
-          <TabsTrigger value="notebooks">Notebooks</TabsTrigger>
-          <TabsTrigger value="sources">Sources</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="chat">AI Assistant</TabsTrigger>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         </TabsList>
 
         <TabsContent value="notebooks" className="mt-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-<<<<<<< HEAD
             {notebooksData?.notebooks?.map((notebook: ResearchNotebook) => (
               <Card
                 key={notebook.id}
@@ -539,33 +432,16 @@ export default function ResearchLabPage() {
                     <span>{notebook._count?.sources ?? 0} sources</span>
                     <span>•</span>
                     <span>{notebook._count?.notes ?? 0} notes</span>
-=======
-            {notebooks?.notebooks?.map((notebook: ResearchNotebook) => (
-              <Card key={notebook.id} onClick={() => setSelectedNotebook(notebook.id)} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle>{notebook.title}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{notebook.description || 'No description'}</p>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>{notebook._count.sources} sources</span>
-                    <span>•</span>
-                    <span>{notebook._count.notes} notes</span>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                     <span>•</span>
                     <span>{formatRelativeTime(notebook.updatedAt)}</span>
                   </div>
                 </CardContent>
               </Card>
             ))}
-<<<<<<< HEAD
             <Card
               onClick={() => setShowCreateNotebook(true)}
               className="cursor-pointer hover:shadow-md transition-shadow border-dashed"
             >
-=======
-            <Card onClick={() => setShowCreateNotebook(true)} className="cursor-pointer hover:shadow-md transition-shadow border-dashed">
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               <CardContent className="pt-12 pb-12 text-center">
                 <Plus className="mx-auto h-12 w-12 text-muted-foreground" />
                 <p className="mt-2 text-muted-foreground">Create new notebook</p>
@@ -576,7 +452,6 @@ export default function ResearchLabPage() {
 
         <TabsContent value="sources" className="mt-4">
           {selectedNotebook ? (
-<<<<<<< HEAD
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <DocumentUpload
@@ -765,35 +640,6 @@ export default function ResearchLabPage() {
                   )}
                 </CardContent>
               </Card>
-=======
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Sources</h2>
-                <DocumentUpload notebookId={selectedNotebook} />
-              </div>
-              <DocumentList
-                documents={sources?.sources?.map((s: ResearchSource) => ({
-                  id: s.id,
-                  title: s.title,
-                  description: null,
-                  fileName: s.title,
-                  fileSize: "0",
-                  mimeType: "application/pdf",
-                  documentType: "PDF",
-                  status: "READY" as any,
-                  errorMessage: null,
-                  pageCount: null,
-                  subject: null,
-                  project: null,
-                  notebook: null,
-                  chunksCount: 0,
-                  createdAt: s.createdAt,
-                  updatedAt: s.createdAt,
-                  processedAt: null,
-                })) || []}
-                showUpload={false}
-              />
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             </div>
           ) : (
             <Card>
@@ -805,7 +651,6 @@ export default function ResearchLabPage() {
           )}
         </TabsContent>
 
-<<<<<<< HEAD
         <TabsContent value="synthesis" className="mt-4">
           {selectedNotebook ? (
             <div className="space-y-6">
@@ -1022,13 +867,10 @@ export default function ResearchLabPage() {
           )}
         </TabsContent>
 
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <TabsContent value="notes" className="mt-4">
           {selectedNotebook ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-<<<<<<< HEAD
                 <h2 className="text-xl font-semibold">Notebook Notes ({notesData?.notes?.length || 0})</h2>
                 <Button onClick={() => setShowCreateNote(true)}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -1101,19 +943,6 @@ export default function ResearchLabPage() {
                       <div className="prose max-h-60 overflow-y-auto whitespace-pre-wrap text-sm">
                         {note.content}
                       </div>
-=======
-                <h2 className="text-xl font-semibold">Notes</h2>
-                <Button>New Note</Button>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                {notes?.notes?.map((note: ResearchNote) => (
-                  <Card key={note.id}>
-                    <CardHeader>
-                      <CardTitle>{note.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="prose max-h-40 overflow-y-auto">{note.content}</div>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                     </CardContent>
                   </Card>
                 ))}
@@ -1128,22 +957,6 @@ export default function ResearchLabPage() {
             </Card>
           )}
         </TabsContent>
-<<<<<<< HEAD
-=======
-
-        <TabsContent value="chat" className="mt-4">
-          {selectedNotebook ? (
-            <RAGChat notebookId={selectedNotebook} />
-          ) : (
-            <Card>
-              <CardContent className="pt-12 pb-12 text-center">
-                <Brain className="mx-auto h-12 w-12 text-muted-foreground" />
-                <p className="mt-2 text-muted-foreground">Select a notebook to chat with its sources</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       </Tabs>
     </div>
   )

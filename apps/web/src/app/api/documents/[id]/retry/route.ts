@@ -1,5 +1,4 @@
 import { requireAuth } from '@/lib/auth'
-<<<<<<< HEAD
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { reprocessDocument } from '@/lib/document-processing/pipeline'
@@ -7,14 +6,6 @@ import { canMutateDocument } from '@/lib/document-processing/access'
 
 export async function POST(
   _request: Request,
-=======
-import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
-import { reprocessDocument } from '@/lib/document-processing/pipeline'
-
-export async function POST(
-  request: Request,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -27,7 +18,6 @@ export async function POST(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-<<<<<<< HEAD
     if (!canMutateDocument(user, document)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -61,17 +51,5 @@ export async function POST(
       { error: error instanceof Error ? error.message : 'Failed to retry processing' },
       { status: 422 }
     )
-=======
-    if (document.ownerId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    await reprocessDocument(id, user.id)
-
-    return NextResponse.json({ success: true, message: 'Reprocessing started' })
-  } catch (error) {
-    console.error('Document retry error:', error)
-    return NextResponse.json({ error: 'Failed to retry processing' }, { status: 500 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }
