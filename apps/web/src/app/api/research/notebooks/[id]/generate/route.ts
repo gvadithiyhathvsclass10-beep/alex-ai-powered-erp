@@ -271,7 +271,7 @@ Rules:
               question: String(f.question || '').trim(),
               answer: String(f.answer || '').trim(),
               sourceNumbers: Array.isArray(f.sourceNumbers)
-                ? f.sourceNumbers.map(Number).filter(n => Number.isFinite(n) && n >= 1)
+                ? f.sourceNumbers.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n >= 1)
                 : [],
             })),
           }

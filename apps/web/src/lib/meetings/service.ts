@@ -523,7 +523,7 @@ export async function createMeetingOrEvent(
     organizerId: user.id,
     organizerName: organizerUser
       ? `${organizerUser.firstName} ${organizerUser.lastName}`.trim()
-      : user.name || 'Teacher',
+      : `${user.firstName} ${user.lastName}`.trim() || 'Teacher',
     organizerEmail: organizerUser?.email || user.email || '',
     organizerRole: context.effectiveRole,
     includeClassStudents,

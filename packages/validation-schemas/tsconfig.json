@@ -7,10 +7,6 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-<<<<<<< HEAD
-=======
-    "rootDir": "./src",
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,13 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
-<<<<<<< HEAD
     "baseUrl": ".",
     "paths": {
       "@alex/shared-types": ["../shared-types/src/index.ts"]
     },
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     "types": ["node"]
   },
   "include": ["src/**/*"],

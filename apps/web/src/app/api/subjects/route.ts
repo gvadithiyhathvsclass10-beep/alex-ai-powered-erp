@@ -4,23 +4,16 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-<<<<<<< HEAD
     await requireAuth()
-=======
-    const user = await requireAuth()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const subjects = await prisma.subject.findMany({
       include: {
         institution: { select: { id: true, name: true } },
         department: { select: { id: true, name: true, code: true } },
         semester: { select: { id: true, name: true, number: true } },
-<<<<<<< HEAD
         lecturers: {
           include: { user: { select: { id: true, firstName: true, lastName: true } } },
         },
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         _count: { select: { enrollments: true, resources: true } },
       },
       orderBy: { name: 'asc' },
@@ -28,7 +21,6 @@ export async function GET() {
 
     return NextResponse.json({ subjects })
   } catch (error) {
-<<<<<<< HEAD
     console.error('[Subjects] All subjects list error:', error)
     return NextResponse.json({ error: 'Failed to list subjects' }, { status: 500 })
   }
@@ -102,9 +94,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create subject' }, { status: 500 })
   }
 }
-=======
-    console.error('All subjects list error:', error)
-    return NextResponse.json({ error: 'Failed to list subjects' }, { status: 500 })
-  }
-}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

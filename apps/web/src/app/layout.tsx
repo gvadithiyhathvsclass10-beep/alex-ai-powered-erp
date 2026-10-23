@@ -2,10 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import { AuthProvider } from "@/components/auth/AuthProvider"
-<<<<<<< HEAD
 import { Toaster } from "@/components/ui/toaster"
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import "./globals.css"
 
 const geistSans = Geist({
@@ -31,10 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             {children}
-<<<<<<< HEAD
             <Toaster />
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </AuthProvider>
         </ThemeProvider>
       </body>

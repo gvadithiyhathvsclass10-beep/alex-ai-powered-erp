@@ -1,20 +1,15 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-<<<<<<< HEAD
 import { canAccessDocument } from '@/lib/document-processing/access'
 import { generateDiagramFromTemplate, saveDiagram, type DiagramDefinition } from '@/lib/diagrams/generator'
 import { generateStructuredOutput, formatAIServiceErrorResponse } from '@/lib/ai/service'
-=======
-import { generateDiagramFromTemplate, saveDiagram } from '@/lib/diagrams/generator'
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
 
     const body = await request.json()
-<<<<<<< HEAD
     const {
       templateId,
       variables,
@@ -34,16 +29,10 @@ export async function POST(request: Request) {
 
     const isPlaceholderMermaid =
       customCode === 'flowchart TD\n  A[Source document] --> B[Key concepts]' && Boolean(sourceDocId)
-=======
-    const { templateId, variables, customCode, customType, title, sourceDocId, subjectId } = body
-
-    let definition
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     if (templateId) {
       definition = await generateDiagramFromTemplate(templateId, variables || {})
       if (title) definition.title = title
-<<<<<<< HEAD
     } else if (customCode && customType && !isPlaceholderMermaid) {
       definition = {
         type: customType,
@@ -108,19 +97,6 @@ export async function POST(request: Request) {
       )
     }
 
-=======
-    } else if (customCode && customType) {
-      definition = {
-        type: customType,
-        code: customCode,
-        title: title || "Custom Diagram",
-      }
-    } else {
-      return NextResponse.json({ error: 'Either templateId or customCode+customType required' }, { status: 400 })
-    }
-
-    // Save to database
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     const saved = await saveDiagram(user.id, definition, sourceDocId, subjectId)
 
     return NextResponse.json({
@@ -128,7 +104,6 @@ export async function POST(request: Request) {
       title: saved.title,
       type: saved.type,
       definition: saved.definition,
-<<<<<<< HEAD
       provider: usedProvider,
       model: usedModel,
       createdAt: saved.createdAt,
@@ -137,13 +112,6 @@ export async function POST(request: Request) {
     console.error('[Diagrams] Generation error:', error)
     const formatted = formatAIServiceErrorResponse(error, 'Diagram generation failed')
     return NextResponse.json(formatted.body, { status: formatted.status })
-=======
-      createdAt: saved.createdAt,
-    })
-  } catch (error) {
-    console.error('Diagram generation error:', error)
-    return NextResponse.json({ error: 'Diagram generation failed' }, { status: 500 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }
 
@@ -155,17 +123,9 @@ export async function GET(request: Request) {
     const diagramId = searchParams.get('id')
 
     if (diagramId) {
-<<<<<<< HEAD
       const diagram = await prisma.diagram.findUnique({ where: { id: diagramId } })
       if (!diagram || diagram.userId !== user.id) {
         return NextResponse.json({ error: 'Diagram not found' }, { status: 404 })
-=======
-      const diagram = await prisma.diagram.findUnique({
-        where: { id: diagramId, userId: user.id },
-      })
-      if (!diagram) {
-        return NextResponse.json({ error: 'Not found' }, { status: 404 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       }
       return NextResponse.json(diagram)
     }
@@ -173,7 +133,6 @@ export async function GET(request: Request) {
     const diagrams = await prisma.diagram.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
-<<<<<<< HEAD
       take: 20,
     })
 
@@ -181,12 +140,5 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Get diagrams error:', error)
     return NextResponse.json({ error: 'Failed to get diagrams' }, { status: 500 })
-=======
-    })
-    return NextResponse.json(diagrams)
-  } catch (error) {
-    console.error('Diagrams fetch error:', error)
-    return NextResponse.json({ error: 'Failed to fetch diagrams' }, { status: 500 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }

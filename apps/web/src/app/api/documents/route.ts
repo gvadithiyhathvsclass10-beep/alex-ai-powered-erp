@@ -1,5 +1,4 @@
 import { requireAuth } from '@/lib/auth'
-<<<<<<< HEAD
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { processDocument, createDocumentRecord } from '@/lib/document-processing/pipeline'
@@ -9,19 +8,12 @@ import {
   buildAccessibleDocumentsWhere,
 } from '@/lib/document-processing/access'
 import { DocumentStatus } from '@prisma/client'
-=======
-import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
-import { processDocument, createDocumentRecord } from '@/lib/document-processing/pipeline'
-import { DocumentType } from '@prisma/client'
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
 
     const formData = await request.formData()
-<<<<<<< HEAD
     const file = formData.get('file') as File | null
     const title = (formData.get('title') as string | null) || undefined
     const description = (formData.get('description') as string | null) || undefined
@@ -56,35 +48,11 @@ export async function POST(request: Request) {
       title,
       description
     )
-=======
-    const file = formData.get('file') as File
-    const subjectId = formData.get('subjectId') as string | null
-    const projectId = formData.get('projectId') as string | null
-    const notebookId = formData.get('notebookId') as string | null
-
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
-
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE_MB || '50') * 1024 * 1024
-    if (file.size > maxSize) {
-      return NextResponse.json({ error: `File size exceeds ${process.env.MAX_FILE_SIZE_MB}MB limit` }, { status: 400 })
-    }
-
-    const allowedTypes = (process.env.ALLOWED_FILE_TYPES || 'pdf,doc,docx,txt,md,csv,xls,xlsx,ppt,pptx,png,jpg,jpeg').split(',')
-    const fileExt = file.name.split('.').pop()?.toLowerCase()
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      return NextResponse.json({ error: 'File type not allowed' }, { status: 400 })
-    }
-
-    const { document, buffer } = await createDocumentRecord(user.id, file, subjectId || undefined, projectId || undefined, notebookId || undefined)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     await prisma.documentProcessingJob.create({
       data: {
         documentId: document.id,
         step: 'queued',
-<<<<<<< HEAD
         status: DocumentStatus.QUEUED,
       },
     })
@@ -194,36 +162,6 @@ export async function POST(request: Request) {
       { error: error instanceof Error ? error.message : 'Upload failed' },
       { status: 500 }
     )
-=======
-        status: 'QUEUED',
-      },
-    })
-
-    processDocument({
-      documentId: document.id,
-      userId: user.id,
-      fileBuffer: buffer,
-      fileName: file.name,
-      mimeType: file.type,
-      documentType: document.documentType,
-      subjectId: subjectId || undefined,
-      projectId: projectId || undefined,
-      notebookId: notebookId || undefined,
-    }).catch(console.error)
-
-    return NextResponse.json({
-      document: {
-        id: document.id,
-        title: document.title,
-        fileName: document.fileName,
-        status: document.status,
-        createdAt: document.createdAt,
-      },
-    })
-  } catch (error) {
-    console.error('Document upload error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }
 
@@ -236,7 +174,6 @@ export async function GET(request: Request) {
     const projectId = searchParams.get('projectId')
     const notebookId = searchParams.get('notebookId')
     const status = searchParams.get('status')
-<<<<<<< HEAD
     const search = searchParams.get('search')
     const scope = searchParams.get('scope')
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
@@ -282,16 +219,6 @@ export async function GET(request: Request) {
             status,
             search,
           })
-=======
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
-
-    const where: Record<string, unknown> = { ownerId: user.id }
-    if (subjectId) where.subjectId = subjectId
-    if (projectId) where.projectId = projectId
-    if (notebookId) where.notebookId = notebookId
-    if (status) where.status = status
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
@@ -306,7 +233,6 @@ export async function GET(request: Request) {
         skip: (page - 1) * limit,
         take: limit,
       }),
-<<<<<<< HEAD
       prisma.document.count ? prisma.document.count({ where }) : Promise.resolve(0),
     ])
 
@@ -346,35 +272,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Documents] List error:', error)
-=======
-      prisma.document.count({ where }),
-    ])
-
-    return NextResponse.json({
-      documents: documents.map(d => ({
-        id: d.id,
-        title: d.title,
-        description: d.description,
-        fileName: d.fileName,
-        fileSize: d.fileSize.toString(),
-        mimeType: d.mimeType,
-        documentType: d.documentType,
-        status: d.status,
-        errorMessage: d.errorMessage,
-        pageCount: d.pageCount,
-        subject: d.subject,
-        project: d.project,
-        notebook: d.notebook,
-        chunksCount: d._count.chunks,
-        createdAt: d.createdAt,
-        updatedAt: d.updatedAt,
-        processedAt: d.processedAt,
-      })),
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    })
-  } catch (error) {
-    console.error('Document list error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to list documents' }, { status: 500 })
   }
 }

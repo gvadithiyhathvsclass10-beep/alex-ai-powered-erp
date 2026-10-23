@@ -1,7 +1,16 @@
 import { prisma } from './prisma'
 import { getLocalUserId, LOCAL_AUTH_COOKIE } from './local-auth'
-import { UserRole, MembershipStatus, CollegeMembership } from '@prisma/client'
+import { UserRole, MembershipStatus, CollegeMembership, User } from '@prisma/client'
 import { cookies } from 'next/headers'
+
+export type AuthenticatedUser = User & {
+  activeMembership?: CollegeMembership | null
+  role: UserRole
+  institutionId: string | null
+  departmentId: string | null
+  courseId: string | null
+  semesterId: string | null
+}
 
 export async function getCurrentUser() {
   const cookieStore = await cookies()

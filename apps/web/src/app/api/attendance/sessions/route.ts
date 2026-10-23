@@ -1,7 +1,6 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-<<<<<<< HEAD
 import {
   resolveClassroomContext,
   verifySubjectManagementAccess,
@@ -295,31 +294,6 @@ export async function GET(request?: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Attendance Sessions] List error:', error)
-=======
-
-export async function GET() {
-  try {
-    const user = await requireAuth()
-
-    const sessions = await prisma.attendanceSession.findMany({
-      where: {
-        subject: {
-          enrollments: { some: { userId: user.id, isActive: true } },
-        },
-      },
-      orderBy: { date: 'desc' },
-      include: {
-        subject: { select: { id: true, name: true, code: true } },
-        records: {
-          include: { user: { select: { id: true, firstName: true, lastName: true } } },
-        },
-      },
-    })
-
-    return NextResponse.json({ sessions })
-  } catch (error) {
-    console.error('Attendance sessions list error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to list sessions' }, { status: 500 })
   }
 }
@@ -327,7 +301,6 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
-<<<<<<< HEAD
     const body = await request.json()
     const { subjectId, date, period = 1, topic, records, allowExisting, upsert } = body
 
@@ -460,6 +433,12 @@ export async function POST(request: Request) {
     const createdSession = await prisma.$transaction(async (tx) => {
       const hasFindUnique = typeof tx.attendanceSession.findUnique === 'function'
 
+      // Validate semesterId is available
+      const sessionSemesterId = access.subject?.semesterId
+      if (!sessionSemesterId) {
+        throw new Error('Unable to determine semester for this subject. Please ensure the subject is associated with a valid semester.')
+      }
+
       if (!hasFindUnique) {
         // Minimal mock compatibility path
         const enrollments = await prisma.subjectEnrollment.findMany({
@@ -487,6 +466,7 @@ export async function POST(request: Request) {
       const session = await tx.attendanceSession.create({
         data: {
           subjectId: String(subjectId),
+          semesterId: sessionSemesterId,
           date: normalizedDate,
           period: normalizedPeriod,
           topic: typeof topic === 'string' && topic.trim() ? topic.trim() : null,
@@ -533,6 +513,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error instanceof Error && error.message.includes('semester')) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
     console.error('[Attendance Sessions] Create error:', error)
     return NextResponse.json({ error: 'Failed to create session' }, { status: 500 })
@@ -709,26 +692,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete session' }, { status: 500 })
   }
 }
-=======
-
-    const body = await request.json()
-    const { subjectId, date, period, topic } = body
-
-    const session = await prisma.attendanceSession.create({
-      data: {
-        subjectId,
-        semesterId: '', // Will be set from subject
-        date: new Date(date),
-        period,
-        topic,
-        conductedBy: user.id,
-      },
-    })
-
-    return NextResponse.json({ session })
-  } catch (error) {
-    console.error('Attendance session create error:', error)
-    return NextResponse.json({ error: 'Failed to create session' }, { status: 500 })
-  }
-}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

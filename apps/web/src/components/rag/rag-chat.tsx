@@ -1,14 +1,8 @@
 "use client"
 
 import * as React from "react"
-<<<<<<< HEAD
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
-=======
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -17,7 +11,6 @@ import { Separator } from "@/components/ui/separator"
 import {
   Send,
   Loader2,
-<<<<<<< HEAD
   ChevronDown,
   ChevronUp,
   Copy,
@@ -25,33 +18,11 @@ import {
   AlertCircle,
   CheckCircle2,
   BookmarkPlus,
-=======
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Check,
-  Bot,
-  Sparkles,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 
-<<<<<<< HEAD
 export interface Citation {
-=======
-interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  citations?: Citation[]
-  sources?: Source[]
-  createdAt: string
-}
-
-interface Citation {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   id: string
   documentId: string
   documentTitle: string
@@ -61,7 +32,6 @@ interface Citation {
   relevanceScore: number
 }
 
-<<<<<<< HEAD
 export interface SourceItem {
   id: string
   documentId: string
@@ -73,17 +43,6 @@ export interface SourceItem {
   sectionTitle: string | null
   similarity: number
   document?: {
-=======
-interface Source {
-  id: string
-  documentId: string
-  content: string
-  chunkIndex: number
-  pageNumber: number | null
-  sectionTitle: string | null
-  similarity: number
-  document: {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     id: string
     title: string
     fileName: string
@@ -92,7 +51,6 @@ interface Source {
   }
 }
 
-<<<<<<< HEAD
 export interface Message {
   id: string
   role: "user" | "assistant"
@@ -109,32 +67,22 @@ interface RAGChatProps {
   conversationId?: string
   onConversationCreated?: (id: string) => void
   onSaveAsNote?: (title: string, content: string) => void
-=======
-interface RAGChatProps {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   subjectId?: string
   projectId?: string
   notebookId?: string
   documentIds?: string[]
-<<<<<<< HEAD
   sourceIds?: string[]
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   initialMessages?: Message[]
 }
 
 export function RAGChat({
-<<<<<<< HEAD
   conversationId,
   onConversationCreated,
   onSaveAsNote,
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   subjectId,
   projectId,
   notebookId,
   documentIds,
-<<<<<<< HEAD
   sourceIds,
   initialMessages = [],
 }: RAGChatProps) {
@@ -142,18 +90,12 @@ export function RAGChat({
   const [activeConversationId, setActiveConversationId] = React.useState<string | undefined>(
     conversationId
   )
-=======
-  initialMessages = [],
-}: RAGChatProps) {
-  const queryClient = useQueryClient()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const [messages, setMessages] = React.useState<Message[]>(initialMessages)
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [showSources, setShowSources] = React.useState<Record<string, boolean>>({})
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
-<<<<<<< HEAD
   React.useEffect(() => {
     setActiveConversationId(conversationId)
   }, [conversationId])
@@ -205,8 +147,6 @@ export function RAGChat({
     }
   }, [activeConversationId, conversationData])
 
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -217,39 +157,23 @@ export function RAGChat({
 
   const sendMessage = useMutation({
     mutationFn: async (query: string) => {
-<<<<<<< HEAD
       const response = await fetch("/api/rag/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
           conversationId: activeConversationId,
-=======
-      const response = await fetch('/api/rag/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           subjectId,
           projectId,
           notebookId,
           documentIds,
-<<<<<<< HEAD
           sourceIds,
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         }),
       })
 
       if (!response.ok) {
-<<<<<<< HEAD
         const error = await response.json().catch(() => ({}))
         throw new Error(error.error || "Query failed")
-=======
-        const error = await response.json()
-        throw new Error(error.error || 'Query failed')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       }
 
       return response.json()
@@ -259,7 +183,6 @@ export function RAGChat({
         id: Date.now().toString(),
         role: "assistant",
         content: data.answer,
-<<<<<<< HEAD
         citations: data.citations || [],
         sources: data.sources || [],
         isSourceSupported: data.isSourceSupported,
@@ -276,13 +199,6 @@ export function RAGChat({
           onConversationCreated(data.conversationId)
         }
       }
-=======
-        citations: data.citations,
-        sources: data.sources,
-        createdAt: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, newMessage])
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     },
     onError: (error) => {
       toast({
@@ -307,18 +223,11 @@ export function RAGChat({
       createdAt: new Date().toISOString(),
     }
 
-<<<<<<< HEAD
     setMessages((prev) => [...prev, userMessage])
     const currentInput = input
     setInput("")
     setIsLoading(true)
     sendMessage.mutate(currentInput)
-=======
-    setMessages(prev => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
-    sendMessage.mutate(input)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 
   const copyToClipboard = (text: string) => {
@@ -328,7 +237,6 @@ export function RAGChat({
 
   return (
     <Card className="flex flex-col h-full">
-<<<<<<< HEAD
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -353,19 +261,10 @@ export function RAGChat({
             </Button>
           )}
         </div>
-=======
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="h-5 w-5" />
-          AI Assistant
-          <span className="text-xs text-muted-foreground">(RAG)</span>
-        </CardTitle>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       </CardHeader>
       <CardContent className="flex-1 flex flex-col min-h-0">
         <ScrollArea className="flex-1 pr-2">
           <div className="space-y-4 pb-4">
-<<<<<<< HEAD
             {isLoadingHistory ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -401,17 +300,6 @@ export function RAGChat({
                 />
               ))
             )}
-=======
-            {messages.map(message => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                showSources={showSources[message.id]}
-                onToggleSources={() => setShowSources(prev => ({ ...prev, [message.id]: !prev[message.id] }))}
-                onCopy={copyToClipboard}
-              />
-            ))}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             {isLoading && (
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -432,7 +320,6 @@ export function RAGChat({
         <form onSubmit={handleSubmit} className="mt-4">
           <div className="flex gap-2">
             <Textarea
-<<<<<<< HEAD
               placeholder={
                 notebookId
                   ? "Ask a question or follow-up grounded in your notebook sources..."
@@ -446,11 +333,6 @@ export function RAGChat({
                   handleSubmit(e)
                 }
               }}
-=======
-              placeholder="Ask a question about your documents..."
-              value={input}
-              onChange={e => setInput(e.target.value)}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               className="flex-1 min-h-[80px] max-h-[200px] resize-none"
               disabled={isLoading}
               rows={2}
@@ -465,11 +347,7 @@ export function RAGChat({
             </Button>
           </div>
           <p className="mt-1 text-xs text-muted-foreground text-center">
-<<<<<<< HEAD
             Responses cite source title, page, and section when supported, and explicitly identify unsupported questions.
-=======
-            Powered by your documents. Answers include citations to source material.
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </p>
         </form>
       </CardContent>
@@ -482,7 +360,6 @@ interface MessageBubbleProps {
   showSources: boolean
   onToggleSources: () => void
   onCopy: (text: string) => void
-<<<<<<< HEAD
   onSaveAsNote?: (title: string, content: string) => void
 }
 
@@ -517,28 +394,11 @@ function MessageBubble({
               strokeWidth={2}
               d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
             />
-=======
-}
-
-function MessageBubble({ message, showSources, onToggleSources, onCopy }: MessageBubbleProps) {
-  const isUser = message.role === "user"
-
-  return (
-    <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
-      <div className={cn(
-        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-        isUser ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-      )}>
-        {isUser ? (
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </svg>
         ) : (
           <Bot className="h-4 w-4" />
         )}
       </div>
-<<<<<<< HEAD
       <div className={cn("flex-1 max-w-[85%]", isUser ? "text-right" : "text-left")}>
         <div
           className={cn(
@@ -586,28 +446,6 @@ function MessageBubble({ message, showSources, onToggleSources, onCopy }: Messag
                   [{index + 1}] {citation.documentTitle}
                   {citation.pageNumber && <span className="ml-1">· p.{citation.pageNumber}</span>}
                   {citation.sectionTitle && <span className="ml-1">· {citation.sectionTitle}</span>}
-=======
-      <div className={cn(
-        "flex-1 max-w-[85%]",
-        isUser ? "text-right" : "text-left"
-      )}>
-        <div className={cn(
-          "inline-block rounded-2xl px-4 py-2",
-          isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"
-        )}>
-          <div className="whitespace-pre-wrap">{message.content}</div>
-          {message.citations && message.citations.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {message.citations.map((citation, index) => (
-                <Badge
-                  key={citation.id}
-                  variant="outline"
-                  className="text-xs cursor-pointer hover:bg-accent"
-                  onClick={() => navigator.clipboard.writeText(citation.excerpt)}
-                >
-                  [{index + 1}] {citation.documentTitle}
-                  {citation.pageNumber && <span className="ml-1">p.{citation.pageNumber}</span>}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                 </Badge>
               ))}
             </div>
@@ -624,7 +462,6 @@ function MessageBubble({ message, showSources, onToggleSources, onCopy }: Messag
           >
             <Copy className="h-3 w-3" />
           </Button>
-<<<<<<< HEAD
           {!isUser && onSaveAsNote && (
             <Button
               variant="ghost"
@@ -642,26 +479,18 @@ function MessageBubble({ message, showSources, onToggleSources, onCopy }: Messag
             </Button>
           )}
           {(hasCitations || hasSources) && (
-=======
-          {((message.citations && message.citations.length > 0) || (message.sources && message.sources.length > 0)) && (
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6"
               onClick={onToggleSources}
-<<<<<<< HEAD
               title={showSources ? "Hide cited excerpts" : "Show cited excerpts"}
-=======
-              title={showSources ? "Hide sources" : "Show sources"}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             >
               {showSources ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
           )}
         </div>
         {showSources && (
-<<<<<<< HEAD
           <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-muted pl-3">
             {(message.sources && message.sources.length > 0
               ? message.sources
@@ -676,11 +505,6 @@ function MessageBubble({ message, showSources, onToggleSources, onCopy }: Messag
                 }))
             ).map((source, index) => (
               <SourceCard key={source.id || index} source={source} index={index} />
-=======
-          <div className="mt-2 ml-10 mr-2 space-y-2 border-l-2 border-muted pl-3">
-            {message.sources?.map((source, index) => (
-              <SourceCard key={source.id} source={source} index={index} />
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             ))}
           </div>
         )}
@@ -690,16 +514,11 @@ function MessageBubble({ message, showSources, onToggleSources, onCopy }: Messag
 }
 
 interface SourceCardProps {
-<<<<<<< HEAD
   source: SourceItem
-=======
-  source: Source
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   index: number
 }
 
 function SourceCard({ source, index }: SourceCardProps) {
-<<<<<<< HEAD
   const title = source.documentTitle || source.document?.title || `Source ${index + 1}`
   const text = source.excerpt || source.content || ""
   return (
@@ -719,25 +538,6 @@ function SourceCard({ source, index }: SourceCardProps) {
         {source.sectionTitle && <span>· Section: {source.sectionTitle}</span>}
       </div>
       {text && <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{text}</div>}
-=======
-  return (
-    <div className="bg-muted/50 rounded-lg p-3">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="font-medium text-sm">{source.document.title}</span>
-        <Badge variant="outline" className="text-xs">
-          {Math.round(source.similarity * 100)}%
-        </Badge>
-      </div>
-      {source.pageNumber && (
-        <span className="text-xs text-muted-foreground">Page {source.pageNumber}</span>
-      )}
-      {source.sectionTitle && (
-        <span className="text-xs text-muted-foreground">Section: {source.sectionTitle}</span>
-      )}
-      <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
-        {source.content}
-      </div>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     </div>
   )
 }

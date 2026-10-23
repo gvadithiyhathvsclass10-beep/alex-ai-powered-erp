@@ -7,10 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-<<<<<<< HEAD
-=======
-import { Textarea } from "@/components/ui/textarea"
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
@@ -94,11 +90,7 @@ export default function StudyStudioPage() {
   })
 
   const { data: documents } = useQuery({
-<<<<<<< HEAD
     queryKey: ['documents'],
-=======
-    queryKey: ['documents', 'study-studio'],
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryFn: async () => {
       const res = await fetch('/api/documents')
       if (!res.ok) throw new Error('Failed to fetch documents')
@@ -124,24 +116,15 @@ export default function StudyStudioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sourceDocId, type }),
       })
-<<<<<<< HEAD
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       return data
-=======
-      if (!res.ok) throw new Error('Generation failed')
-      return res.json()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-materials'] })
       toast({ title: "Notes generated successfully" })
     },
-<<<<<<< HEAD
     onError: (err: Error) => toast({ title: "Error", description: err.message || "Failed to generate notes", variant: "destructive" }),
-=======
-    onError: () => toast({ title: "Error", description: "Failed to generate notes", variant: "destructive" }),
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   })
 
   const generateFlashcards = useMutation({
@@ -151,14 +134,9 @@ export default function StudyStudioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sourceDocId, count }),
       })
-<<<<<<< HEAD
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       return data
-=======
-      if (!res.ok) throw new Error('Generation failed')
-      return res.json()
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
@@ -166,11 +144,7 @@ export default function StudyStudioPage() {
       setActiveTab("flashcards")
       toast({ title: "Flashcards generated successfully" })
     },
-<<<<<<< HEAD
     onError: (err: Error) => toast({ title: "Error", description: err.message || "Failed to generate flashcards", variant: "destructive" }),
-=======
-    onError: () => toast({ title: "Error", description: "Failed to generate flashcards", variant: "destructive" }),
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   })
 
   const reviewCard = useMutation({
@@ -246,17 +220,12 @@ export default function StudyStudioPage() {
               </SelectContent>
             </Select>
           </div>
-<<<<<<< HEAD
           <DocumentUpload
             onSuccess={(doc) => {
               setSelectedSourceDoc(doc.id)
             }}
           />
           <DocumentList documents={documents?.documents || []} showUpload={false} />
-=======
-          <DocumentUpload />
-          <DocumentList documents={[]} showUpload={false} />
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
           {notes?.materials?.map((material: StudyMaterial) => (
             <Card key={material.id} className="mt-4">
@@ -267,11 +236,7 @@ export default function StudyStudioPage() {
                 </div>
               </CardHeader>
               <CardContent>
-<<<<<<< HEAD
                 <div className="prose max-h-60 overflow-y-auto whitespace-pre-wrap">{material.content}</div>
-=======
-                <div className="prose max-h-60 overflow-y-auto">{material.content}</div>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </CardContent>
             </Card>
           ))}

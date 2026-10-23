@@ -3,29 +3,22 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { NotificationService } from '@/lib/notifications'
 import { AuditLogService } from '@/lib/audit-log'
-<<<<<<< HEAD
 import { resolveClassroomContext } from '@/lib/classroom-permissions'
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 const LOW_ATTENDANCE_THRESHOLD = 35
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
-<<<<<<< HEAD
     const context = await resolveClassroomContext(user)
 
     if (!context.isTeacher) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const body = await request.json()
     const { action, studentId, subjectId, threshold } = body
 
-<<<<<<< HEAD
     const effectiveThreshold = Number(threshold) || LOW_ATTENDANCE_THRESHOLD
     const institutionId = context.institutionId || ''
 
@@ -46,38 +39,13 @@ export async function POST(request: Request) {
       )
     } else if (action === 'get_low_attendance') {
       return getLowAttendanceStudents(institutionId, effectiveThreshold, subjectId)
-=======
-    const membership = await prisma.collegeMembership.findFirst({
-      where: { userId: user.id, status: 'ACTIVE' },
-      include: { institution: true },
-    })
-
-    if (!membership || !['LECTURER', 'ADMIN'].includes(membership.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const effectiveThreshold = threshold || LOW_ATTENDANCE_THRESHOLD
-
-    if (action === 'check_and_notify') {
-      return checkAndNotifyLowAttendance(membership.institutionId, effectiveThreshold)
-    } else if (action === 'notify_student') {
-      if (!studentId || !subjectId) {
-        return NextResponse.json({ error: 'Student ID and Subject ID required' }, { status: 400 })
-      }
-      return notifyStudentLowAttendance(studentId, subjectId, effectiveThreshold, membership.institutionId)
-    } else if (action === 'get_low_attendance') {
-      return getLowAttendanceStudents(membership.institutionId, effectiveThreshold, subjectId)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
-<<<<<<< HEAD
     if (error instanceof Error && error.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     console.error('Attendance alerts error:', error)
     return NextResponse.json({ error: 'Failed to process alerts' }, { status: 500 })
   }
@@ -94,21 +62,16 @@ async function checkAndNotifyLowAttendance(institutionId: string, threshold: num
       threshold,
       institutionId
     )
-<<<<<<< HEAD
     results.push({
       studentId: student.userId,
       subjectId: student.subjectId,
       ...(await result.json()),
     })
-=======
-    results.push({ studentId: student.userId, subjectId: student.subjectId, ...await result.json() })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 
   return NextResponse.json({ checked: students.length, notifications: results })
 }
 
-<<<<<<< HEAD
 async function getLowAttendanceStudents(
   institutionId: string,
   threshold: number,
@@ -119,10 +82,6 @@ async function getLowAttendanceStudents(
     threshold,
     subjectId
   )
-=======
-async function getLowAttendanceStudents(institutionId: string, threshold: number, subjectId?: string | null) {
-  const students = await getLowAttendanceStudentsInternal(institutionId, threshold, subjectId)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return NextResponse.json({ students, threshold })
 }
 
@@ -131,47 +90,19 @@ async function getLowAttendanceStudentsInternal(
   threshold: number,
   subjectId?: string | null
 ) {
-<<<<<<< HEAD
   const enrollmentWhere: any = { isActive: true }
   if (subjectId) enrollmentWhere.subjectId = subjectId
   if (institutionId) {
     enrollmentWhere.subject = { institutionId }
   }
 
-=======
-  const whereClause: any = {
-    institutionId,
-    role: 'STUDENT',
-    status: 'ACTIVE',
-  }
-
-  const memberships = await prisma.collegeMembership.findMany({
-    where: whereClause,
-    include: { user: true },
-  })
-
-  const studentIds = memberships.map(m => m.userId)
-
-  const enrollmentWhere: any = {
-    userId: { in: studentIds },
-    isActive: true,
-  }
-  if (subjectId) enrollmentWhere.subjectId = subjectId
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const enrollments = await prisma.subjectEnrollment.findMany({
     where: enrollmentWhere,
     include: {
       subject: {
         include: {
           attendanceSessions: {
-<<<<<<< HEAD
             include: { records: true },
-=======
-            include: {
-              records: { where: { userId: { in: studentIds } } },
-            },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             where: { isCancelled: false },
           },
         },
@@ -187,7 +118,6 @@ async function getLowAttendanceStudentsInternal(
     if (sessions.length === 0) continue
 
     let present = 0
-<<<<<<< HEAD
     let excused = 0
 
     sessions.forEach((session) => {
@@ -205,17 +135,6 @@ async function getLowAttendanceStudentsInternal(
     })
 
     const total = Math.max(0, sessions.length - excused)
-=======
-    let total = sessions.length
-
-    sessions.forEach(session => {
-      const record = session.records.find(r => r.userId === enrollment.userId)
-      if (record && (record.status === 'PRESENT' || record.status === 'LATE')) {
-        present++
-      }
-    })
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     const percentage = total > 0 ? Math.round((present / total) * 100) : 100
 
     if (percentage < threshold) {
@@ -227,11 +146,7 @@ async function getLowAttendanceStudentsInternal(
         subjectName: enrollment.subject.name,
         subjectCode: enrollment.subject.code,
         present,
-<<<<<<< HEAD
         total: sessions.length,
-=======
-        total,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         percentage,
       })
     }
@@ -264,7 +179,6 @@ async function notifyStudentLowAttendance(
   })
 
   let present = 0
-<<<<<<< HEAD
   let excused = 0
   sessions.forEach((session) => {
     const record = session.records[0]
@@ -281,14 +195,6 @@ async function notifyStudentLowAttendance(
   })
 
   const total = Math.max(0, sessions.length - excused)
-=======
-  sessions.forEach(session => {
-    const record = session.records[0]
-    if (record && (record.status === 'PRESENT' || record.status === 'LATE')) present++
-  })
-
-  const total = sessions.length
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const percentage = total > 0 ? Math.round((present / total) * 100) : 100
 
   if (percentage >= threshold) {
@@ -317,7 +223,6 @@ async function notifyStudentLowAttendance(
       message: `Your attendance in ${enrollment.subject.name} (${enrollment.subject.code}) is ${percentage}%, which is below the ${threshold}% threshold. Please attend classes regularly to avoid academic consequences.`,
       referenceId: subjectId,
       referenceType: 'ATTENDANCE_ALERT',
-<<<<<<< HEAD
       metadata: {
         percentage,
         threshold,
@@ -345,23 +250,6 @@ async function notifyStudentLowAttendance(
         where: { institutionId: resolvedInstId, isActive: true },
       })
     : []
-=======
-      metadata: { percentage, threshold, present, total, subjectCode: enrollment.subject.code },
-    },
-  })
-
-  const guardianContacts = await prisma.guardianContact.findMany({
-    where: {
-      institutionId,
-      studentId,
-      consentGiven: true,
-    },
-  })
-
-  const notificationConfigs = await prisma.notificationConfig.findMany({
-    where: { institutionId, isActive: true },
-  })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   const deliveryResults = []
 
@@ -381,11 +269,7 @@ async function notifyStudentLowAttendance(
           data: {
             notificationId: notification.id,
             provider: config.provider,
-<<<<<<< HEAD
             recipient: guardian.email || guardian.phone || guardian.whatsapp || '',
-=======
-recipient: guardian.email || guardian.phone || guardian.whatsapp || '',
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             status: result.success ? 'DELIVERED' : 'FAILED',
             providerResponse: result.response,
             errorMessage: result.error,
@@ -411,25 +295,17 @@ recipient: guardian.email || guardian.phone || guardian.whatsapp || '',
   }
 
   await AuditLogService.log({
-<<<<<<< HEAD
     institutionId: resolvedInstId,
-=======
-    institutionId,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     userId: studentId,
     action: 'LOW_ATTENDANCE_ALERT_SENT',
     entityType: 'Notification',
     entityId: notification.id,
-<<<<<<< HEAD
     newValues: {
       percentage,
       threshold,
       subjectId,
       guardianNotifications: deliveryResults.length,
     },
-=======
-    newValues: { percentage, threshold, subjectId, guardianNotifications: deliveryResults.length },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   })
 
   return NextResponse.json({

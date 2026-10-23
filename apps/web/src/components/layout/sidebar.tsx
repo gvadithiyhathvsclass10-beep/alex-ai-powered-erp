@@ -57,7 +57,6 @@ const navItems: NavItem[] = [
 ]
 
 const lecturerOnlyItems: NavItem[] = [
-<<<<<<< HEAD
   { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"] },
   { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
   { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"] },
@@ -70,20 +69,6 @@ const adminOnlyItems: NavItem[] = [
   { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"] },
   { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"] },
   { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"] },
-=======
-  { label: "Create Subject", href: "/dashboard/subjects/create", icon: Plus, roles: ["LECTURER", "ADMIN"] },
-  { label: "Mark Attendance", href: "/dashboard/attendance/mark", icon: UserCheck, roles: ["LECTURER"] },
-  { label: "Create Assessment", href: "/dashboard/assessments/create", icon: ClipboardCheck, roles: ["LECTURER"] },
-  { label: "Create Assignment", href: "/dashboard/assignments/create", icon: FileText, roles: ["LECTURER"] },
-  { label: "Manage Resources", href: "/dashboard/subjects/resources", icon: Library, roles: ["LECTURER", "ADMIN"] },
-]
-
-const adminOnlyItems: NavItem[] = [
-  { label: "User Management", href: "/dashboard/admin/users", icon: Users, roles: ["ADMIN"] },
-  { label: "Institution Settings", href: "/dashboard/admin/institution", icon: Shield, roles: ["ADMIN"] },
-  { label: "Academic Calendar", href: "/dashboard/admin/calendar", icon: Calendar, roles: ["ADMIN"] },
-  { label: "Audit Logs", href: "/dashboard/admin/audit", icon: Archive, roles: ["ADMIN"] },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 ]
 
 function NavLink({ item, isActive, userRole }: { item: NavItem; isActive: boolean; userRole: string }) {

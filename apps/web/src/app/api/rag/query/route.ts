@@ -1,7 +1,6 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-<<<<<<< HEAD
 import { hybridSearch, type SearchResult } from '@/lib/rag/vector-search'
 import { getUserChatProvider, type AIProviderType } from '@/lib/rag/generation'
 import { canAccessDocument } from '@/lib/document-processing/access'
@@ -34,17 +33,12 @@ function computeChunkTermOverlap(terms: string[], results: SearchResult[]): numb
   }
   return maxMatched / terms.length
 }
-=======
-import { hybridSearch } from '@/lib/rag/vector-search'
-import { getUserChatProvider } from '@/lib/rag/generation'
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
 
     const body = await request.json()
-<<<<<<< HEAD
     const {
       query,
       subjectId,
@@ -197,27 +191,12 @@ export async function POST(request: Request) {
     let conversationHistory: Array<{ role: string; content: string }> = []
     let targetConversationId: string | null = conversationId || null
 
-=======
-    const { query, subjectId, projectId, notebookId, documentIds, limit, threshold, stream, conversationId, context: extraContext } = body
-
-    if (!query || typeof query !== 'string') {
-      return NextResponse.json({ error: 'Query is required' }, { status: 400 })
-    }
-
-    const chatProvider = await getUserChatProvider(user.id)
-
-    // Load conversation history if conversationId provided
-    let conversationHistory: Array<{ role: string; content: string }> = []
-    let targetConversationId: string | null = conversationId
-    
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     if (conversationId) {
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 20 } },
       })
       if (conversation && conversation.userId === user.id) {
-<<<<<<< HEAD
         conversationHistory = (conversation.messages || []).map(m => ({
           role: m.role,
           content: m.content,
@@ -301,93 +280,6 @@ export async function POST(request: Request) {
         ? '\n\nUSER MEMORIES (authoritative facts):\n' +
           memories.map(m => `- [${m.category}] ${m.key}: ${m.value}`).join('\n')
         : ''
-=======
-        conversationHistory = conversation.messages.map(m => ({ role: m.role, content: m.content }))
-      }
-    }
-
-    // Load user memories
-    const memories = await prisma.userMemory.findMany({
-      where: { userId: user.id },
-      orderBy: { updatedAt: 'desc' },
-    })
-
-    // Load academic context
-    const [enrollments, upcomingAssignments, attendanceSummary, plannerEvents] = await Promise.all([
-      prisma.subjectEnrollment.findMany({
-        where: { userId: user.id, isActive: true },
-        include: { subject: { include: { semester: true } } },
-        take: 10,
-      }),
-      prisma.assignment.findMany({
-        where: {
-          subject: { enrollments: { some: { userId: user.id, isActive: true } } },
-          dueDate: { gte: new Date() },
-          isPublished: true,
-        },
-        include: { subject: true },
-        orderBy: { dueDate: 'asc' },
-        take: 10,
-      }),
-      prisma.attendanceRecord.findMany({
-        where: { userId: user.id },
-        include: { session: { include: { subject: true } } },
-        orderBy: { markedAt: 'desc' },
-        take: 50,
-      }),
-      prisma.plannerEvent.findMany({
-        where: { userId: user.id, startTime: { gte: new Date() } },
-        orderBy: { startTime: 'asc' },
-        take: 10,
-      }),
-    ])
-
-    // Perform hybrid search
-    const searchResults = await hybridSearch({
-      query,
-      userId: user.id,
-      subjectId,
-      projectId,
-      notebookId,
-      documentIds,
-      limit: limit || 10,
-      threshold: threshold || 0.7,
-    })
-
-    if (searchResults.length === 0) {
-      // Still save conversation even if no search results
-      let newConversationId = targetConversationId
-      if (!newConversationId) {
-        const newConv = await prisma.conversation.create({
-          data: {
-            userId: user.id,
-            title: query.slice(0, 100),
-            messages: {
-              create: [
-                { role: 'user', content: query, senderId: user.id },
-                { role: 'assistant', content: 'I could not find any relevant information in your documents to answer this question.', senderId: user.id, metadata: { citations: [], sources: [] } },
-              ],
-            },
-          },
-        })
-        newConversationId = newConv.id
-      }
-
-      return NextResponse.json({
-        answer: 'I could not find any relevant information in your documents to answer this question.',
-        citations: [],
-        sources: [],
-        model: 'none',
-        tokenUsage: { prompt: 0, completion: 0, total: 0 },
-        conversationId: newConversationId,
-      })
-    }
-
-    // Build enhanced context with memories and academic info
-    const memoryContext = memories.length > 0 
-      ? '\n\nUSER MEMORIES (authoritative facts):\n' + memories.map(m => `- [${m.category}] ${m.key}: ${m.value}`).join('\n')
-      : ''
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const academicContext = `
 ${enrollments.length > 0 ? '\nCURRENT ENROLLMENTS:\n' + enrollments.map(e => `- ${e.subject.code}: ${e.subject.name} (${e.subject.semester?.name || 'N/A'})`).join('\n') : ''}
@@ -396,7 +288,6 @@ ${attendanceSummary.length > 0 ? '\nRECENT ATTENDANCE:\n' + [...new Set(attendan
 ${plannerEvents.length > 0 ? '\nUPCOMING EVENTS:\n' + plannerEvents.map(e => `- ${e.title} (${new Date(e.startTime).toLocaleString()})`).join('\n') : ''}
 `.trim()
 
-<<<<<<< HEAD
     const historyMessages = conversationHistory.slice(-10).map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
@@ -411,21 +302,11 @@ Rules:
 4. For follow-up questions, use the conversation history together with the provided sources and maintain accurate [Source X] citations.`
       : `You are ALEX, a personal AI academic assistant for a student. You have access to:
 1. Retrieved document sources (primary evidence when available)
-=======
-    // Build conversation history messages for the model
-    const historyMessages = conversationHistory.slice(-10).flatMap(m => [
-      { role: m.role as 'user' | 'assistant', content: m.content }
-    ])
-
-    const systemPrompt = `You are ALEX, a personal AI academic assistant for a student. You have access to:
-1. Retrieved document sources (primary evidence)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 2. User-approved persistent memories (authoritative facts)
 3. Academic context (enrollments, assignments, attendance, calendar)
 4. Current page context (what the user is viewing)
 
 Guidelines:
-<<<<<<< HEAD
 - Answer using the provided sources, memories, and academic context
 - Cite document sources using [Source X] format when referencing uploaded documents
 - Reference memories as "According to your saved memory..."
@@ -443,56 +324,26 @@ Guidelines:
     if (stream && 'generateStream' in chatProvider && typeof chatProvider.generateStream === 'function') {
       const encoder = new TextEncoder()
       const readable = new ReadableStream({
-=======
-- Answer using ONLY the provided sources and memories
-- Cite document sources using [Source X] format
-- Reference memories as "According to your saved memory..."
-- Use academic context to personalize answers (e.g., "For your ${enrollments[0]?.subject?.code} class...")
-- Use current page context to provide relevant assistance
-- If sources don't contain enough information, say so clearly
-- Distinguish between retrieved facts, memories, and your own reasoning
-- Be concise but thorough
-- Never fabricate citations, page numbers, or memories
-- If asked about something not in sources/memories, offer to search or create a memory`
-
-    if (stream && 'generateStream' in chatProvider && typeof chatProvider.generateStream === 'function') {
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         async start(controller) {
           try {
             for await (const chunk of chatProvider.generateStream({
               query,
-<<<<<<< HEAD
               context: effectiveContextForGeneration,
               systemPrompt: fullSystemPrompt,
-=======
-              context: searchResults,
-              systemPrompt: systemPrompt + `\n\nConversation History:\n${historyMessages.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nMemories & Academic Context:\n${memoryContext}\n${academicContext}\n\nCurrent Page Context:\n${extraContext || 'None'}`,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             })) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`))
             }
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', citations: [] })}\n\n`))
-<<<<<<< HEAD
           } catch (streamErr) {
             const msg = streamErr instanceof Error ? streamErr.message : 'Generation failed'
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`))
-=======
-} catch {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Generation failed' })}\n\n`))
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           } finally {
             controller.close()
           }
         },
       })
 
-<<<<<<< HEAD
       return new Response(readable, {
-=======
-      return new Response(stream, {
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -503,7 +354,6 @@ Guidelines:
 
     const response = await chatProvider.generate({
       query,
-<<<<<<< HEAD
       context: effectiveContextForGeneration,
       systemPrompt: fullSystemPrompt,
     })
@@ -604,37 +454,10 @@ Guidelines:
               model: response.model,
             } as any,
           },
-=======
-      context: searchResults,
-      systemPrompt: systemPrompt + `\n\nConversation History:\n${historyMessages.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nMemories & Academic Context:\n${memoryContext}\n${academicContext}\n\nCurrent Page Context:\n${extraContext || 'None'}`,
-    })
-
-    // Save to conversation
-    if (!targetConversationId) {
-      const newConv = await prisma.conversation.create({
-        data: {
-          userId: user.id,
-          title: query.slice(0, 100),
-          messages: {
-            create: [
-              { role: 'user', content: query, senderId: user.id },
-              { role: 'assistant', content: response.answer, senderId: user.id, metadata: { citationIds: response.citations.map(c => c.id), sourceIds: response.sources.map(s => s.id) } },
-            ],
-          },
-        },
-      })
-      targetConversationId = newConv.id
-    } else {
-      await prisma.message.createMany({
-        data: [
-          { conversationId: targetConversationId, role: 'user', content: query, senderId: user.id },
-          { conversationId: targetConversationId, role: 'assistant', content: response.answer, senderId: user.id, metadata: { citationIds: response.citations.map(c => c.id), sourceIds: response.sources.map(s => s.id) } },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         ],
       })
     }
 
-<<<<<<< HEAD
     return NextResponse.json({
       answer: finalAnswer,
       citations: finalCitations,
@@ -651,11 +474,5 @@ Guidelines:
     console.error('[RAG Query] Error:', error)
     const formatted = formatAIServiceErrorResponse(error, 'Query failed')
     return NextResponse.json(formatted.body, { status: formatted.status })
-=======
-    return NextResponse.json({ ...response, conversationId: targetConversationId })
-  } catch (_error) {
-    console.error('RAG query error:', _error)
-    return NextResponse.json({ error: 'Query failed' }, { status: 500 })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }

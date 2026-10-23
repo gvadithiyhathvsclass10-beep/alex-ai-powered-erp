@@ -3,7 +3,6 @@
 import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { DocumentList } from "@/components/documents/document-list"
-<<<<<<< HEAD
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -24,15 +23,6 @@ type DocumentStatus =
   | "READY"
   | "FAILED"
 
-=======
-import { DocumentUpload } from "@/components/documents/document-upload"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DocumentStatus } from "@prisma/client"
-import { formatRelativeTime } from "@/lib/utils"
-import { toast } from "@/hooks/use-toast"
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 interface DocumentListItem {
   id: string
   title: string
@@ -56,7 +46,6 @@ interface DocumentListItem {
 export default function DocumentsPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("personal")
-<<<<<<< HEAD
   const [viewingDocId, setViewingDocId] = React.useState<string | null>(null)
   const [editingDoc, setEditingDoc] = React.useState<DocumentListItem | null>(null)
   const [editTitle, setEditTitle] = React.useState("")
@@ -68,19 +57,10 @@ export default function DocumentsPage() {
     queryFn: async () => {
       const res = await fetch("/api/documents")
       if (!res.ok) throw new Error("Failed to fetch documents")
-=======
-
-  const { data: personalDocs, isLoading: personalLoading } = useQuery({
-    queryKey: ['documents', 'personal'],
-    queryFn: async () => {
-      const res = await fetch('/api/documents')
-      if (!res.ok) throw new Error('Failed to fetch')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return res.json()
     },
   })
 
-<<<<<<< HEAD
   const { data: viewedDocDetail, isLoading: detailLoading } = useQuery({
     queryKey: ["document-detail", viewingDocId],
     queryFn: async () => {
@@ -90,21 +70,10 @@ export default function DocumentsPage() {
       return res.json()
     },
     enabled: !!viewingDocId,
-=======
-  const { data: subjectDocs, isLoading: subjectLoading } = useQuery({
-    queryKey: ['documents', 'subject'],
-    queryFn: async () => {
-      const res = await fetch('/api/documents?subjectId=current')
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
-    enabled: false,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   })
 
   const retryMutation = useMutation({
     mutationFn: async (id: string) => {
-<<<<<<< HEAD
       const res = await fetch(`/api/documents/${id}/retry`, { method: "POST" })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Retry failed")
@@ -119,22 +88,10 @@ export default function DocumentsPage() {
     },
     onError: (err: Error) =>
       toast({ title: "Reprocessing failed", description: err.message, variant: "destructive" }),
-=======
-      const res = await fetch(`/api/documents/${id}/retry`, { method: 'POST' })
-      if (!res.ok) throw new Error('Retry failed')
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      toast({ title: "Processing restarted" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to retry", variant: "destructive" }),
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-<<<<<<< HEAD
       const res = await fetch(`/api/documents/${id}`, { method: "DELETE" })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Delete failed")
@@ -207,23 +164,6 @@ export default function DocumentsPage() {
       setEditingDoc(target)
       setEditTitle(target.title)
       setEditDescription(target.description || "")
-=======
-      const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      toast({ title: "Document deleted" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to delete", variant: "destructive" }),
-  })
-
-  const handleRetry = (id: string) => retryMutation.mutate(id)
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this document?")) {
-      deleteMutation.mutate(id)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   }
 
@@ -231,7 +171,6 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-<<<<<<< HEAD
         <p className="text-muted-foreground mt-1">
           Upload, inspect, and connect your academic documents to the AI engine
         </p>
@@ -381,42 +320,21 @@ export default function DocumentsPage() {
           <TabsTrigger value="subjects">Subject Resources ({subjectDocuments.length})</TabsTrigger>
           <TabsTrigger value="projects">Project Documents ({projectDocuments.length})</TabsTrigger>
           <TabsTrigger value="research">Research Notebooks ({researchDocuments.length})</TabsTrigger>
-=======
-        <p className="text-muted-foreground mt-1">Manage your documents and knowledge base</p>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="personal">Personal Documents</TabsTrigger>
-          <TabsTrigger value="subjects">Subject Resources</TabsTrigger>
-          <TabsTrigger value="projects">Project Documents</TabsTrigger>
-          <TabsTrigger value="research">Research Notebooks</TabsTrigger>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         </TabsList>
 
         <TabsContent value="personal" className="mt-4">
           <DocumentList
-<<<<<<< HEAD
             documents={allDocuments}
             isLoading={docsLoading}
             onRetry={handleRetry}
             onDelete={handleDelete}
             onView={handleView}
             onEdit={handleEdit}
-=======
-            documents={personalDocs?.documents || []}
-            isLoading={personalLoading}
-            onRetry={handleRetry}
-            onDelete={handleDelete}
-            onView={(id) => window.location.href = `/dashboard/documents/${id}`}
-            onEdit={(id) => console.log('edit', id)}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             showUpload={true}
           />
         </TabsContent>
 
         <TabsContent value="subjects" className="mt-4">
-<<<<<<< HEAD
           <DocumentList
             documents={subjectDocuments}
             isLoading={docsLoading}
@@ -450,44 +368,6 @@ export default function DocumentsPage() {
             onEdit={handleEdit}
             showUpload={false}
           />
-=======
-          <Card>
-            <CardHeader>
-              <CardTitle>Subject Resources</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Select a subject from the Subjects page to view its resources.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="projects" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Documents</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Select a project from the Projects page to view its documents.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="research" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Research Notebook Documents</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Select a notebook from the Research Lab to view its documents.
-              </p>
-            </CardContent>
-          </Card>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         </TabsContent>
       </Tabs>
     </div>

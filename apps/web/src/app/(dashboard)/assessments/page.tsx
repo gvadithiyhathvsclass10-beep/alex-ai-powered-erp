@@ -13,13 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-<<<<<<< HEAD
 import { Plus, CheckCircle, AlertCircle, Calendar, BarChart, Edit, Eye, Trash2 } from "lucide-react"
 import { formatDate, calculatePercentage } from "@/lib/utils"
-=======
-import { Plus, CheckCircle, XCircle, AlertCircle, Calendar, Download, BarChart, Target, Edit, Eye, AlertTriangle } from "lucide-react"
-import { formatDate, formatRelativeTime, calculatePercentage } from "@/lib/utils"
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { toast } from "@/hooks/use-toast"
 
 interface Assessment {
@@ -52,10 +47,7 @@ interface AssessmentResult {
 
 interface AssessmentDetail extends Assessment {
   results: AssessmentResult[]
-<<<<<<< HEAD
   roster?: AssessmentResult[]
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 }
 
 export default function AssessmentsPage() {
@@ -63,13 +55,8 @@ export default function AssessmentsPage() {
   const [activeTab, setActiveTab] = React.useState("my-assessments")
   const [selectedAssessment, setSelectedAssessment] = React.useState<string | null>(null)
   const [showMarksDialog, setShowMarksDialog] = React.useState(false)
-<<<<<<< HEAD
   const [marksInput, setMarksInput] = React.useState<Record<string, { marks: string; feedback: string }>>({})
   const [deletingAssessment, setDeletingAssessment] = React.useState<Assessment | null>(null)
-=======
-  const [editingResult, setEditingResult] = React.useState<AssessmentResult | null>(null)
-  const [marksInput, setMarksInput] = React.useState<Record<string, { marks: string; feedback: string }>>({})
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   const { data: assessments } = useQuery({
     queryKey: ['assessments', 'my'],
@@ -80,11 +67,7 @@ export default function AssessmentsPage() {
     },
   })
 
-<<<<<<< HEAD
   const { data: assessmentDetailData } = useQuery({
-=======
-  const { data: assessmentDetail } = useQuery({
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryKey: ['assessment-detail', selectedAssessment],
     queryFn: async () => {
       if (!selectedAssessment) return null
@@ -94,7 +77,6 @@ export default function AssessmentsPage() {
     },
     enabled: !!selectedAssessment,
   })
-<<<<<<< HEAD
   const assessmentDetail: AssessmentDetail | null = assessmentDetailData?.assessment || assessmentDetailData || null
 
   // Pre-fill marksInput when opening marks dialog
@@ -114,8 +96,6 @@ export default function AssessmentsPage() {
       )
     }
   }, [showMarksDialog, assessmentDetail])
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   const updateAssessmentMutation = useMutation({
     mutationFn: async (data: { id: string; isPublished?: boolean; results?: any[] }) => {
@@ -130,13 +110,8 @@ export default function AssessmentsPage() {
       }
       return res.json()
     },
-<<<<<<< HEAD
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['assessment-detail', variables.id] })
-=======
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assessment-detail', selectedAssessment] })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       queryClient.invalidateQueries({ queryKey: ['assessments', 'my'] })
       toast({ title: "Assessment updated successfully" })
     },
@@ -145,50 +120,27 @@ export default function AssessmentsPage() {
     },
   })
 
-<<<<<<< HEAD
   const deleteAssessmentMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/assessments/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const error = await res.json().catch(() => ({}))
         throw new Error(error.error || 'Failed to delete assessment')
-=======
-  const createAssessmentMutation = useMutation({
-    mutationFn: async (data: { subjectId: string; name: string; type: string; maxMarks: number; weight: number; assessmentDate: string; description?: string }) => {
-      const res = await fetch('/api/assessments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to create')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       }
       return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments', 'my'] })
-<<<<<<< HEAD
       setDeletingAssessment(null)
       toast({ title: "Assessment deleted" })
-=======
-      toast({ title: "Assessment created successfully" })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" })
     },
   })
 
-<<<<<<< HEAD
   const handlePublish = (assessmentId: string, isPublished: boolean) => {
     updateAssessmentMutation.mutate({ id: assessmentId, isPublished })
-=======
-  const handlePublish = (isPublished: boolean) => {
-    if (!selectedAssessment) return
-    updateAssessmentMutation.mutate({ id: selectedAssessment, isPublished })
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 
   const handleSaveMarks = () => {
@@ -196,11 +148,7 @@ export default function AssessmentsPage() {
 
     const results = Object.entries(marksInput).map(([userId, { marks, feedback }]) => ({
       userId,
-<<<<<<< HEAD
       marksObtained: parseFloat(marks) || 0,
-=======
-      marksObtained: parseFloat(marks),
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       feedback: feedback || null,
       isPublished: true,
     }))
@@ -229,16 +177,12 @@ export default function AssessmentsPage() {
     },
   })
 
-<<<<<<< HEAD
   const isLecturer =
     userData?.user?.role === 'LECTURER' ||
     userData?.user?.role === 'PROJECT_MENTOR' ||
     userData?.user?.role === 'ADMIN'
 
   const gradingRoster = assessmentDetail?.roster || assessmentDetail?.results || []
-=======
-  const isLecturer = userData?.user?.role === 'LECTURER' || userData?.user?.role === 'ADMIN'
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   return (
     <div className="space-y-6">
@@ -298,11 +242,7 @@ export default function AssessmentsPage() {
                       <span>{formatDate(assessment.assessmentDate)}</span>
                     </div>
                     {assessment.isPublished && (
-<<<<<<< HEAD
                       <Button variant="outline" size="sm" onClick={e => { e.stopPropagation(); setSelectedAssessment(assessment.id); setActiveTab("results") }}>
-=======
-                      <Button variant="outline" size="sm" onClick={e => { e.stopPropagation(); setSelectedAssessment(assessment.id) }}>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                         View Result
                       </Button>
                     )}
@@ -318,23 +258,6 @@ export default function AssessmentsPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Assessments</h2>
-<<<<<<< HEAD
-=======
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Assessment
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create New Assessment</DialogTitle>
-                    </DialogHeader>
-                    <CreateAssessmentForm onSuccess={() => queryClient.invalidateQueries({ queryKey: ['assessments', 'my'] })} />
-                  </DialogContent>
-                </Dialog>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </div>
 
               <div className="space-y-4">
@@ -349,18 +272,12 @@ export default function AssessmentsPage() {
                         <Badge variant={assessment.isPublished ? 'success' : 'outline'}>
                           {assessment.isPublished ? 'Published' : 'Draft'}
                         </Badge>
-<<<<<<< HEAD
                         <Button variant="ghost" size="icon" onClick={() => { setSelectedAssessment(assessment.id); setActiveTab("results") }}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => setDeletingAssessment(assessment)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-=======
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedAssessment(assessment.id)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -374,21 +291,13 @@ export default function AssessmentsPage() {
                           <span>•</span>
                           <span>{formatDate(assessment.assessmentDate)}</span>
                           <span>•</span>
-<<<<<<< HEAD
                           <span>{assessment._count.results} graded</span>
-=======
-                          <span>{assessment._count.results} submissions</span>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                         </div>
                         <div className="flex gap-2">
                           <Button
                             variant={assessment.isPublished ? 'outline' : 'default'}
                             size="sm"
-<<<<<<< HEAD
                             onClick={() => handlePublish(assessment.id, !assessment.isPublished)}
-=======
-                            onClick={() => handlePublish(!assessment.isPublished)}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                           >
                             {assessment.isPublished ? 'Unpublish' : 'Publish'}
                           </Button>
@@ -417,24 +326,14 @@ export default function AssessmentsPage() {
                 <div className="flex gap-2">
                   {isLecturer && (
                     <>
-<<<<<<< HEAD
                       <Button variant="outline" size="sm" onClick={() => setShowMarksDialog(true)}>
-=======
-                      <Button variant="outline" size="sm" onClick={() => { setMarksInput(
-                        Object.fromEntries(assessmentDetail.results.map((r: any) => [r.userId, { marks: r.marksObtained.toString(), feedback: r.feedback || '' }]))
-                      ); setShowMarksDialog(true) }}>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                         <Edit className="mr-2 h-4 w-4" />
                         Edit Marks
                       </Button>
                       <Button
                         variant={assessmentDetail.isPublished ? 'outline' : 'default'}
                         size="sm"
-<<<<<<< HEAD
                         onClick={() => handlePublish(assessmentDetail.id, !assessmentDetail.isPublished)}
-=======
-                        onClick={() => handlePublish(!assessmentDetail.isPublished)}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                       >
                         {assessmentDetail.isPublished ? 'Unpublish' : 'Publish Results'}
                       </Button>
@@ -446,11 +345,7 @@ export default function AssessmentsPage() {
               <Card>
                 <CardContent className="pt-0">
                   {assessmentDetail.results.length === 0 ? (
-<<<<<<< HEAD
                     <p className="text-muted-foreground text-center py-8">No results recorded yet</p>
-=======
-                    <p className="text-muted-foreground text-center py-8">No results available</p>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   ) : (
                     <div className="overflow-x-auto">
                       <Table>
@@ -548,30 +443,6 @@ export default function AssessmentsPage() {
               </CardContent>
             </Card>
           </div>
-<<<<<<< HEAD
-=======
-
-          {selectedAssessment && assessmentDetail && assessmentDetail.results.length > 0 && (
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Performance Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {getGradeDistribution(assessmentDetail.results, assessmentDetail.maxMarks).map(([grade, count]) => (
-                    <div key={grade} className="flex items-center gap-4">
-                      <Badge variant={getGradeVariant(grade)} className="w-16 text-center">{grade}</Badge>
-                      <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full" style={{ width: `${(count / assessmentDetail.results.length) * 100}%` }} />
-                      </div>
-                      <span className="text-sm text-muted-foreground w-12 text-right">{count} students</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         </TabsContent>
       </Tabs>
 
@@ -593,7 +464,6 @@ export default function AssessmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-<<<<<<< HEAD
                 {gradingRoster.map((result: AssessmentResult) => {
                   const existing = marksInput[result.userId] || {
                     marks: String(result.marksObtained ?? 0),
@@ -605,34 +475,19 @@ export default function AssessmentsPage() {
                   )
                   return (
                     <TableRow key={result.userId}>
-=======
-                {assessmentDetail?.results.map((result: AssessmentResult) => {
-                  const existing = marksInput[result.userId] || { marks: result.marksObtained.toString(), feedback: result.feedback || '' }
-                  const percentage = calculatePercentage(parseFloat(existing.marks) || 0, assessmentDetail.maxMarks)
-                  return (
-                    <TableRow key={result.id}>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                       <TableCell className="font-medium">{result.user.firstName} {result.user.lastName}</TableCell>
                       <TableCell>{result.user.studentId || 'N/A'}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
                           min={0}
-<<<<<<< HEAD
                           max={assessmentDetail?.maxMarks || 100}
-=======
-                          max={assessmentDetail.maxMarks}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                           step={0.5}
                           value={existing.marks}
                           onChange={e => handleMarksChange(result.userId, 'marks', e.target.value)}
                           className="w-24"
                         />
-<<<<<<< HEAD
                         <span className="text-xs text-muted-foreground"> / {assessmentDetail?.maxMarks || 100}</span>
-=======
-                        <span className="text-xs text-muted-foreground"> / {assessmentDetail.maxMarks}</span>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                       </TableCell>
                       <TableCell>
                         <Progress value={percentage} className="w-full" />
@@ -660,7 +515,6 @@ export default function AssessmentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-<<<<<<< HEAD
 
       {/* Delete Assessment Confirmation Dialog */}
       <Dialog open={!!deletingAssessment} onOpenChange={(open) => !open && setDeletingAssessment(null)}>
@@ -687,8 +541,6 @@ export default function AssessmentsPage() {
           )}
         </DialogContent>
       </Dialog>
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     </div>
   )
 }
@@ -708,28 +560,17 @@ function CreateAssessmentForm({ onSuccess }: { onSuccess: () => void }) {
     type: 'INTERNAL_ASSESSMENT',
     maxMarks: 100,
     weight: 1,
-<<<<<<< HEAD
     assessmentDate: new Date(),
-=======
-    assessmentDate: undefined,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     description: '',
   })
   const [isLoading, setIsLoading] = React.useState(false)
 
   const resetForm = () => setFormData({
     subjectId: '', name: '', type: 'INTERNAL_ASSESSMENT', maxMarks: 100,
-<<<<<<< HEAD
     weight: 1, assessmentDate: new Date(), description: '',
   })
 
   const { data: subjects } = useQuery({
-=======
-    weight: 1, assessmentDate: undefined, description: '',
-  })
-
-  const { data: subjects = [] } = useQuery({
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryKey: ['subjects', 'my'],
     queryFn: async () => {
       const res = await fetch('/api/subjects/my')
@@ -742,11 +583,7 @@ function CreateAssessmentForm({ onSuccess }: { onSuccess: () => void }) {
     mutationFn: async (data: typeof formData) => {
       const payload = {
         ...data,
-<<<<<<< HEAD
         assessmentDate: data.assessmentDate instanceof Date ? data.assessmentDate.toISOString() : new Date().toISOString(),
-=======
-        assessmentDate: data.assessmentDate instanceof Date ? data.assessmentDate.toISOString() : data.assessmentDate,
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       }
       const res = await fetch('/api/assessments', {
         method: 'POST',
@@ -858,7 +695,6 @@ function calculateOverallAverage(assessments?: Assessment[]): number {
   if (!assessments || assessments.length === 0) return 0
   const published = assessments.filter(a => a.isPublished)
   if (published.length === 0) return 0
-<<<<<<< HEAD
   const withResults = published.filter((a: any) => Array.isArray(a.results) && a.results.length > 0 && a.maxMarks > 0)
   if (withResults.length === 0) return 0
   const sumPct = withResults.reduce((acc: number, a: any) => {
@@ -866,10 +702,6 @@ function calculateOverallAverage(assessments?: Assessment[]): number {
     return acc + (avgMarks / a.maxMarks) * 100
   }, 0)
   return Math.round(sumPct / withResults.length)
-=======
-  // This is a simplified calculation - in reality you'd need actual student results
-  return 0
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 }
 
 function getUpcomingCount(assessments?: Assessment[]): number {
@@ -878,19 +710,3 @@ function getUpcomingCount(assessments?: Assessment[]): number {
   const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   return assessments.filter(a => new Date(a.assessmentDate) >= now && new Date(a.assessmentDate) <= thirtyDaysLater).length
 }
-<<<<<<< HEAD
-=======
-
-function getGradeDistribution(results: AssessmentResult[], maxMarks: number): [string, number][] {
-  const grades = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F']
-  const distribution: Record<string, number> = {}
-  grades.forEach(g => distribution[g] = 0)
-
-  results.forEach(r => {
-    const grade = getGrade(calculatePercentage(r.marksObtained, maxMarks))
-    distribution[grade]++
-  })
-
-  return grades.map(g => [g, distribution[g]])
-}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

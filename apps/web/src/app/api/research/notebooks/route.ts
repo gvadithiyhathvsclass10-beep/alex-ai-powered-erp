@@ -1,5 +1,4 @@
 import { requireAuth } from '@/lib/auth'
-<<<<<<< HEAD
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
@@ -15,22 +14,10 @@ export async function GET(request: Request) {
 
     const notebooks = await prisma.researchNotebook.findMany({
       where,
-=======
-import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
-
-export async function GET() {
-  try {
-    const user = await requireAuth()
-
-    const notebooks = await prisma.researchNotebook.findMany({
-      where: { ownerId: user.id },
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: { select: { sources: true, notes: true } },
         project: { select: { id: true, title: true } },
-<<<<<<< HEAD
         sources: { select: { id: true, documentId: true } },
         documents: { select: { id: true, status: true } },
       },
@@ -71,14 +58,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Research] Notebooks list error:', error)
-=======
-      },
-    })
-
-    return NextResponse.json({ notebooks })
-  } catch (error) {
-    console.error('Research notebooks list error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to list notebooks' }, { status: 500 })
   }
 }
@@ -88,7 +67,6 @@ export async function POST(request: Request) {
     const user = await requireAuth()
 
     const body = await request.json()
-<<<<<<< HEAD
     const { title, description, projectId, isPublic = false } = body
 
     if (!title || typeof title !== 'string' || !title.trim()) {
@@ -97,14 +75,10 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-=======
-    const { title, description, projectId } = body
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const notebook = await prisma.researchNotebook.create({
       data: {
         ownerId: user.id,
-<<<<<<< HEAD
         title: title.trim(),
         description: description ? String(description).trim() : null,
         projectId: projectId || null,
@@ -126,17 +100,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Research] Notebook create error:', error)
-=======
-        title,
-        description,
-        projectId,
-      },
-    })
-
-    return NextResponse.json({ notebook })
-  } catch (error) {
-    console.error('Research notebook create error:', error)
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to create notebook' }, { status: 500 })
   }
 }

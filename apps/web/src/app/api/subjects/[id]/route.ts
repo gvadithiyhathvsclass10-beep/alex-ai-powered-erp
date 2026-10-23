@@ -102,6 +102,15 @@ export async function PATCH(
     }
 
     if (body.action === 'enroll_student' && body.studentId) {
+      // Get the subject to find its semesterId
+      const subject = await prisma.subject.findUnique({
+        where: { id },
+        select: { semesterId: true },
+      })
+      if (!subject) {
+        return NextResponse.json({ error: 'Subject not found' }, { status: 404 })
+      }
+
       const enrollment = await prisma.subjectEnrollment.upsert({
         where: {
           userId_subjectId: {
@@ -113,6 +122,7 @@ export async function PATCH(
         create: {
           userId: String(body.studentId),
           subjectId: id,
+          semesterId: subject.semesterId,
           isActive: true,
         },
       })

@@ -1,15 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-<<<<<<< HEAD
     "lib": [
       "dom",
       "dom.iterable",
       "esnext"
     ],
-=======
-    "lib": ["dom", "dom.iterable", "esnext"],
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -27,7 +23,6 @@
       }
     ],
     "paths": {
-<<<<<<< HEAD
       "@/*": [
         "./src/*"
       ],
@@ -49,13 +44,6 @@
       "@alex/validation-schemas/*": [
         "../../packages/validation-schemas/src/*"
       ]
-=======
-      "@/*": ["./src/*"],
-      "@alex/shared-types/*": ["../../packages/shared-types/src/*"],
-      "@alex/shared-utils/*": ["../../packages/shared-utils/src/*"],
-      "@alex/validation-schemas/*": ["../../packages/validation-schemas/src/*"],
-      "@prisma/client": ["../../node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client"]
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   },
   "include": [
@@ -66,13 +54,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-<<<<<<< HEAD
   "exclude": [
     "node_modules",
     "prisma/seed.sqlite.ts"
   ]
 }
-=======
-  "exclude": ["node_modules", "prisma/seed.sqlite.ts"]
-}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

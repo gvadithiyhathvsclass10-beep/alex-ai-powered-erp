@@ -8,18 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-<<<<<<< HEAD
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { AlertCircle, FileText, Upload, Loader2, Plus, CheckCircle } from "lucide-react"
-=======
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DatePicker } from "@/components/ui/date-picker"
-import { Badge } from "@/components/ui/badge"
-import { DocumentUpload } from "@/components/documents/document-upload"
-import { Plus, CheckCircle, XCircle, AlertCircle, Calendar, Download, FileText, Clock, Upload } from "lucide-react"
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { formatDate, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 
@@ -52,11 +44,7 @@ interface Submission {
   gradedAt: string | null
   marksObtained: number | null
   feedback: string | null
-<<<<<<< HEAD
   user?: { id: string; firstName: string; lastName: string; email?: string }
-=======
-  user: { id: string; firstName: string; lastName: string }
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   attachments: { id: string; fileName: string; storagePath: string }[]
 }
 
@@ -64,7 +52,6 @@ export default function AssignmentsPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("my-assignments")
   const [selectedAssignment, setSelectedAssignment] = React.useState<string | null>(null)
-<<<<<<< HEAD
   const [submissionContent, setSubmissionContent] = React.useState("")
   const [submissionFiles, setSubmissionFiles] = React.useState<File[]>([])
   const [showResubmitForm, setShowResubmitForm] = React.useState(false)
@@ -91,19 +78,10 @@ export default function AssignmentsPage() {
     queryFn: async () => {
       const res = await fetch("/api/user/profile")
       if (!res.ok) throw new Error("Failed to fetch profile")
-=======
-
-  const { data: assignments } = useQuery({
-    queryKey: ['assignments', 'my'],
-    queryFn: async () => {
-      const res = await fetch('/api/assignments/my')
-      if (!res.ok) throw new Error('Failed to fetch')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return res.json()
     },
   })
 
-<<<<<<< HEAD
   const isTeacher = ["LECTURER", "PROJECT_MENTOR", "ADMIN"].includes(
     userData?.user?.role || ""
   )
@@ -154,20 +132,11 @@ export default function AssignmentsPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || "Failed to fetch submissions")
       }
-=======
-  const { data: submissions } = useQuery({
-    queryKey: ['assignment-submissions', selectedAssignment],
-    queryFn: async () => {
-      if (!selectedAssignment) return { submissions: [] }
-      const res = await fetch(`/api/assignments/${selectedAssignment}/submissions`)
-      if (!res.ok) throw new Error('Failed to fetch')
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return res.json()
     },
     enabled: !!selectedAssignment,
   })
 
-<<<<<<< HEAD
   const submissionsList: Submission[] = Array.isArray(submissionsData)
     ? submissionsData
     : submissionsData?.submissions || []
@@ -293,35 +262,11 @@ export default function AssignmentsPage() {
 
   const activeAssignmentObj = assignmentsList.find((a) => a.id === selectedAssignment)
 
-=======
-  const submitAssignment = useMutation({
-    mutationFn: async (data: { assignmentId: string; content: string; files: File[] }) => {
-      const formData = new FormData()
-      formData.append('assignmentId', data.assignmentId)
-      formData.append('content', data.content)
-      data.files.forEach(f => formData.append('files', f))
-      
-      const res = await fetch('/api/assignments/submit', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) throw new Error('Failed to submit')
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignment-submissions', selectedAssignment] })
-      toast({ title: "Assignment submitted" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to submit assignment", variant: "destructive" }),
-  })
-
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Assignments</h1>
-<<<<<<< HEAD
           <p className="text-muted-foreground mt-1">
             {isTeacher
               ? "Create coursework assignments and evaluate student submissions"
@@ -334,15 +279,10 @@ export default function AssignmentsPage() {
             Create Assignment
           </Button>
         )}
-=======
-          <p className="text-muted-foreground mt-1">Manage your coursework and submissions</p>
-        </div>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
-<<<<<<< HEAD
           <TabsTrigger value="my-assignments">
             {isTeacher ? "Class Assignments" : "My Assignments"}
           </TabsTrigger>
@@ -458,67 +398,12 @@ export default function AssignmentsPage() {
               })}
             </div>
           )}
-=======
-          <TabsTrigger value="my-assignments">My Assignments</TabsTrigger>
-          <TabsTrigger value="submissions">My Submissions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="my-assignments" className="mt-4">
-          <div className="space-y-4">
-            {assignments?.assignments?.map((assignment: Assignment) => {
-              const isOverdue = new Date(assignment.dueDate) < new Date()
-              const isSubmitted = assignment._count.submissions > 0
-              
-              return (
-                <Card key={assignment.id} className={isOverdue && !isSubmitted ? 'border-red-200' : ''}>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>{assignment.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{assignment.subject.code} - {assignment.subject.name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={isOverdue && !isSubmitted ? 'destructive' : isSubmitted ? 'success' : 'warning'}>
-                        {isOverdue && !isSubmitted ? 'Overdue' : isSubmitted ? 'Submitted' : 'Pending'}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {assignment.description && <p className="text-sm text-muted-foreground">{assignment.description}</p>}
-                      {assignment.instructions && (
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="font-medium text-sm">Instructions:</p>
-                          <p className="text-sm text-muted-foreground mt-1">{assignment.instructions}</p>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>Max: {assignment.maxMarks} marks</span>
-                        <span>•</span>
-                        <span>Weight: {assignment.weight}x</span>
-                        <span>•</span>
-                        <span>Due: {formatDate(assignment.dueDate)}</span>
-                        {isOverdue && !isSubmitted && <span className="text-red-500">OVERDUE</span>}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={() => setSelectedAssignment(assignment.id)} disabled={isSubmitted}>
-                          {isSubmitted ? 'View Submission' : 'Submit Assignment'}
-                        </Button>
-                        <Button variant="outline" onClick={() => { setSelectedAssignment(assignment.id); setActiveTab("submissions") }}>View Details</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-4">
           {selectedAssignment ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-<<<<<<< HEAD
                 <h2 className="text-xl font-semibold">
                   Submissions for {activeAssignmentObj?.title || "Assignment"}
                 </h2>
@@ -743,54 +628,11 @@ export default function AssignmentsPage() {
                                 <Badge key={att.id} variant="outline">
                                   {att.fileName}
                                 </Badge>
-=======
-                <h2 className="text-xl font-semibold">Submissions for {assignments?.assignments?.find((a: Assignment) => a.id === selectedAssignment)?.title}</h2>
-              </div>
-              <Card>
-                <CardContent className="pt-0">
-                  {submissions?.submissions?.length === 0 ? (
-                    <div className="p-8 text-center">
-                      <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <p className="mt-2 text-muted-foreground">No submissions yet</p>
-                      <div className="mt-4 space-y-4">
-                        <Textarea placeholder="Your submission content..." rows={6} className="max-w-md mx-auto" />
-                        <DocumentUpload />
-                        <Button onClick={() => toast({ title: "Select your content or document first", description: "The submission form is ready above; enter content or attach a file before submitting." })}>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Submit Assignment
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {submissions?.submissions?.map((submission: Submission) => (
-                        <div key={submission.id} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <Badge variant={
-                              submission.status === 'SUBMITTED' ? 'default' :
-                              submission.status === 'LATE' ? 'warning' :
-                              submission.status === 'EVALUATED' ? 'success' : 'outline'
-                            }>
-                              {submission.status}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">
-                              Attempt {submission.submissionNumber} · {formatRelativeTime(submission.submittedAt!)}
-                            </span>
-                          </div>
-                          {submission.content && (
-                            <div className="prose mb-4">{submission.content}</div>
-                          )}
-                          {submission.attachments.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-4">
-                              {submission.attachments.map((att) => (
-                                <Badge key={att.id} variant="outline">{att.fileName}</Badge>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                               ))}
                             </div>
                           )}
                           {submission.marksObtained !== null && (
                             <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-<<<<<<< HEAD
                               <p className="font-medium">
                                 Grade: {submission.marksObtained} /{" "}
                                 {activeAssignmentObj?.maxMarks || 100}
@@ -812,15 +654,6 @@ export default function AssignmentsPage() {
                                 Resubmit
                               </Button>
                             )}
-=======
-                              <p className="font-medium">Grade: {submission.marksObtained} / {assignments?.assignments?.find((a: Assignment) => a.id === selectedAssignment)?.maxMarks || 100}</p>
-                              {submission.feedback && <p className="text-sm text-muted-foreground mt-1">{submission.feedback}</p>}
-                            </div>
-                          )}
-                          {submission.status !== 'EVALUATED' && assignments?.assignments?.find((a: Assignment) => a.id === selectedAssignment)?.allowResubmission && (
-                            <Button variant="outline" onClick={() => { setActiveTab("submissions"); toast({ title: "Resubmission ready", description: "Replace the submission content or upload a new document below." }) }}>Resubmit</Button>
-                          )}
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                         </div>
                       ))}
                     </div>
@@ -832,19 +665,14 @@ export default function AssignmentsPage() {
             <Card>
               <CardContent className="pt-12 pb-12 text-center">
                 <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-<<<<<<< HEAD
                 <p className="mt-2 text-muted-foreground">
                   Select an assignment to view or evaluate submissions
                 </p>
-=======
-                <p className="mt-2 text-muted-foreground">Select an assignment to view your submissions</p>
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </CardContent>
             </Card>
           )}
         </TabsContent>
       </Tabs>
-<<<<<<< HEAD
 
       {/* Teacher Create Assignment Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -949,8 +777,6 @@ export default function AssignmentsPage() {
           </div>
         </DialogContent>
       </Dialog>
-=======
->>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     </div>
   )
 }
