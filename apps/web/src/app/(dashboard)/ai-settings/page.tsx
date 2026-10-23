@@ -61,53 +61,61 @@ interface AIModelConfig {
   parameters: Record<string, any>
 }
 
-const PROVIDER_INFO: Record<string, { name: string; icon: React.ReactNode; models: string[]; capabilities: string[] }> = {
+const PROVIDER_INFO: Record<string, { name: string; icon: React.ReactNode; models: string[]; embeddingModels: string[]; capabilities: string[] }> = {
   OPENAI: {
     name: "OpenAI",
     icon: <Brain className="h-5 w-5" />,
     models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    embeddingModels: ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
     capabilities: ["chat", "embeddings", "functions", "vision"],
   },
   GOOGLE_GEMINI: {
     name: "Google Gemini",
     icon: <Sparkles className="h-5 w-5" />,
     models: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+    embeddingModels: ["text-embedding-004", "embedding-001"],
     capabilities: ["chat", "embeddings", "vision"],
   },
   ANTHROPIC: {
     name: "Anthropic",
     icon: <Zap className="h-5 w-5" />,
     models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
+    embeddingModels: [],
     capabilities: ["chat", "functions", "vision"],
   },
   NVIDIA_NEMOTRON: {
     name: "NVIDIA Nemotron",
     icon: <Shield className="h-5 w-5" />,
-    models: ["nvidia/nemotron-3-ultra", "nvidia/nemotron-3-large"],
+    models: ["nvidia/nemotron-3-ultra", "nvidia/nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3-large", "nvidia/llama-3.1-nemotron-70b-instruct"],
+    embeddingModels: [],
     capabilities: ["chat", "reasoning"],
   },
   GROQ: {
     name: "Groq",
     icon: <Wifi className="h-5 w-5" />,
     models: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"],
+    embeddingModels: [],
     capabilities: ["chat", "fast-inference"],
   },
   MISTRAL: {
     name: "Mistral AI",
     icon: <Brain className="h-5 w-5" />,
     models: ["mistral-large-latest", "mistral-small-latest", "open-mistral-7b"],
+    embeddingModels: ["mistral-embed"],
     capabilities: ["chat", "embeddings"],
   },
   OPENROUTER: {
     name: "OpenRouter",
     icon: <Zap className="h-5 w-5" />,
     models: ["openrouter/auto", "anthropic/claude-3.5-sonnet", "google/gemini-pro"],
+    embeddingModels: [],
     capabilities: ["chat", "multiple-models"],
   },
   TOGETHER_AI: {
     name: "Together AI",
     icon: <Sparkles className="h-5 w-5" />,
     models: ["meta-llama/Meta-Llama-3.1-70B", "mistralai/Mixtral-8x7B"],
+    embeddingModels: [],
     capabilities: ["chat", "embeddings", "open-source"],
   },
 }
@@ -199,7 +207,7 @@ export default function AISettingsPage() {
   })
 
   const testConnectionMutation = useMutation({
-    mutationFn: async (data: { provider?: string; apiKey?: string; credentialId?: string; model?: string; query?: string }) => {
+    mutationFn: async (data: { provider?: string; apiKey?: string; credentialId?: string; model?: string; query?: string; useSavedConfig?: boolean }) => {
       const res = await fetch("/api/ai/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -227,22 +235,32 @@ export default function AISettingsPage() {
     return key.slice(0, 4) + "****" + key.slice(-4)
   }
 
-  const handleTestConnection = useCallback(() => {
+  const handleTestConnection = useCallback((eventOrFlag?: boolean | React.MouseEvent<HTMLButtonElement>) => {
+    const useSavedConfig = typeof eventOrFlag === 'boolean' ? eventOrFlag : false
     const savedCred = credentials.find((c: AICredential) => c.provider === testingProvider && c.isActive)
-    if (!testingProvider || (!testApiKey && !savedCred)) {
+    if (!testingProvider) {
+      toast({ title: "Error", description: "Please select a provider", variant: "destructive" })
+      return
+    }
+    if (!useSavedConfig && !testApiKey && !savedCred) {
       toast({ title: "Error", description: "Please select a provider and enter an API key (or configure one in Credentials)", variant: "destructive" })
+      return
+    }
+    if (useSavedConfig && !savedCred) {
+      toast({ title: "Error", description: "No saved credential found for this provider", variant: "destructive" })
       return
     }
     setIsTesting(true)
     setTestResult(null)
     testConnectionMutation.mutate({
       provider: testingProvider,
-      apiKey: testApiKey || undefined,
-      credentialId: !testApiKey && savedCred ? savedCred.id : undefined,
+      apiKey: useSavedConfig ? undefined : (testApiKey || undefined),
+      credentialId: (useSavedConfig || !testApiKey) && savedCred ? savedCred.id : undefined,
       model: testModel || undefined,
       query: testQuery || undefined,
+      useSavedConfig,
     })
-  }, [testingProvider, testApiKey, testModel, testConnectionMutation])
+  }, [testingProvider, testApiKey, testModel, testConnectionMutation, credentials])
 
   return (
     <div className="space-y-6">
@@ -434,26 +452,31 @@ export default function AISettingsPage() {
                   <TableBody>
                     {["chat", "embeddings", "reasoning", "vision"].map(taskType => {
                       const config = modelConfigs.find((c: AIModelConfig) => c.taskType === taskType && c.isDefault)
+                      const isEmbeddingsTask = taskType === "embeddings"
+                      const capableProviders = Object.entries(PROVIDER_INFO)
+                        .filter(([, info]) => isEmbeddingsTask ? info.capabilities.includes("embeddings") : true)
+                        .map(([key]) => key)
                       return (
                         <TableRow key={taskType}>
                           <TableCell>
                             <span className="capitalize font-medium">{taskType}</span>
                             <p className="text-xs text-muted-foreground">
                               {taskType === "chat" ? "General conversation and Q&A" :
-                               taskType === "embeddings" ? "Document search and retrieval" :
+                               taskType === "embeddings" ? "Document search and retrieval (requires embedding-capable provider)" :
                                taskType === "reasoning" ? "Complex problem solving" :
                                "Image analysis"}
                             </p>
                           </TableCell>
                           <TableCell>
-                            <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, modelId: PROVIDER_INFO[v]?.models?.[0] || "gpt-4o-mini", taskType, isDefault: true })}>
+                            <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, modelId: PROVIDER_INFO[v]?.models?.[0] || (isEmbeddingsTask ? PROVIDER_INFO[v]?.embeddingModels?.[0] : "gpt-4o-mini"), taskType, isDefault: true })}>
                               <SelectTrigger className="w-[200px]">
                                 <SelectValue placeholder="Select provider" />
                               </SelectTrigger>
                               <SelectContent>
-                                {Object.entries(PROVIDER_INFO).map(([key, info]) => (
-                                  <SelectItem key={key} value={key}>{info.name}</SelectItem>
-                                ))}
+                                {Object.entries(PROVIDER_INFO).map(([key, info]) => {
+                                  if (isEmbeddingsTask && !info.capabilities.includes("embeddings")) return null
+                                  return <SelectItem key={key} value={key}>{info.name}</SelectItem>
+                                })}
                               </SelectContent>
                             </Select>
                           </TableCell>
@@ -601,24 +624,48 @@ export default function AISettingsPage() {
                 />
               </div>
 
-              <Button
-                onClick={handleTestConnection}
-                disabled={isTesting || !testingProvider || (!testApiKey && !credentials.some((c: AICredential) => c.provider === testingProvider && c.isActive))}
-                className="w-full"
-                size="lg"
-              >
-                {isTesting ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Testing Connection...
-                  </>
-                ) : (
-                  <>
-                    <Wifi className="mr-2 h-5 w-5" />
-                    Test Connection
-                  </>
+              <div className="grid gap-2">
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={isTesting || !testingProvider || (!testApiKey && !credentials.some((c: AICredential) => c.provider === testingProvider && c.isActive))}
+                  className="w-full"
+                  size="lg"
+                >
+                  {isTesting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Testing Connection...
+                    </>
+                  ) : (
+                    <>
+                      <Wifi className="mr-2 h-5 w-5" />
+                      Test Connection (Form Input)
+                    </>
+                  )}
+                </Button>
+
+                {credentials.some((c: AICredential) => c.provider === testingProvider && c.isActive) && (
+                  <Button
+                    onClick={() => handleTestConnection(true)}
+                    disabled={isTesting}
+                    className="w-full"
+                    size="lg"
+                    variant="outline"
+                  >
+                    {isTesting ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Testing Saved Config...
+                      </>
+                    ) : (
+                      <>
+                        <Wifi className="mr-2 h-5 w-5" />
+                        Test Saved Configuration
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </div>
 
               {testResult && (
                 <div className={cn("p-4 rounded-lg", testResult.success ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200")}>

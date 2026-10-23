@@ -10,9 +10,10 @@ export async function POST(request: Request) {
     const user = await requireAuth()
 
     const body = await request.json()
-    const { provider, apiKey, credentialId, model, query, baseUrl } = body
+    const { provider, apiKey, credentialId, model, query, baseUrl, useSavedConfig } = body
 
-    if (!credentialId && (!provider || !apiKey)) {
+    // If using saved config, we don't need explicit provider/apiKey
+    if (!useSavedConfig && !credentialId && (!provider || !apiKey)) {
       return NextResponse.json(
         { error: 'Either credentialId or both provider and apiKey are required', success: false },
         { status: 400 }

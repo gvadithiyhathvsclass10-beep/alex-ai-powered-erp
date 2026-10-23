@@ -82,6 +82,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
       'nvidia/nemotron-3-ultra-550b-a55b',
       'nvidia/nemotron-3-large',
       'nvidia/llama-3.1-nemotron-70b-instruct',
+      'nemotron-3-ultra',
     ],
     embeddingModels: [],
     capabilities: ['chat', 'reasoning', 'structured', 'summarization'],
@@ -730,8 +731,8 @@ export async function resolveAIConfig(options: {
 
   throw new AIConfigError(
     requestedProvider
-      ? `No active API key configured for ${SUPPORTED_AI_PROVIDERS[requestedProvider].name}. Please add your API key in AI Settings.`
-      : 'No AI provider API key is configured. Please add an API key in AI Settings.'
+      ? `No active API key configured for ${SUPPORTED_AI_PROVIDERS[requestedProvider].name}. Please add your API key in AI Settings → Credentials tab, and set a default model in AI Settings → Models tab.`
+      : 'No AI provider API key is configured. Please add an API key in AI Settings → Credentials tab, and set a default model in AI Settings → Models tab.'
   )
 }
 
@@ -1204,19 +1205,48 @@ export async function testProviderConnection(
       ? input.query.trim()
       : 'Respond with "OK" to confirm the API connection is working.'
 
-  const result = await generateText({
-    userId: input.userId,
-    provider: input.provider,
-    apiKey: input.apiKey,
-    credentialId: input.credentialId,
-    model: input.model,
-    baseUrl: input.baseUrl,
-    prompt: testPrompt,
-    systemPrompt: 'You are an API connectivity health check assistant. Keep your reply concise.',
-    maxTokens: 64,
-    temperature: 0,
-    timeoutMs: 15000,
-  })
+  let result: TextGenerationOutput
+
+  try {
+    result = await generateText({
+      userId: input.userId,
+      provider: input.provider,
+      apiKey: input.apiKey,
+      credentialId: input.credentialId,
+      model: input.model,
+      baseUrl: input.baseUrl,
+      prompt: testPrompt,
+      systemPrompt: 'You are an API connectivity health check assistant. Keep your reply concise.',
+      maxTokens: 64,
+      temperature: 0,
+      timeoutMs: 15000,
+    })
+  } catch (error) {
+    // Re-throw with more context
+    if (error instanceof AIConfigError) {
+      throw new AIConfigError(
+        `${error.message} (Test connection failed - check your API key and model configuration)`,
+        error.provider,
+        error.model
+      )
+    }
+    if (error instanceof AIAuthError) {
+      throw new AIAuthError(
+        `${error.message} (Test connection failed - verify your API key is correct and has access to the selected model)`,
+        error.provider,
+        error.statusCode,
+        error.code
+      )
+    }
+    if (error instanceof AIModelNotSupportedError) {
+      throw new AIModelNotSupportedError(
+        `${error.message} (Test connection failed - the model may not be available for this provider)`,
+        error.provider,
+        error.model
+      )
+    }
+    throw error
+  }
 
   return {
     success: true,
@@ -1279,6 +1309,31 @@ export async function saveUserAICredential(input: {
       isActive: true,
     },
   })
+
+  // Auto-create default model configs for chat and embeddings if not already set
+  const taskTypes: Array<{ taskType: AITaskType; defaultModel: string }> = [
+    { taskType: 'chat', defaultModel: meta.defaultChatModel },
+  ]
+  if (meta.defaultEmbeddingModel) {
+    taskTypes.push({ taskType: 'embeddings', defaultModel: meta.defaultEmbeddingModel })
+  }
+
+  for (const { taskType, defaultModel } of taskTypes) {
+    const existing = await prisma.aIModelConfig.findFirst({
+      where: { userId: input.userId, taskType, isDefault: true },
+    })
+    if (!existing) {
+      await prisma.aIModelConfig.create({
+        data: {
+          userId: input.userId,
+          provider: normalizedProvider,
+          modelId: defaultModel,
+          taskType,
+          isDefault: true,
+        },
+      })
+    }
+  }
 
   return {
     id: credential.id,

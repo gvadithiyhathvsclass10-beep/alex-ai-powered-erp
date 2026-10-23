@@ -352,7 +352,7 @@ export async function getUserEmbeddingProvider(
 
   throw new Error(
     requestedProvider
-      ? `No active ${requestedProvider} API credential is configured for embeddings. Add a valid key in AI Settings or choose a supported embeddings provider.`
-      : 'No embeddings API key is configured. Add an OpenAI, Google Gemini, or Mistral credential and select an embeddings model in AI Settings.'
+      ? `No active ${requestedProvider} API credential is configured for embeddings. Add a valid key in AI Settings → Credentials tab, then select an embeddings model in AI Settings → Models tab (embeddings task type).`
+      : 'No embeddings API key is configured. To enable document search and RAG: 1) Add an embedding provider credential (OpenAI, Google Gemini, or Mistral) in AI Settings → Credentials tab, 2) Set a default embeddings model in AI Settings → Models tab (select "embeddings" task type).'
   )
 }
