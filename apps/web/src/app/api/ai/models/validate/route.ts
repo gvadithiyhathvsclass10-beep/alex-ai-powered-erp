@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       'OTHER',
     ]
 
-    if (!['OPENAI', 'GOOGLE_GEMINI', 'ANTHROPIC', 'NVIDIA_NEMOTRON', 'GROQ', 'MISTRAL', 'OPENROUTER', 'TOGETHER_AI', 'OTHER'].includes(provider)) {
+    if (!validProviders.includes(provider)) {
       return NextResponse.json(
         { error: `Invalid provider: ${provider}` },
         { status: 400 }

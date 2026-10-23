@@ -327,7 +327,8 @@ export function validateProviderModel(
   provider: PrismaAIProviderType,
   model?: string,
   taskType: AITaskType = 'chat',
-  customAllowedModels: string[] = []
+  customAllowedModels: string[] = [],
+  allowCustomModels: boolean = true
 ): string {
   const meta = SUPPORTED_AI_PROVIDERS[provider]
   if (!meta) {
@@ -400,8 +401,14 @@ export function validateProviderModel(
     return requested
   }
 
+  // If custom models are allowed and format looks valid, accept it
+  // This allows users to use newly released models or fine-tuned models
+  if (allowCustomModels && /^[a-zA-Z0-9_\-./]+$/.test(requested)) {
+    return requested
+  }
+
   throw new AIModelNotSupportedError(
-    `Model "${requested}" is not supported for provider ${meta.name} (${provider}). Supported models: ${knownModels.join(', ')}`,
+    `Model "${requested}" is not supported for provider ${meta.name} (${provider}). Supported models: ${knownModels.join(', ')}. You can also use a custom model ID if your provider supports it.`,
     provider,
     requested
   )

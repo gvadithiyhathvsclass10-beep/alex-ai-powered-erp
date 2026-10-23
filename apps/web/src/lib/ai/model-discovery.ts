@@ -457,7 +457,8 @@ async function performDiscovery(options: ModelDiscoveryOptions, cacheKey: string
 
     const models = await fetchModelsFromProvider(options.provider, apiKey, baseUrl)
 
-    // Filter models based on task type if specified
+    // Filter models based on task type if specified - but don't filter out models just because
+    // they're not in our static capability list. Provider APIs may have newer models.
     let filteredModels = models
     if (options.taskType) {
       if (options.provider === 'MOCK') {
@@ -467,10 +468,17 @@ async function performDiscovery(options: ModelDiscoveryOptions, cacheKey: string
         }
       } else {
         const meta = SUPPORTED_AI_PROVIDERS[options.provider as PrismaAIProviderType]
+        // Only filter if we know the provider doesn't support the task at all
+        // For discovered models, we trust the provider's capability reporting
         if (meta && !meta.capabilities.includes(options.taskType as any)) {
+          // Provider itself doesn't support this task type at all
           filteredModels = []
         } else if (options.taskType === 'embeddings') {
-          filteredModels = models.filter(m => m.capabilities?.includes('embeddings'))
+          // For embeddings, filter to models that declare embeddings capability
+          // But if capabilities array is empty/unknown, don't filter (provider may have updated)
+          filteredModels = models.filter(m => 
+            !m.capabilities || m.capabilities.length === 0 || m.capabilities?.includes('embeddings')
+          )
         }
       }
     }

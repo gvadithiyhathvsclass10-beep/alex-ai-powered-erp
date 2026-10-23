@@ -44,6 +44,7 @@ import {
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
+import type { DiscoveredModel } from "@/lib/ai/model-discovery"
 
 interface AICredential {
   id: string
@@ -64,7 +65,7 @@ interface AIModelConfig {
   modelId: string
   taskType: string
   isDefault: boolean
-  parameters: Record<string, any>
+  parameters: Record<string, unknown>
 }
 
 const PROVIDER_INFO: Record<string, { name: string; icon: React.ReactNode; models: string[]; embeddingModels: string[]; capabilities: string[] }> = {
@@ -140,7 +141,7 @@ export default function AISettingsPage() {
   const [discoverProvider, setDiscoverProvider] = useState<string>("")
   const [discoverCredentialId, setDiscoverCredentialId] = useState<string>("")
   const [discoverTaskType, setDiscoverTaskType] = useState<string>("")
-  const [discoveredModels, setDiscoveredModels] = useState<any[]>([])
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([])
   const [discoverCached, setDiscoverCached] = useState(false)
   const [discoverError, setDiscoverError] = useState<string | null>(null)
   const [isDiscovering, setIsDiscovering] = useState(false)
@@ -151,7 +152,7 @@ export default function AISettingsPage() {
   const [customModelId, setCustomModelId] = useState<string>("")
   const [customTaskType, setCustomTaskType] = useState<string>("")
   const [isTestingCustom, setIsTestingCustom] = useState(false)
-  const [customTestResult, setCustomTestResult] = useState<{ valid: boolean; error?: string; model?: any } | null>(null)
+  const [customTestResult, setCustomTestResult] = useState<{ valid: boolean; error?: string; model?: DiscoveredModel } | null>(null)
 
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ["ai-credentials"],
@@ -208,7 +209,7 @@ export default function AISettingsPage() {
   })
 
   const updateModelConfigMutation = useMutation({
-    mutationFn: async (data: { provider: string; modelId: string; taskType: string; isDefault: boolean; parameters?: Record<string, any> }) => {
+    mutationFn: async (data: { provider: string; modelId: string; taskType: string; isDefault: boolean; parameters?: Record<string, unknown> }) => {
       const res = await fetch("/api/ai/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -643,6 +644,16 @@ export default function AISettingsPage() {
                       const capableProviders = Object.entries(PROVIDER_INFO)
                         .filter(([, info]) => isEmbeddingsTask ? info.capabilities.includes("embeddings") : true)
                         .map(([key]) => key)
+                      
+                      // Combine hardcoded models with discovered models
+                      const getModelsForProvider = (provider: string) => {
+                        const hardcoded = PROVIDER_INFO[provider]?.models || []
+                        const embeddingModels = PROVIDER_INFO[provider]?.embeddingModels || []
+                        const discovered = discoveredModels.filter((m: DiscoveredModel) => m.provider === provider)
+                        const allModels = [...new Set([...hardcoded, ...embeddingModels, ...discovered.map((m: DiscoveredModel) => m.id)])]
+                        return allModels
+                      }
+                      
                       return (
                         <TableRow key={taskType}>
                           <TableCell>
@@ -655,7 +666,7 @@ export default function AISettingsPage() {
                             </p>
                           </TableCell>
                           <TableCell>
-                            <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, modelId: PROVIDER_INFO[v]?.models?.[0] || (isEmbeddingsTask ? PROVIDER_INFO[v]?.embeddingModels?.[0] : "gpt-4o-mini"), taskType, isDefault: true })}>
+                            <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, modelId: (isEmbeddingsTask ? PROVIDER_INFO[v]?.embeddingModels?.[0] : PROVIDER_INFO[v]?.models?.[0]) || "gpt-4o-mini", taskType, isDefault: true })}>
                               <SelectTrigger className="w-[200px]">
                                 <SelectValue placeholder="Select provider" />
                               </SelectTrigger>
@@ -673,7 +684,7 @@ export default function AISettingsPage() {
                                 <SelectValue placeholder="Select model" />
                               </SelectTrigger>
                               <SelectContent>
-                                {config?.provider && PROVIDER_INFO[config.provider]?.models.map((m: string) => (
+                                {config?.provider && getModelsForProvider(config.provider).map((m: string) => (
                                   <SelectItem key={m} value={m}>{m}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -769,12 +780,17 @@ export default function AISettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Model (Optional)</Label>
+                  {/* Model selection with discovered models */}
                   <Select value={testModel} onValueChange={setTestModel}>
                     <SelectTrigger>
                       <SelectValue placeholder="Auto-select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {testingProvider && PROVIDER_INFO[testingProvider]?.models.map((model: string) => (
+                      {testingProvider && [
+                        ...(PROVIDER_INFO[testingProvider]?.models || []),
+                        ...(PROVIDER_INFO[testingProvider]?.embeddingModels || []),
+                        ...discoveredModels.filter((m: DiscoveredModel) => m.provider === testingProvider).map((m: DiscoveredModel) => m.id)
+                      ].filter(Boolean).map((model: string) => (
                         <SelectItem key={model} value={model}>{model}</SelectItem>
                       ))}
                     </SelectContent>

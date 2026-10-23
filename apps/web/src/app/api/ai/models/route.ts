@@ -53,7 +53,8 @@ export async function POST(request: Request) {
         provider,
         String(rawModelId).trim(),
         validTaskType,
-        meta ? [...meta.models, ...meta.embeddingModels] : []
+        meta ? [...meta.models, ...meta.embeddingModels] : [],
+        false // Don't allow custom models for non-custom entries
       )
     } else {
       // For custom models, validate format and optionally test the model
