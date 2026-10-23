@@ -96,7 +96,11 @@ export default function SolutionGeneratorPage() {
   const [activeTab, setActiveTab] = useState<"generate" | "history">("generate")
 
   // Fetch user documents
+<<<<<<< HEAD
   const { data: documentsData, isLoading: docsLoading } = useQuery({
+=======
+  const { data: documents = [], isLoading: docsLoading } = useQuery({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryKey: ["documents"],
     queryFn: async () => {
       const res = await fetch("/api/documents")
@@ -106,7 +110,11 @@ export default function SolutionGeneratorPage() {
   })
 
   // Fetch subjects
+<<<<<<< HEAD
   const { data: subjectsData, isLoading: subjectsLoading } = useQuery({
+=======
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryKey: ["subjects"],
     queryFn: async () => {
       const res = await fetch("/api/subjects/my")
@@ -242,8 +250,11 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
     toast({ title: "Solution copied to clipboard" })
   }
 
+<<<<<<< HEAD
   const documents: Document[] = Array.isArray(documentsData) ? documentsData : (documentsData?.documents || [])
   const subjects = Array.isArray(subjectsData) ? subjectsData : (subjectsData?.subjects || [])
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const filteredDocuments = documents.filter((d: Document) => d.status === "READY")
 
   return (

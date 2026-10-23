@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { AuditLogService } from '@/lib/audit-log'
+<<<<<<< HEAD
 import {
   resolveClassroomContext,
   verifySubjectManagementAccess,
@@ -9,16 +10,26 @@ import {
 
 export async function GET(
   _request: Request,
+=======
+
+export async function GET(
+  request: Request,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth()
+<<<<<<< HEAD
     const context = await resolveClassroomContext(user)
+=======
+
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     const { id } = await params
 
     const assessment = await prisma.assessment.findUnique({
       where: { id },
       include: {
+<<<<<<< HEAD
         subject: {
           select: {
             id: true,
@@ -54,6 +65,13 @@ export async function GET(
                 memberships: { select: { studentId: true } },
               },
             },
+=======
+        subject: { select: { id: true, name: true, code: true, semesterId: true } },
+        semester: { select: { id: true, name: true, number: true } },
+        results: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, email: true, memberships: { select: { studentId: true } } } },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           },
         },
       },
@@ -63,7 +81,19 @@ export async function GET(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 })
     }
 
+<<<<<<< HEAD
     if (!context.isTeacher) {
+=======
+    const membership = await prisma.collegeMembership.findFirst({
+      where: { userId: user.id, status: 'ACTIVE' },
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'No active membership' }, { status: 400 })
+    }
+
+    if (membership.role === 'STUDENT') {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       if (!assessment.isPublished) {
         return NextResponse.json({ error: 'Assessment not published' }, { status: 403 })
       }
@@ -73,6 +103,7 @@ export async function GET(
       if (!enrollment) {
         return NextResponse.json({ error: 'Not enrolled in this subject' }, { status: 403 })
       }
+<<<<<<< HEAD
       assessment.results = assessment.results.filter(
         (r: { userId: string }) => r.userId === user.id
       )
@@ -81,10 +112,19 @@ export async function GET(
         where: { userId: user.id, subjectId: assessment.subjectId },
       })
       if (!assignment && assessment.createdBy !== user.id) {
+=======
+      assessment.results = assessment.results.filter((r: any) => r.userId === user.id)
+    } else if (membership.role === 'LECTURER' || membership.role === 'ADMIN') {
+      const assignment = await prisma.lecturerAssignment.findFirst({
+        where: { userId: user.id, subjectId: assessment.subjectId },
+      })
+      if (!assignment && membership.role !== 'ADMIN') {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         return NextResponse.json({ error: 'Not assigned to this subject' }, { status: 403 })
       }
     }
 
+<<<<<<< HEAD
     const normalizedResults = assessment.results.map((r) => ({
       ...r,
       user: {
@@ -147,6 +187,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Assessments] Get assessment error:', error)
+=======
+    return NextResponse.json({ assessment })
+  } catch (error) {
+    console.error('Get assessment error:', error)
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to get assessment' }, { status: 500 })
   }
 }
@@ -157,6 +202,7 @@ export async function PUT(
 ) {
   try {
     const user = await requireAuth()
+<<<<<<< HEAD
     const context = await resolveClassroomContext(user)
 
     if (!context.isTeacher) {
@@ -193,6 +239,22 @@ export async function PUT(
             },
           },
         },
+=======
+
+    const { id } = await params
+    const body = await request.json()
+    const { isPublished, results } = body
+
+    const assessment = await prisma.assessment.findUnique({
+      where: { id },
+      include: { 
+        subject: true, 
+        results: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, memberships: { select: { studentId: true } } } }
+          }
+        }
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       },
     })
 
@@ -200,15 +262,32 @@ export async function PUT(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 })
     }
 
+<<<<<<< HEAD
     if (!context.isAdmin) {
       const assignment = await prisma.lecturerAssignment.findFirst({
         where: { userId: user.id, subjectId: assessment.subjectId },
       })
       if (!assignment && assessment.createdBy !== user.id) {
+=======
+    const membership = await prisma.collegeMembership.findFirst({
+      where: { userId: user.id, status: 'ACTIVE' },
+    })
+
+    if (!membership || !['LECTURER', 'ADMIN'].includes(membership.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (membership.role === 'LECTURER') {
+      const assignment = await prisma.lecturerAssignment.findFirst({
+        where: { userId: user.id, subjectId: assessment.subjectId },
+      })
+      if (!assignment) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         return NextResponse.json({ error: 'Not assigned to this subject' }, { status: 403 })
       }
     }
 
+<<<<<<< HEAD
     const effectiveMaxMarks =
       maxMarks !== undefined ? Number(maxMarks) : assessment.maxMarks
     if (Number.isNaN(effectiveMaxMarks) || effectiveMaxMarks <= 0) {
@@ -239,6 +318,12 @@ export async function PUT(
       isPublished: assessment.isPublished,
       publishedAt: assessment.publishedAt,
       results: assessment.results.map((r) => ({
+=======
+    const oldValues: any = {
+      isPublished: assessment.isPublished,
+      publishedAt: assessment.publishedAt,
+      results: assessment.results.map((r: any) => ({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         userId: r.userId,
         marksObtained: r.marksObtained,
         feedback: r.feedback,
@@ -246,6 +331,7 @@ export async function PUT(
       })),
     }
 
+<<<<<<< HEAD
     const updateData: Record<string, unknown> = {}
     if (name !== undefined && String(name).trim()) {
       updateData.name = String(name).trim()
@@ -269,6 +355,9 @@ export async function PUT(
       updateData.description = description ? String(description).trim() : null
     }
 
+=======
+    const updateData: any = {}
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     if (typeof isPublished === 'boolean') {
       updateData.isPublished = isPublished
       if (isPublished && !assessment.isPublished) {
@@ -288,6 +377,7 @@ export async function PUT(
 
       if (results && Array.isArray(results)) {
         for (const result of results) {
+<<<<<<< HEAD
           const {
             userId,
             marksObtained,
@@ -304,26 +394,52 @@ export async function PUT(
               : typeof isPublished === 'boolean'
                 ? isPublished
                 : true
+=======
+          const { userId, marksObtained, feedback, isPublished: resultPublished } = result
+          if (userId === undefined || marksObtained === undefined) continue
+
+          if (marksObtained < 0 || marksObtained > assessment.maxMarks) {
+            throw new Error(`Invalid marks for user ${userId}: must be between 0 and ${assessment.maxMarks}`)
+          }
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
           await tx.assessmentResult.upsert({
             where: { assessmentId_userId: { assessmentId: id, userId } },
             update: {
+<<<<<<< HEAD
               marksObtained: numMarks,
               feedback: feedback ? String(feedback) : null,
               gradedBy: user.id,
               gradedAt: new Date(),
               isPublished: publishFlag,
               publishedAt: publishFlag ? new Date() : null,
+=======
+              marksObtained,
+              feedback,
+              gradedBy: user.id,
+              gradedAt: new Date(),
+              isPublished: resultPublished ?? false,
+              publishedAt: resultPublished ? new Date() : null,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             },
             create: {
               assessmentId: id,
               userId,
+<<<<<<< HEAD
               marksObtained: numMarks,
               feedback: feedback ? String(feedback) : null,
               gradedBy: user.id,
               gradedAt: new Date(),
               isPublished: publishFlag,
               publishedAt: publishFlag ? new Date() : null,
+=======
+              marksObtained,
+              feedback,
+              gradedBy: user.id,
+              gradedAt: new Date(),
+              isPublished: resultPublished ?? false,
+              publishedAt: resultPublished ? new Date() : null,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             },
           })
         }
@@ -335,6 +451,7 @@ export async function PUT(
       include: {
         subject: { select: { id: true, name: true, code: true } },
         results: {
+<<<<<<< HEAD
           include: {
             user: {
               select: {
@@ -346,6 +463,9 @@ export async function PUT(
               },
             },
           },
+=======
+          include: { user: { select: { id: true, firstName: true, lastName: true, memberships: { select: { studentId: true } } } } },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         },
       },
     })
@@ -353,7 +473,11 @@ export async function PUT(
     const newValues = {
       isPublished: updatedAssessment?.isPublished,
       publishedAt: updatedAssessment?.publishedAt,
+<<<<<<< HEAD
       results: updatedAssessment?.results.map((r) => ({
+=======
+      results: updatedAssessment?.results.map((r: any) => ({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         userId: r.userId,
         marksObtained: r.marksObtained,
         feedback: r.feedback,
@@ -362,6 +486,7 @@ export async function PUT(
     }
 
     await AuditLogService.log({
+<<<<<<< HEAD
       institutionId: context.institutionId || assessment.subject.institutionId,
       userId: user.id,
       action:
@@ -370,12 +495,20 @@ export async function PUT(
             ? 'ASSESSMENT_PUBLISH'
             : 'ASSESSMENT_UNPUBLISH'
           : 'ASSESSMENT_UPDATE_RESULTS',
+=======
+      institutionId: membership.institutionId,
+      userId: user.id,
+      action: isPublished !== undefined && isPublished !== assessment.isPublished 
+        ? (isPublished ? 'ASSESSMENT_PUBLISH' : 'ASSESSMENT_UNPUBLISH')
+        : 'ASSESSMENT_UPDATE_RESULTS',
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       entityType: 'Assessment',
       entityId: id,
       oldValues,
       newValues,
     })
 
+<<<<<<< HEAD
     return NextResponse.json({
       assessment: updatedAssessment
         ? {
@@ -454,5 +587,11 @@ export async function DELETE(
     }
     console.error('[Assessments] Delete assessment error:', error)
     return NextResponse.json({ error: 'Failed to delete assessment' }, { status: 500 })
+=======
+    return NextResponse.json({ assessment: updatedAssessment })
+  } catch (error) {
+    console.error('Update assessment error:', error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to update assessment' }, { status: 500 })
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }

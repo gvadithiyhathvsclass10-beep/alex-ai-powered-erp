@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,20 +9,38 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import {
   BookOpen,
+=======
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import {
+  FolderOpen,
+  BookOpen,
+  Calendar,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   Users,
   UserCheck,
   ClipboardCheck,
   FileText,
+<<<<<<< HEAD
+=======
+  Bell,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   Plus,
   ArrowRight,
   Book,
   ClipboardList,
+<<<<<<< HEAD
   Loader2,
   AlertCircle,
   Video,
   ExternalLink,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
+=======
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 interface DashboardProps {
   user: {
@@ -33,6 +52,7 @@ interface DashboardProps {
 }
 
 const lecturerQuickActions = [
+<<<<<<< HEAD
   { label: "Mark Attendance", href: "/attendance", icon: UserCheck, description: "Record & update class attendance" },
   { label: "Teacher Meetings", href: "/planner", icon: Video, description: "Schedule & manage meetings" },
   { label: "Create Assessment", href: "/assessments", icon: ClipboardCheck, description: "Add & grade assessments" },
@@ -75,10 +95,29 @@ export function LecturerDashboard({ user }: DashboardProps) {
   const recentAnnouncements = data?.recentAnnouncements || []
   const upcomingMeetings = (meetingsData?.meetings || []).slice(0, 5)
 
+=======
+  { label: "Mark Attendance", href: "/dashboard/attendance/mark", icon: UserCheck, description: "Record class attendance" },
+  { label: "Create Assessment", href: "/dashboard/assessments/create", icon: ClipboardCheck, description: "Add new assessment" },
+  { label: "Create Assignment", href: "/dashboard/assignments/create", icon: FileText, description: "Assign coursework" },
+  { label: "Upload Resources", href: "/dashboard/subjects/resources", icon: BookOpen, description: "Share study materials" },
+  { label: "View Subjects", href: "/dashboard/subjects", icon: Book, description: "Manage your subjects" },
+  { label: "Grade Submissions", href: "/dashboard/assignments", icon: ClipboardList, description: "Review student work" },
+]
+
+const lecturerStats = [
+  { label: "Assigned Subjects", value: "0", icon: Book, color: "text-blue-500" },
+  { label: "Pending Attendance", value: "0", icon: UserCheck, color: "text-yellow-500" },
+  { label: "Ungraded Submissions", value: "0", icon: ClipboardList, color: "text-red-500" },
+  { label: "Active Students", value: "0", icon: Users, color: "text-green-500" },
+]
+
+export function LecturerDashboard({ user }: DashboardProps) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Welcome, Dr. {user.lastName}!</h1>
+<<<<<<< HEAD
         <p className="text-muted-foreground mt-1">Manage your classes, meetings, attendance, and assessments.</p>
       </div>
 
@@ -96,6 +135,11 @@ export function LecturerDashboard({ user }: DashboardProps) {
         </Card>
       )}
 
+=======
+        <p className="text-muted-foreground mt-1">Manage your classes and assessments.</p>
+      </div>
+
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {lecturerStats.map((stat) => (
           <Card key={stat.label}>
@@ -104,11 +148,15 @@ export function LecturerDashboard({ user }: DashboardProps) {
               <stat.icon className={cn("h-4 w-4", stat.color)} />
             </CardHeader>
             <CardContent>
+<<<<<<< HEAD
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <div className="text-2xl font-bold">{stat.value}</div>
               )}
+=======
+              <div className="text-2xl font-bold">{stat.value}</div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             </CardContent>
           </Card>
         ))}
@@ -142,18 +190,29 @@ export function LecturerDashboard({ user }: DashboardProps) {
         </div>
       </div>
 
+<<<<<<< HEAD
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+=======
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Today&apos;s Classes</CardTitle>
             <Button variant="ghost" size="sm" asChild>
+<<<<<<< HEAD
               <Link href="/attendance">
                 <Plus className="mr-1 h-4 w-4" />
                 Attendance
+=======
+              <Link href="/dashboard/attendance/mark">
+                <Plus className="mr-1 h-4 w-4" />
+                Mark Attendance
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -217,17 +276,29 @@ export function LecturerDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No classes scheduled today</p>
+            </div>
+          </CardContent>
+        </Card>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Pending Grading</CardTitle>
             <Button variant="ghost" size="sm" asChild>
+<<<<<<< HEAD
               <Link href="/assignments">
+=======
+              <Link href="/dashboard/assignments">
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                 <ArrowRight className="mr-1 h-4 w-4" />
                 View All
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -247,11 +318,19 @@ export function LecturerDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No pending submissions</p>
+            </div>
+          </CardContent>
+        </Card>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Recent Announcements</CardTitle>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -268,6 +347,11 @@ export function LecturerDashboard({ user }: DashboardProps) {
                 ))}
               </div>
             )}
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No recent announcements</p>
+            </div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </CardContent>
         </Card>
       </div>

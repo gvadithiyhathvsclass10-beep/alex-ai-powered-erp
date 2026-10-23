@@ -306,7 +306,11 @@ export default function DocumentStudioPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
+<<<<<<< HEAD
   const { data: documentsData, isLoading: docsLoading } = useQuery({
+=======
+  const { data: documents = [], isLoading: docsLoading } = useQuery({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     queryKey: ["documents"],
     queryFn: async () => {
       const res = await fetch("/api/documents")
@@ -435,7 +439,10 @@ export default function DocumentStudioPage() {
     toast({ title: "Document copied to clipboard" })
   }
 
+<<<<<<< HEAD
   const documents: Document[] = Array.isArray(documentsData) ? documentsData : (documentsData?.documents || [])
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const filteredDocuments = documents.filter((d: Document) => d.status === "READY")
 
   return (

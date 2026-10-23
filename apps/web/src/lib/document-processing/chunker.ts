@@ -25,6 +25,7 @@ function countTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
+<<<<<<< HEAD
 function splitText(text: string, separators: string[], maxTokens = 1000): string[] {
   if (separators.length === 0) return [text]
 
@@ -41,13 +42,35 @@ function splitText(text: string, separators: string[], maxTokens = 1000): string
   for (const part of parts) {
     const testChunk = current + (current ? separator : '') + part
     if (countTokens(testChunk) > maxTokens && current) {
+=======
+function splitText(text: string, separators: string[]): string[] {
+  if (separators.length === 0) return [text]
+  
+  const separator = separators[0]
+  const parts = text.split(separator)
+  
+  if (parts.length === 1) {
+    return splitText(text, separators.slice(1))
+  }
+  
+  const result: string[] = []
+  let current = ''
+  
+  for (const part of parts) {
+    const testChunk = current + (current ? separator : '') + part
+    if (countTokens(testChunk) > 1000 && current) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       result.push(current)
       current = part
     } else {
       current = testChunk
     }
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   if (current) result.push(current)
   return result
 }
@@ -58,6 +81,7 @@ export function chunkContent(
   options: ChunkOptions = {}
 ): DocumentChunk[] {
   const opts = { ...DEFAULT_OPTIONS, ...options }
+<<<<<<< HEAD
   const normalizedPages = (pages.length > 0 ? pages : [{ pageNumber: 1, text: content }]).filter(
     p => p.text && p.text.trim().length > 0
   )
@@ -97,10 +121,44 @@ export function chunkContent(
         content: currentChunk.trim(),
         chunkIndex: chunkIndex++,
         pageNumber: page.pageNumber,
+=======
+  const chunks: DocumentChunk[] = []
+  let chunkIndex = 0
+  let currentPosition = 0
+  
+  const textSegments = pages.map(p => ({
+    pageNumber: p.pageNumber,
+    text: p.text,
+    startPos: currentPosition,
+    endPos: currentPosition + p.text.length,
+  }))
+  currentPosition += pages.reduce((sum, p) => sum + p.text.length + 2, 0)
+  
+  const fullText = pages.map(p => p.text).join('\n\n')
+  const segments = splitText(fullText, opts.separators)
+  
+  let currentChunk = ''
+  
+  for (const segment of segments) {
+    const testChunk = currentChunk + (currentChunk ? '\n\n' : '') + segment
+    const tokenCount = countTokens(testChunk)
+    
+    if (tokenCount > opts.chunkSize && currentChunk) {
+      const pageNumber = findPageForPosition(
+        fullText.indexOf(currentChunk),
+        textSegments
+      )
+      
+      chunks.push({
+        content: currentChunk.trim(),
+        chunkIndex: chunkIndex++,
+        pageNumber,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         tokenCount: countTokens(currentChunk),
         metadata: {},
         sectionTitle: extractSectionTitle(currentChunk),
       })
+<<<<<<< HEAD
     }
   }
 
@@ -109,6 +167,45 @@ export function chunkContent(
 
 function getOverlapText(text: string, overlapTokens: number): string {
   if (overlapTokens <= 0) return ''
+=======
+      
+      const overlapText = getOverlapText(currentChunk, opts.chunkOverlap)
+      currentChunk = overlapText + '\n\n' + segment
+    } else {
+      currentChunk = testChunk
+    }
+  }
+  
+  if (currentChunk.trim()) {
+    const pageNumber = findPageForPosition(
+      fullText.indexOf(currentChunk),
+      textSegments
+    )
+    
+    chunks.push({
+      content: currentChunk.trim(),
+      chunkIndex: chunkIndex++,
+      pageNumber,
+      tokenCount: countTokens(currentChunk),
+      metadata: {},
+      sectionTitle: extractSectionTitle(currentChunk),
+    })
+  }
+  
+  return chunks
+}
+
+function findPageForPosition(position: number, segments: { pageNumber: number; startPos: number; endPos: number }[]): number {
+  for (const segment of segments) {
+    if (position >= segment.startPos && position < segment.endPos) {
+      return segment.pageNumber
+    }
+  }
+  return segments[0]?.pageNumber || 1
+}
+
+function getOverlapText(text: string, overlapTokens: number): string {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   const words = text.split(/\s+/)
   const overlapWords = Math.min(words.length, Math.ceil(overlapTokens / 4))
   return words.slice(-overlapWords).join(' ')
@@ -117,8 +214,13 @@ function getOverlapText(text: string, overlapTokens: number): string {
 function extractSectionTitle(text: string): string | undefined {
   const lines = text.split('\n').filter(l => l.trim())
   for (const line of lines) {
+<<<<<<< HEAD
     const trimmed = line.trim().replace(/^#{1,6}\s+/, '')
     if (trimmed.length > 2 && trimmed.length < 100 && /^[A-Z][^.!?;]*$/.test(trimmed)) {
+=======
+    const trimmed = line.trim()
+    if (trimmed.length < 100 && /^[A-Z][^.]*$/.test(trimmed)) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return trimmed
     }
   }

@@ -317,6 +317,7 @@ export function AIAvatar({
         .map((result: SpeechRecognitionResult) => result[0].transcript)
         .join("")
 
+<<<<<<< HEAD
       const lastResult = event.results[event.results.length - 1]
       if (lastResult?.isFinal && transcript.trim()) {
         handleSendMessage(transcript.trim())
@@ -344,6 +345,19 @@ export function AIAvatar({
         : 'Could not start speech recognition. Check microphone permissions and ensure this page uses HTTPS.'
       toast({ title: "Voice error", description: message, variant: "destructive" })
     }
+=======
+      if (event.results[0].isFinal) {
+        handleSendMessage(transcript)
+      }
+    }
+
+    recognition.onerror = () => {
+      setIsListening(false)
+      toast({ title: "Voice error", description: "Failed to recognize speech", variant: "destructive" })
+    }
+
+    recognition.start()
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 
   const handleQuickAction = (action: string) => {

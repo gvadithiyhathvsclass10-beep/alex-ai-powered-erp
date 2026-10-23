@@ -1,25 +1,40 @@
 "use client"
 
+<<<<<<< HEAD
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+=======
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import Link from "next/link"
 import {
   Users,
   Book,
   Calendar,
+<<<<<<< HEAD
   Archive,
   Settings,
+=======
+  Shield,
+  Archive,
+  Settings,
+  Plus,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   ArrowRight,
   GraduationCap,
   Building2,
   Database,
   HardDrive,
   Server,
+<<<<<<< HEAD
   Loader2,
   AlertCircle,
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -33,6 +48,7 @@ interface DashboardProps {
 }
 
 const adminQuickActions = [
+<<<<<<< HEAD
   { label: "Manage Users", href: "/dashboard/settings", icon: Users, description: "Add, edit, remove users" },
   { label: "Manage Subjects", href: "/dashboard/subjects", icon: Book, description: "Configure subjects" },
   { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, description: "Set academic dates" },
@@ -73,6 +89,24 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
   const pendingApprovals = data?.pendingApprovals || []
   const dbHealthy = healthData?.database === "ok"
 
+=======
+  { label: "Manage Users", href: "/dashboard/admin/users", icon: Users, description: "Add, edit, remove users" },
+  { label: "Manage Subjects", href: "/dashboard/admin/subjects", icon: Book, description: "Configure subjects" },
+  { label: "Academic Calendar", href: "/dashboard/admin/calendar", icon: Calendar, description: "Set academic dates" },
+  { label: "Institution Settings", href: "/dashboard/admin/institution", icon: Building2, description: "Configure institution" },
+  { label: "Audit Logs", href: "/dashboard/admin/audit", icon: Archive, description: "View system activity" },
+  { label: "System Settings", href: "/dashboard/admin/settings", icon: Settings, description: "Global configuration" },
+]
+
+const adminStats = [
+  { label: "Total Students", value: "0", icon: GraduationCap, color: "text-blue-500" },
+  { label: "Total Lecturers", value: "0", icon: Users, color: "text-green-500" },
+  { label: "Active Subjects", value: "0", icon: Book, color: "text-purple-500" },
+  { label: "Departments", value: "0", icon: Building2, color: "text-orange-500" },
+]
+
+export function AdminDashboard({ user }: DashboardProps) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return (
     <div className="space-y-6">
       <div>
@@ -80,6 +114,7 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
         <p className="text-muted-foreground mt-1">Manage your institution&apos;s academic system.</p>
       </div>
 
+<<<<<<< HEAD
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-6 flex items-center justify-between">
@@ -94,6 +129,8 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
         </Card>
       )}
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {adminStats.map((stat) => (
           <Card key={stat.label}>
@@ -102,11 +139,15 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
               <stat.icon className={cn("h-4 w-4", stat.color)} />
             </CardHeader>
             <CardContent>
+<<<<<<< HEAD
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <div className="text-2xl font-bold">{stat.value}</div>
               )}
+=======
+              <div className="text-2xl font-bold">{stat.value}</div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             </CardContent>
           </Card>
         ))}
@@ -145,13 +186,18 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Recent Registrations</CardTitle>
             <Button variant="ghost" size="sm" asChild>
+<<<<<<< HEAD
               <Link href="/dashboard/settings">
+=======
+              <Link href="/dashboard/admin/users">
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                 <ArrowRight className="mr-1 h-4 w-4" />
                 View All
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -174,6 +220,13 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
           </CardContent>
         </Card>
 
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No recent registrations</p>
+            </div>
+          </CardContent>
+        </Card>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">System Health</CardTitle>
@@ -182,27 +235,40 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2"><Database className="h-4 w-4" />Database</span>
+<<<<<<< HEAD
                 <span className={cn("font-medium", dbHealthy ? "text-green-500" : "text-amber-500")}>
                   {dbHealthy ? "Healthy" : "Checking"}
                 </span>
+=======
+                <span className="text-green-500 font-medium">Healthy</span>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2"><HardDrive className="h-4 w-4" />Storage</span>
                 <span className="text-green-500 font-medium">Healthy</span>
               </div>
               <div className="flex items-center justify-between text-sm">
+<<<<<<< HEAD
                 <span className="flex items-center gap-2"><Server className="h-4 w-4" />AI Mode</span>
                 <span className="text-green-500 font-medium uppercase">{healthData?.aiMode || "Ready"}</span>
+=======
+                <span className="flex items-center gap-2"><Server className="h-4 w-4" />Background Jobs</span>
+                <span className="text-green-500 font-medium">Running</span>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               </div>
             </div>
           </CardContent>
         </Card>
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Pending Approvals</CardTitle>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -222,6 +288,11 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
                 ))}
               </div>
             )}
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No pending approvals</p>
+            </div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </CardContent>
         </Card>
       </div>

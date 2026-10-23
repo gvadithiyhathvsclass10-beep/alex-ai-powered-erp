@@ -1,15 +1,19 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+<<<<<<< HEAD
 import {
   resolveClassroomContext,
   verifySubjectManagementAccess,
 } from '@/lib/classroom-permissions'
 import { AuditLogService } from '@/lib/audit-log'
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export async function GET() {
   try {
     const user = await requireAuth()
+<<<<<<< HEAD
     const context = await resolveClassroomContext(user)
 
     if (context.isTeacher) {
@@ -33,6 +37,8 @@ export async function GET() {
 
       return NextResponse.json({ assignments })
     }
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
     const enrollments = await prisma.subjectEnrollment.findMany({
       where: { userId: user.id, isActive: true },
@@ -41,6 +47,7 @@ export async function GET() {
           include: {
             assignments: {
               where: { isPublished: true },
+<<<<<<< HEAD
               include: {
                 _count: {
                   select: {
@@ -49,14 +56,22 @@ export async function GET() {
                 },
               },
               orderBy: { dueDate: 'asc' },
+=======
+              include: { _count: { select: { submissions: true } } },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             },
           },
         },
       },
     })
 
+<<<<<<< HEAD
     const assignments = enrollments.flatMap((e) =>
       e.subject.assignments.map((a) => ({
+=======
+    const assignments = enrollments.flatMap(e => 
+      e.subject.assignments.map(a => ({
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         ...a,
         subject: { id: e.subject.id, name: e.subject.name, code: e.subject.code },
       }))
@@ -64,6 +79,7 @@ export async function GET() {
 
     return NextResponse.json({ assignments })
   } catch (error) {
+<<<<<<< HEAD
     if (error instanceof Error && error.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -159,3 +175,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 })
   }
 }
+=======
+    console.error('My assignments list error:', error)
+    return NextResponse.json({ error: 'Failed to list assignments' }, { status: 500 })
+  }
+}
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

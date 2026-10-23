@@ -1,11 +1,16 @@
 "use client"
 
+<<<<<<< HEAD
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+=======
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import Link from "next/link"
 import {
   FolderOpen,
@@ -13,6 +18,7 @@ import {
   Calendar,
   FlaskConical,
   FolderKanban,
+<<<<<<< HEAD
   Plus,
   ArrowRight,
   Loader2,
@@ -20,6 +26,17 @@ import {
   FileText,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
+=======
+  UserCheck,
+  ClipboardCheck,
+  FileText,
+  Award,
+  Bell,
+  Plus,
+  ArrowRight,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 interface DashboardProps {
   user: {
@@ -31,7 +48,11 @@ interface DashboardProps {
 }
 
 const quickActions = [
+<<<<<<< HEAD
   { label: "Upload Document", href: "/dashboard/documents", icon: FolderOpen, description: "Add study materials" },
+=======
+  { label: "Upload Document", href: "/dashboard/documents/upload", icon: FolderOpen, description: "Add study materials" },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   { label: "AI Assistant", href: "/dashboard/assistant", icon: BookOpen, description: "Chat with your AI tutor" },
   { label: "Study Studio", href: "/dashboard/study-studio", icon: BookOpen, description: "Generate flashcards & notes" },
   { label: "Smart Planner", href: "/dashboard/planner", icon: Calendar, description: "Plan your study schedule" },
@@ -39,6 +60,7 @@ const quickActions = [
   { label: "Projects", href: "/dashboard/projects", icon: FolderKanban, description: "Manage team projects" },
 ]
 
+<<<<<<< HEAD
 export function StudentDashboard({ user }: DashboardProps) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-stats", "student"],
@@ -63,6 +85,16 @@ export function StudentDashboard({ user }: DashboardProps) {
   const recentDocuments = data?.recentDocuments || []
   const attendanceSummary = data?.attendanceSummary || []
 
+=======
+const stats = [
+  { label: "Documents", value: "0", icon: FolderOpen, color: "text-blue-500" },
+  { label: "Study Materials", value: "0", icon: BookOpen, color: "text-green-500" },
+  { label: "Active Projects", value: "0", icon: FolderKanban, color: "text-purple-500" },
+  { label: "Upcoming Deadlines", value: "0", icon: Calendar, color: "text-orange-500" },
+]
+
+export function StudentDashboard({ user }: DashboardProps) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   return (
     <div className="space-y-6">
       <div>
@@ -70,6 +102,7 @@ export function StudentDashboard({ user }: DashboardProps) {
         <p className="text-muted-foreground mt-1">Here&apos;s what&apos;s happening with your studies today.</p>
       </div>
 
+<<<<<<< HEAD
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-6 flex items-center justify-between">
@@ -84,6 +117,8 @@ export function StudentDashboard({ user }: DashboardProps) {
         </Card>
       )}
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.label}>
@@ -92,11 +127,15 @@ export function StudentDashboard({ user }: DashboardProps) {
               <stat.icon className={cn("h-4 w-4", stat.color)} />
             </CardHeader>
             <CardContent>
+<<<<<<< HEAD
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <div className="text-2xl font-bold">{stat.value}</div>
               )}
+=======
+              <div className="text-2xl font-bold">{stat.value}</div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             </CardContent>
           </Card>
         ))}
@@ -136,6 +175,7 @@ export function StudentDashboard({ user }: DashboardProps) {
             <CardTitle className="text-lg">Upcoming Deadlines</CardTitle>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -160,12 +200,20 @@ export function StudentDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No upcoming deadlines</p>
+            </div>
+          </CardContent>
+        </Card>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Recent Documents</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+<<<<<<< HEAD
               {isLoading ? (
                 <div className="flex justify-center py-6">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -187,6 +235,11 @@ export function StudentDashboard({ user }: DashboardProps) {
               )}
               <Button variant="outline" className="w-full mt-2" asChild>
                 <Link href="/dashboard/documents">
+=======
+              <p className="text-sm text-muted-foreground text-center py-4">No documents uploaded yet</p>
+              <Button variant="outline" className="w-full mt-2" asChild>
+                <Link href="/dashboard/documents/upload">
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   <Plus className="mr-2 h-4 w-4" />
                   Upload Document
                 </Link>
@@ -194,12 +247,16 @@ export function StudentDashboard({ user }: DashboardProps) {
             </div>
           </CardContent>
         </Card>
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Attendance Overview</CardTitle>
           </CardHeader>
           <CardContent>
+<<<<<<< HEAD
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -219,6 +276,11 @@ export function StudentDashboard({ user }: DashboardProps) {
                 ))}
               </div>
             )}
+=======
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground text-center py-4">No attendance data available</p>
+            </div>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </CardContent>
         </Card>
       </div>

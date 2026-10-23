@@ -9,9 +9,15 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
+<<<<<<< HEAD
     "test": "node --test tests/infrastructure.test.cjs && node --test tests/routes-and-integration.test.cjs && node --test tests/ai-service.test.cjs && node --test tests/document-pipeline.test.cjs && node --test tests/research-notebook.test.cjs && node --test tests/teacher-classroom.test.cjs",
     "test:watch": "node --test --watch tests/*.test.cjs",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.cjs",
+=======
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     "db:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:generate:postgres": "prisma generate --schema=prisma/schema.prisma",
     "db:push": "prisma db push --schema=prisma/schema.prisma",
@@ -20,7 +26,11 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+<<<<<<< HEAD
     "db:reset": "node ../../scripts/reset-dev-db.js",
+=======
+    "db:reset": "node ../scripts/reset-dev-db.js",
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     "postinstall": "prisma generate --schema=prisma/schema.prisma"
   },
   "dependencies": {
@@ -96,4 +106,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad

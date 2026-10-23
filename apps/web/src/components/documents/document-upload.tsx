@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+<<<<<<< HEAD
 import { useDropzone, type FileRejection } from "react-dropzone"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,21 @@ export interface UploadedDocumentInfo {
 
 interface DocumentUploadProps {
   onSuccess?: (document: UploadedDocumentInfo) => void
+=======
+import { useDropzone } from "react-dropzone"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Upload, FileText, X, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface DocumentUploadProps {
+  onSuccess?: (document: { id: string; title: string }) => void
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   subjectId?: string
   projectId?: string
   notebookId?: string
@@ -33,6 +49,7 @@ interface DocumentUploadProps {
   maxFiles?: number
 }
 
+<<<<<<< HEAD
 export const ALLOWED_TYPES = [
   "application/pdf",
   "application/msword",
@@ -122,6 +139,24 @@ function uploadWithProgress(
     return { ok: res.ok, status: res.status, data }
   })
 }
+=======
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/png',
+  'image/jpeg',
+]
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export function DocumentUpload({
   onSuccess,
@@ -131,6 +166,7 @@ export function DocumentUpload({
   multiple = true,
   maxFiles = 10,
 }: DocumentUploadProps) {
+<<<<<<< HEAD
   const queryClient = useQueryClient()
   const [files, setFiles] = React.useState<File[]>([])
   const [uploading, setUploading] = React.useState(false)
@@ -194,10 +230,33 @@ export function DocumentUpload({
     },
     [maxFiles, validateFileClientSide]
   )
+=======
+  const [files, setFiles] = React.useState<File[]>([])
+  const [uploading, setUploading] = React.useState(false)
+  const [progress, setProgress] = React.useState<Record<string, number>>({})
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
+  const [showConfirm, setShowConfirm] = React.useState(false)
+
+  const onDrop = React.useCallback((acceptedFiles: File[]) => {
+    const validFiles = acceptedFiles.filter(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        setErrors(prev => ({ ...prev, [file.name]: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` }))
+        return false
+      }
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setErrors(prev => ({ ...prev, [file.name]: 'File type not supported' }))
+        return false
+      }
+      return true
+    })
+    setFiles(prev => [...prev, ...validFiles].slice(0, maxFiles))
+  }, [maxFiles])
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
+<<<<<<< HEAD
       "application/pdf": [".pdf"],
       "application/msword": [".doc"],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
@@ -210,6 +269,20 @@ export function DocumentUpload({
       "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
       "image/png": [".png"],
       "image/jpeg": [".jpg", ".jpeg"],
+=======
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt'],
+      'text/markdown': ['.md'],
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-powerpoint': ['.ppt'],
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     },
     multiple,
     maxFiles,
@@ -218,6 +291,7 @@ export function DocumentUpload({
 
   const removeFile = (fileName: string) => {
     setFiles(prev => prev.filter(f => f.name !== fileName))
+<<<<<<< HEAD
     setErrors(prev => {
       const next = { ...prev }
       delete next[fileName]
@@ -309,6 +383,47 @@ export function DocumentUpload({
 
     setUploading(false)
     setFiles(failedFiles)
+=======
+    setErrors(prev => { const next = { ...prev }; delete next[fileName]; return next })
+    setProgress(prev => { const next = { ...prev }; delete next[fileName]; return next })
+  }
+
+  const handleUpload = async () => {
+    if (files.length === 0) return
+    setUploading(true)
+    setErrors({})
+
+    for (const file of files) {
+      try {
+        setProgress(prev => ({ ...prev, [file.name]: 0 }))
+        
+        const formData = new FormData()
+        formData.append('file', file)
+        if (subjectId) formData.append('subjectId', subjectId)
+        if (projectId) formData.append('projectId', projectId)
+        if (notebookId) formData.append('notebookId', notebookId)
+
+        const response = await fetch('/api/documents', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Upload failed')
+        }
+
+        const data = await response.json()
+        setProgress(prev => ({ ...prev, [file.name]: 100 }))
+        onSuccess?.(data.document)
+      } catch (error) {
+        setErrors(prev => ({ ...prev, [file.name]: error instanceof Error ? error.message : 'Upload failed' }))
+      }
+    }
+
+    setUploading(false)
+    setFiles([])
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 
   return (
@@ -323,7 +438,11 @@ export function DocumentUpload({
         <div
           {...getRootProps()}
           className={cn(
+<<<<<<< HEAD
             "relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
+=======
+            "relative border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
           )}
         >
@@ -333,28 +452,41 @@ export function DocumentUpload({
             {isDragActive ? "Drop files here..." : "Drag & drop files here, or click to select"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
+<<<<<<< HEAD
             PDF, DOC, DOCX, TXT, MD, CSV, XLS, XLSX, PPT, PPTX, PNG, JPG, JPEG (max 50MB each)
+=======
+            PDF, DOC, DOCX, TXT, MD, CSV, XLS, XLSX, PPT, PPTX, PNG, JPG (max 50MB each)
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           </p>
         </div>
 
         {files.length > 0 && (
           <div className="mt-4 space-y-3">
+<<<<<<< HEAD
             <h4 className="text-sm font-medium">Files queued for upload ({files.length})</h4>
+=======
+            <h4 className="text-sm font-medium">Files to upload ({files.length})</h4>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {files.map(file => (
                 <div key={file.name} className="flex items-center gap-3 p-3 border rounded-lg">
                   <FileText className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
+<<<<<<< HEAD
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium truncate">{file.name}</p>
                       {stageLabels[file.name] && (
                         <span className="text-xs text-muted-foreground">{stageLabels[file.name]}</span>
                       )}
                     </div>
+=======
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                     <p className="text-xs text-muted-foreground">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                     {progress[file.name] !== undefined && (
+<<<<<<< HEAD
                       <Progress value={progress[file.name]} className="mt-1 h-1.5" />
                     )}
                   </div>
@@ -366,6 +498,19 @@ export function DocumentUpload({
                       <TooltipContent side="top">{errors[file.name]}</TooltipContent>
                     </Tooltip>
                   )}
+=======
+                      <Progress value={progress[file.name]} className="mt-1 h-1" />
+                    )}
+                  </div>
+{errors[file.name] && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertCircle className="h-5 w-5 text-destructive" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{errors[file.name]}</TooltipContent>
+                      </Tooltip>
+                    )}
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   <Button
                     variant="ghost"
                     size="icon"
@@ -379,6 +524,7 @@ export function DocumentUpload({
             </div>
 
             <div className="flex gap-2">
+<<<<<<< HEAD
               <Button
                 type="button"
                 onClick={handleUpload}
@@ -394,6 +540,36 @@ export function DocumentUpload({
                   `Upload & Process ${files.length} File${files.length > 1 ? "s" : ""}`
                 )}
               </Button>
+=======
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    onClick={handleUpload}
+                    disabled={uploading || files.length === 0}
+                    className="flex-1"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      "Upload Files"
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm Upload</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Upload {files.length} file{files.length > 1 ? 's' : ''}? Processing will begin immediately.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogAction onClick={handleUpload}>Upload</AlertDialogAction>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                </AlertDialogContent>
+              </AlertDialog>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               <Button variant="outline" onClick={() => setFiles([])} disabled={uploading}>
                 Clear All
               </Button>
@@ -401,6 +577,7 @@ export function DocumentUpload({
           </div>
         )}
 
+<<<<<<< HEAD
         {completedDocs.length > 0 && files.length === 0 && (
           <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-1">
             <div className="flex items-center justify-between">
@@ -436,6 +613,14 @@ export function DocumentUpload({
                 <li key={fileName}>
                   <strong>{fileName}</strong>: {error}
                 </li>
+=======
+        {Object.keys(errors).length > 0 && (
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <h5 className="text-sm font-medium text-destructive">Errors</h5>
+            <ul className="mt-1 text-sm text-destructive">
+              {Object.entries(errors).map(([fileName, error]) => (
+                <li key={fileName}>{fileName}: {error}</li>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
               ))}
             </ul>
           </div>

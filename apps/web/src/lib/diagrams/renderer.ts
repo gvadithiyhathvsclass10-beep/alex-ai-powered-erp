@@ -1,7 +1,14 @@
+<<<<<<< HEAD
 import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'child_process'
+=======
+import { execSync } from 'child_process'
+import { writeFileSync, mkdtempSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 
 export interface DiagramRenderResult {
   success: boolean
@@ -9,6 +16,7 @@ export interface DiagramRenderResult {
   error?: string
 }
 
+<<<<<<< HEAD
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -71,6 +79,8 @@ function buildFallbackSvg(diagramType: string, code: string): string {
 </svg>`
 }
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 export class DiagramRenderer {
   private static tempDir: string
 
@@ -82,6 +92,7 @@ export class DiagramRenderer {
   }
 
   static async renderMermaid(code: string): Promise<DiagramRenderResult> {
+<<<<<<< HEAD
     if (!code || !code.trim()) {
       return { success: false, error: 'Diagram code is empty' }
     }
@@ -108,10 +119,40 @@ export class DiagramRenderer {
     return {
       success: true,
       svg: buildFallbackSvg('mermaid', code),
+=======
+    const tempDir = this.getTempDir()
+    const inputFile = join(tempDir, `mermaid-${Date.now()}.mmd`)
+    const outputFile = join(tempDir, `mermaid-${Date.now()}.svg`)
+
+    try {
+      writeFileSync(inputFile, code)
+
+      const { execSync } = await import('child_process')
+      const cliPath = join(process.cwd(), 'node_modules', '.bin', 'mmdc')
+      
+      execSync(`"${cliPath}" -i "${inputFile}" -o "${outputFile}" -b transparent`, {
+        stdio: 'pipe',
+        timeout: 30000,
+      })
+
+      const fs = await import('fs')
+      const svg = fs.readFileSync(outputFile, 'utf-8')
+      
+      fs.unlinkSync(inputFile)
+      fs.unlinkSync(outputFile)
+
+      return { success: true, svg }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Mermaid rendering failed' 
+      }
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   }
 
   static async renderGraphviz(code: string): Promise<DiagramRenderResult> {
+<<<<<<< HEAD
     if (!code || !code.trim()) {
       return { success: false, error: 'Diagram code is empty' }
     }
@@ -129,16 +170,73 @@ export class DiagramRenderer {
     return {
       success: true,
       svg: buildFallbackSvg('graphviz', code),
+=======
+    const tempDir = this.getTempDir()
+    const inputFile = join(tempDir, `graphviz-${Date.now()}.dot`)
+    const outputFile = join(tempDir, `graphviz-${Date.now()}.svg`)
+
+    try {
+      writeFileSync(inputFile, code)
+
+      const { execSync } = await import('child_process')
+      execSync(`dot -Tsvg "${inputFile}" -o "${outputFile}"`, {
+        stdio: 'pipe',
+        timeout: 30000,
+      })
+
+      const fs = await import('fs')
+      const svg = fs.readFileSync(outputFile, 'utf-8')
+      
+      fs.unlinkSync(inputFile)
+      fs.unlinkSync(outputFile)
+
+      return { success: true, svg }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Graphviz rendering failed' 
+      }
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   }
 
   static async renderPlantUML(code: string): Promise<DiagramRenderResult> {
+<<<<<<< HEAD
     if (!code || !code.trim()) {
       return { success: false, error: 'Diagram code is empty' }
     }
     return {
       success: true,
       svg: buildFallbackSvg('plantuml', code),
+=======
+    const tempDir = this.getTempDir()
+    const inputFile = join(tempDir, `plantuml-${Date.now()}.puml`)
+    const outputFile = join(tempDir, `plantuml-${Date.now()}.svg`)
+
+    try {
+      writeFileSync(inputFile, code)
+
+      const { execSync } = await import('child_process')
+      const plantumlJar = join(process.cwd(), 'node_modules', 'plantuml', 'plantuml.jar')
+      
+      execSync(`java -jar "${plantumlJar}" -tsvg "${inputFile}" -o "${tempDir}"`, {
+        stdio: 'pipe',
+        timeout: 30000,
+      })
+
+      const fs = await import('fs')
+      const svg = fs.readFileSync(outputFile, 'utf-8')
+      
+      fs.unlinkSync(inputFile)
+      fs.unlinkSync(outputFile)
+
+      return { success: true, svg }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'PlantUML rendering failed' 
+      }
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }
   }
 
@@ -170,7 +268,11 @@ export async function renderDiagramFromCode(
   code: string
 ): Promise<{ svg: string; width: number; height: number }> {
   const result = await DiagramRenderer.render(type, code)
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   if (!result.success || !result.svg) {
     throw new Error(result.error || 'Failed to render diagram')
   }
@@ -180,7 +282,12 @@ export async function renderDiagramFromCode(
 
   return {
     svg: result.svg,
+<<<<<<< HEAD
     width: widthMatch ? parseFloat(widthMatch[1]) : 640,
     height: heightMatch ? parseFloat(heightMatch[1]) : 400,
+=======
+    width: widthMatch ? parseFloat(widthMatch[1]) : 800,
+    height: heightMatch ? parseFloat(heightMatch[1]) : 600,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }
 }

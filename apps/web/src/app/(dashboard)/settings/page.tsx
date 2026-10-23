@@ -224,15 +224,23 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 {[
                   { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], color: '#00a67e' },
+<<<<<<< HEAD
                   { id: 'google_gemini', name: 'Google Gemini', models: ['gemini-1.5-pro', 'gemini-1.5-flash'], color: '#4285f4' },
+=======
+                  { id: 'google', name: 'Google Gemini', models: ['gemini-1.5-pro', 'gemini-1.5-flash'], color: '#4285f4' },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   { id: 'anthropic', name: 'Anthropic', models: ['claude-3-5-sonnet', 'claude-3-opus'], color: '#d4a843' },
                   { id: 'mistral', name: 'Mistral', models: ['mistral-large', 'mistral-medium'], color: '#ff5722' },
                   { id: 'groq', name: 'Groq', models: ['llama-3.1-70b', 'mixtral-8x7b'], color: '#f55036' },
                   { id: 'openrouter', name: 'OpenRouter', models: ['various'], color: '#3b82f6' },
                   { id: 'nvidia_nemotron', name: 'NVIDIA Nemotron', models: ['nvidia/nemotron-3-ultra', 'nvidia/nemotron-3-ultra-550b-a55b'], color: '#76b900' },
                 ].map(provider => {
+<<<<<<< HEAD
                   const credsList: AICredential[] = Array.isArray(aiCredentials) ? aiCredentials : (aiCredentials?.credentials || [])
                   const cred = credsList.find((c: AICredential) => c.provider.toLowerCase() === provider.id.toLowerCase())
+=======
+                  const cred = aiCredentials?.credentials?.find((c: AICredential) => c.provider.toLowerCase() === provider.id.toLowerCase())
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                   return (
                     <div key={provider.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
@@ -257,11 +265,17 @@ export default function SettingsPage() {
                             </Button>
                           </>
                         ) : (
+<<<<<<< HEAD
                           <Button variant="outline" size="sm" asChild>
                             <a href="/dashboard/ai-settings">
                               <Key className="mr-2 h-4 w-4" />
                               Add API Key
                             </a>
+=======
+                          <Button variant="outline" size="sm" onClick={() => setActiveTab("ai")}>
+                            <Key className="mr-2 h-4 w-4" />
+                            Add API Key
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                           </Button>
                         )}
                       </div>

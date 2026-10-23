@@ -2,7 +2,11 @@ import { prisma } from '@/lib/prisma'
 
 export class AuditLogService {
   static async log(params: {
+<<<<<<< HEAD
     institutionId?: string | null
+=======
+    institutionId: string
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     userId?: string
     action: string
     entityType: string
@@ -13,6 +17,7 @@ export class AuditLogService {
     userAgent?: string
   }): Promise<void> {
     try {
+<<<<<<< HEAD
       let institutionId = params.institutionId || null
       if (!institutionId && params.userId) {
         const membership = await prisma.collegeMembership.findFirst({
@@ -32,6 +37,11 @@ export class AuditLogService {
       await prisma.auditLog.create({
         data: {
           institutionId,
+=======
+      await prisma.auditLog.create({
+        data: {
+          institutionId: params.institutionId,
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
           userId: params.userId,
           action: params.action,
           entityType: params.entityType,

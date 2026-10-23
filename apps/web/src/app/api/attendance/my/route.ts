@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
+<<<<<<< HEAD
 import { resolveClassroomContext } from '@/lib/classroom-permissions'
 
 export async function GET(request?: Request) {
@@ -20,22 +21,40 @@ export async function GET(request?: Request) {
         isActive: true,
         ...(filterSubjectId ? { subjectId: filterSubjectId } : {}),
       },
+=======
+
+export async function GET() {
+  // Force dynamic rendering by using headers()
+  headers()
+  
+  try {
+    const user = await requireAuth()
+
+    const enrollments = await prisma.subjectEnrollment.findMany({
+      where: { userId: user.id, isActive: true },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       include: {
         subject: {
           include: {
             attendanceSessions: {
               include: {
+<<<<<<< HEAD
                 records: {
                   where: { userId: user.id },
                 },
               },
               where: { isCancelled: false },
+=======
+                records: { where: { userId: user.id } },
+              },
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
             },
           },
         },
       },
     })
 
+<<<<<<< HEAD
     let totalSessions = 0
     let presentCount = 0
     let absentCount = 0
@@ -311,6 +330,49 @@ export async function GET(request?: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[Attendance] My attendance error:', error)
+=======
+    let totalPresent = 0
+    let totalAbsent = 0
+    let totalConducted = 0
+
+    const subjects = enrollments.map(enrollment => {
+      const sessions = enrollment.subject.attendanceSessions.filter(s => !s.isCancelled)
+      let present = 0
+      let absent = 0
+      
+      sessions.forEach(session => {
+        const record = session.records[0]
+        if (record) {
+          if (record.status === 'PRESENT' || record.status === 'LATE') present++
+          else absent++
+        }
+      })
+      
+      totalPresent += present
+      totalAbsent += absent
+      totalConducted += sessions.length
+
+      return {
+        subjectId: enrollment.subject.id,
+        subjectName: enrollment.subject.name,
+        subjectCode: enrollment.subject.code,
+        present,
+        absent,
+        total: sessions.length,
+        percentage: sessions.length > 0 ? Math.round((present / sessions.length) * 100) : 0,
+      }
+    })
+
+    return NextResponse.json({
+      subjects,
+      overallPercentage: totalConducted > 0 ? Math.round((totalPresent / totalConducted) * 100) : 0,
+      totalPresent,
+      totalAbsent,
+      totalConducted,
+    })
+  } catch (error) {
+    console.error('My attendance error:', error)
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to get attendance' }, { status: 500 })
   }
 }

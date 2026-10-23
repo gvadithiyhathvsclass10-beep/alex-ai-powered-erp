@@ -89,7 +89,11 @@ const PROVIDER_INFO: Record<string, { name: string; icon: React.ReactNode; model
   GROQ: {
     name: "Groq",
     icon: <Wifi className="h-5 w-5" />,
+<<<<<<< HEAD
     models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+=======
+    models: ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"],
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     capabilities: ["chat", "fast-inference"],
   },
   MISTRAL: {
@@ -199,7 +203,11 @@ export default function AISettingsPage() {
   })
 
   const testConnectionMutation = useMutation({
+<<<<<<< HEAD
     mutationFn: async (data: { provider?: string; apiKey?: string; credentialId?: string; model?: string; query?: string }) => {
+=======
+    mutationFn: async (data: { provider: string; apiKey: string; model?: string }) => {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       const res = await fetch("/api/ai/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -228,13 +236,19 @@ export default function AISettingsPage() {
   }
 
   const handleTestConnection = useCallback(() => {
+<<<<<<< HEAD
     const savedCred = credentials.find((c: AICredential) => c.provider === testingProvider && c.isActive)
     if (!testingProvider || (!testApiKey && !savedCred)) {
       toast({ title: "Error", description: "Please select a provider and enter an API key (or configure one in Credentials)", variant: "destructive" })
+=======
+    if (!testingProvider || !testApiKey) {
+      toast({ title: "Error", description: "Please select provider and enter API key", variant: "destructive" })
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
       return
     }
     setIsTesting(true)
     setTestResult(null)
+<<<<<<< HEAD
     testConnectionMutation.mutate({
       provider: testingProvider,
       apiKey: testApiKey || undefined,
@@ -242,6 +256,9 @@ export default function AISettingsPage() {
       model: testModel || undefined,
       query: testQuery || undefined,
     })
+=======
+    testConnectionMutation.mutate({ provider: testingProvider, apiKey: testApiKey, model: testModel || undefined })
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   }, [testingProvider, testApiKey, testModel, testConnectionMutation])
 
   return (
@@ -446,7 +463,11 @@ export default function AISettingsPage() {
                             </p>
                           </TableCell>
                           <TableCell>
+<<<<<<< HEAD
                             <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, modelId: PROVIDER_INFO[v]?.models?.[0] || "gpt-4o-mini", taskType, isDefault: true })}>
+=======
+                            <Select value={config?.provider || ""} onValueChange={(v) => updateModelConfigMutation.mutate({ ...config, provider: v, taskType, isDefault: true })}>
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                               <SelectTrigger className="w-[200px]">
                                 <SelectValue placeholder="Select provider" />
                               </SelectTrigger>
@@ -603,7 +624,11 @@ export default function AISettingsPage() {
 
               <Button
                 onClick={handleTestConnection}
+<<<<<<< HEAD
                 disabled={isTesting || !testingProvider || (!testApiKey && !credentials.some((c: AICredential) => c.provider === testingProvider && c.isActive))}
+=======
+                disabled={isTesting || !testingProvider || !testApiKey}
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
                 className="w-full"
                 size="lg"
               >

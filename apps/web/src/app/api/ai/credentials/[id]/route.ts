@@ -1,14 +1,20 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+<<<<<<< HEAD
 import { validateProviderModel, formatAIServiceErrorResponse } from '@/lib/ai/service'
 
 export async function PATCH(
+=======
+
+export async function DELETE(
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await requireAuth()
+<<<<<<< HEAD
     const { id } = await params
     const body = await request.json()
 
@@ -69,6 +75,9 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth()
+=======
+
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     const { id } = await params
 
     const credential = await prisma.aICredential.findUnique({
@@ -85,7 +94,11 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
+<<<<<<< HEAD
     console.error('[AI Credentials] Delete error:', error)
+=======
+    console.error('AI credential delete error:', error)
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'Failed to delete credential' }, { status: 500 })
   }
 }

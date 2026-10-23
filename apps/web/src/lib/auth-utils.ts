@@ -22,6 +22,7 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   }
 }
 
+<<<<<<< HEAD
 export async function requireAuth(): Promise<AuthContext> {
   const user = await requireAuthFn()
   return {
@@ -29,6 +30,11 @@ export async function requireAuth(): Promise<AuthContext> {
     user,
     membership: user.activeMembership,
   }
+=======
+export function requireAuth(): AuthContext {
+  // This should be called in server components/actions
+  throw new Error('requireAuth must be used with await getAuthContext()')
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 }
 
 export function requireRole(auth: AuthContext | null, allowedRoles: string[]): AuthContext {
@@ -36,8 +42,12 @@ export function requireRole(auth: AuthContext | null, allowedRoles: string[]): A
     throw new Error('Unauthorized')
   }
   
+<<<<<<< HEAD
   const effectiveRole = auth.membership?.role ?? auth.user?.role
   if (!effectiveRole || !allowedRoles.includes(effectiveRole)) {
+=======
+  if (!allowedRoles.includes(auth.membership?.role)) {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     throw new Error('Forbidden')
   }
   

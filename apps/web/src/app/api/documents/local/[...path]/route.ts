@@ -1,12 +1,16 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+<<<<<<< HEAD
 import { getLocalStorageRoot } from '@/lib/storage/client'
 import { canAccessDocument } from '@/lib/document-processing/access'
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { NextResponse } from 'next/server'
 
 export async function GET(
+<<<<<<< HEAD
   _request: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
@@ -59,6 +63,40 @@ export async function GET(
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+=======
+  request: Request,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const user = await requireAuth()
+  
+  const segments = await params
+  const [bucket, ...fileParts] = segments.path || []
+  const filePath = fileParts.join('/')
+  
+  const document = await prisma.document.findFirst({
+    where: { storageBucket: bucket, storagePath: filePath },
+  })
+  
+  if (!document || document.ownerId !== user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  
+  const root = path.resolve(process.cwd(), 'storage')
+  const target = path.resolve(root, bucket, filePath)
+  
+  if (!target.startsWith(root + path.sep)) {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
+  }
+  
+  try {
+    return new NextResponse(await readFile(target), {
+      headers: {
+        'Content-Type': document.mimeType || 'application/octet-stream',
+        'Content-Disposition': `inline; filename="${document.fileName.replace(/"/g, '')}"`,
+      },
+    })
+  } catch {
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     return NextResponse.json({ error: 'File not found' }, { status: 404 })
   }
 }

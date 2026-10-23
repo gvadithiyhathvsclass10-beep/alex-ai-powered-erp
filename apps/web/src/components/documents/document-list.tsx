@@ -16,6 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DocumentUpload } from "./document-upload"
+<<<<<<< HEAD
+=======
+import { DocumentStatus } from "@prisma/client"
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 import { formatDate, formatRelativeTime } from "@/lib/utils"
 import {
   FileText,
@@ -35,6 +39,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+<<<<<<< HEAD
 type DocumentStatus =
   | "UPLOADED"
   | "QUEUED"
@@ -45,6 +50,8 @@ type DocumentStatus =
   | "READY"
   | "FAILED"
 
+=======
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
 interface DocumentListItem {
   id: string
   title: string

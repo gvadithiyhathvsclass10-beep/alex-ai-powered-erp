@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: false,
   partialPrefetching: false,
+<<<<<<< HEAD
   typescript: {
     // Ignore build errors caused by pre-existing TypeScript stack overflow
     // in complex Prisma types (TypeScript 5.9.3 + Prisma 5.22)
@@ -22,6 +23,16 @@ const nextConfig: NextConfig = {
     return [{
       source: "/dashboard/:path+",
       destination: "/:path+",
+=======
+  // The dashboard shell historically linked to feature URLs under
+  // `/dashboard/*`, while the App Router feature pages live at the root
+  // (`/assistant`, `/documents`, etc.) inside the dashboard route group.
+  // Keep the public links stable by internally mapping those URLs.
+  async rewrites() {
+    return [{
+      source: "/dashboard/:path*",
+      destination: "/:path*",
+>>>>>>> 3357b0a9168e2206891dc3b70db4d79b01212aad
     }];
   },
   turbopack: {
