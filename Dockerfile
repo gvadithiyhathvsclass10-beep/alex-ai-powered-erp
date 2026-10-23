@@ -14,9 +14,7 @@ FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
-RUN apk add --no-cache openssl 
- && corepack enable 
- && corepack prepare pnpm@9.0.0 --activate
+RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 WORKDIR /app
 
@@ -49,9 +47,7 @@ FROM prisma AS build-packages
 
 COPY packages ./packages
 
-RUN pnpm --filter @alex/shared-types run build 
- && pnpm --filter @alex/shared-utils run build 
- && pnpm --filter @alex/validation-schemas run build
+RUN pnpm --filter @alex/shared-types run build && pnpm --filter @alex/shared-utils run build && pnpm --filter @alex/validation-schemas run build
 
 # -----------------------------------------------------------------------------
 # Build Next.js
@@ -73,9 +69,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl 
- && addgroup -g 1001 -S nodejs 
- && adduser -S nextjs -u 1001 -G nodejs
+RUN apk add --no-cache openssl && addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
 # Copy standalone output
 COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
@@ -107,9 +101,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl tesseract-ocr 
- && addgroup -g 1001 -S nodejs 
- && adduser -S worker -u 1001 -G nodejs
+RUN apk add --no-cache openssl tesseract-ocr && addgroup -g 1001 -S nodejs && adduser -S worker -u 1001 -G nodejs
 
 # Copy built application
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./
