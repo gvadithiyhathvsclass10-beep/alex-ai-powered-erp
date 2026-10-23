@@ -95,7 +95,7 @@ ENV HOSTNAME="0.0.0.0"
 
 # Synchronize the Prisma schema before starting the API.
 # DATABASE_URL must be configured in Render.
-# Do not use --accept-data-loss.
+# Avoid --accept-data-loss for production data.
 CMD ["sh", "-c", "node node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema=apps/web/prisma/schema.prisma --skip-generate && node apps/web/server.js"]
 
 # -----------------------------------------------------------------------------
