@@ -35,6 +35,12 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
+  Search,
+  PlusCircle,
+  AlertTriangle,
+  Check,
+  X,
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -129,6 +135,23 @@ export default function AISettingsPage() {
   const [testQuery, setTestQuery] = useState("Hello, how are you?")
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; response?: string; error?: string } | null>(null)
+
+  // Model discovery state
+  const [discoverProvider, setDiscoverProvider] = useState<string>("")
+  const [discoverCredentialId, setDiscoverCredentialId] = useState<string>("")
+  const [discoverTaskType, setDiscoverTaskType] = useState<string>("")
+  const [discoveredModels, setDiscoveredModels] = useState<any[]>([])
+  const [discoverCached, setDiscoverCached] = useState(false)
+  const [discoverError, setDiscoverError] = useState<string | null>(null)
+  const [isDiscovering, setIsDiscovering] = useState(false)
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set())
+
+  // Custom model state
+  const [customProvider, setCustomProvider] = useState<string>("")
+  const [customModelId, setCustomModelId] = useState<string>("")
+  const [customTaskType, setCustomTaskType] = useState<string>("")
+  const [isTestingCustom, setIsTestingCustom] = useState(false)
+  const [customTestResult, setCustomTestResult] = useState<{ valid: boolean; error?: string; model?: any } | null>(null)
 
   const { data: credentials = [], isLoading: credsLoading } = useQuery({
     queryKey: ["ai-credentials"],
@@ -261,6 +284,170 @@ export default function AISettingsPage() {
       useSavedConfig,
     })
   }, [testingProvider, testApiKey, testModel, testConnectionMutation, credentials])
+
+  // Model discovery handlers
+  const handleDiscoverModels = useCallback(async (forceRefresh = false) => {
+    if (!discoverProvider) {
+      toast({ title: "Error", description: "Please select a provider", variant: "destructive" })
+      return
+    }
+
+    setIsDiscovering(true)
+    setDiscoverError(null)
+
+    try {
+      const params = new URLSearchParams()
+      params.set('provider', discoverProvider)
+      if (discoverCredentialId) params.set('credentialId', discoverCredentialId)
+      if (discoverTaskType) params.set('taskType', discoverTaskType)
+      if (forceRefresh) params.set('refresh', 'true')
+
+      const res = await fetch(`/api/ai/models/discover?${params.toString()}`)
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to discover models")
+      }
+
+      const data = await res.json()
+      setDiscoveredModels(data.models || [])
+      setDiscoverCached(data.cached || false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to discover models"
+      setDiscoverError(message)
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsDiscovering(false)
+    }
+  }, [discoverProvider, discoverCredentialId, discoverTaskType])
+
+  const handleSelectAllModels = useCallback((checked: boolean) => {
+    if (checked) {
+      setSelectedModels(new Set(discoveredModels.map((m: { id: string }) => m.id)))
+    } else {
+      setSelectedModels(new Set())
+    }
+  }, [discoveredModels])
+
+  const handleToggleModel = useCallback((modelId: string, checked: boolean) => {
+    setSelectedModels(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(modelId)
+      else next.delete(modelId)
+      return next
+    })
+  }, [])
+
+  const handleSelectModelForTask = useCallback((modelId: string) => {
+    const model = discoveredModels.find(m => m.id === modelId)
+    if (!model) return
+
+    const config = modelConfigs.find((c: AIModelConfig) => c.taskType === discoverTaskType && c.isDefault)
+    if (config) {
+      updateModelConfigMutation.mutate({
+        ...config,
+        modelId: model.id,
+        taskType: discoverTaskType,
+        isDefault: true,
+      })
+      toast({ title: "Model selected", description: `${model.id} set as default for ${discoverTaskType}` })
+    }
+  }, [discoveredModels, discoverTaskType, modelConfigs, updateModelConfigMutation])
+
+  const handleSaveSelectedModels = useCallback(() => {
+    if (selectedModels.size === 0) return
+
+    const modelsToSave = Array.from(selectedModels).map(id => 
+      discoveredModels.find((m: { id: string }) => m.id === id)
+    ).filter(Boolean)
+
+    if (modelsToSave.length > 0) {
+      const firstModel = modelsToSave[0]
+      const config = modelConfigs.find((c: AIModelConfig) => c.taskType === discoverTaskType && c.isDefault)
+      if (config) {
+        updateModelConfigMutation.mutate({
+          ...config,
+          modelId: firstModel!.id,
+          taskType: discoverTaskType,
+          isDefault: true,
+        })
+        toast({ title: "Model saved", description: `${firstModel!.id} set as default for ${discoverTaskType}` })
+      }
+    }
+    setSelectedModels(new Set())
+  }, [selectedModels, discoveredModels, discoverTaskType, modelConfigs, updateModelConfigMutation])
+
+  // Custom model handlers
+  const handleTestCustomModel = useCallback(async () => {
+    if (!customProvider || !customModelId || !customTaskType) {
+      toast({ title: "Error", description: "Please fill all fields", variant: "destructive" })
+      return
+    }
+
+    setIsTestingCustom(true)
+    setCustomTestResult(null)
+
+    try {
+      const res = await fetch("/api/ai/models/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: customProvider,
+          modelId: customModelId,
+        }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Validation failed")
+      }
+
+      const data = await res.json()
+      setCustomTestResult(data)
+      toast({ title: data.valid ? "Model validated" : "Validation failed", description: data.error, variant: data.valid ? "default" : "destructive" })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Validation failed"
+      setCustomTestResult({ valid: false, error: message })
+      toast({ title: "Validation failed", description: message, variant: "destructive" })
+    } finally {
+      setIsTestingCustom(false)
+    }
+  }, [customProvider, customModelId, customTaskType])
+
+  const handleSaveCustomModel = useCallback(async () => {
+    if (!customProvider || !customModelId || !customTaskType) {
+      toast({ title: "Error", description: "Please fill all fields", variant: "destructive" })
+      return
+    }
+
+    try {
+      const res = await fetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: customProvider,
+          modelId: customModelId,
+          taskType: customTaskType,
+          isDefault: true,
+          isCustom: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to save custom model")
+      }
+
+      const data = await res.json()
+      queryClient.invalidateQueries({ queryKey: ["ai-model-configs"] })
+      toast({ title: "Custom model saved" })
+      setCustomModelId("")
+      setCustomTaskType("")
+      setCustomTestResult(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save custom model"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    }
+  }, [customProvider, customModelId, customTaskType, queryClient])
 
   return (
     <div className="space-y-6">
