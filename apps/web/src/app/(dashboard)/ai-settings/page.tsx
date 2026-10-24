@@ -178,7 +178,7 @@ export default function AISettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-4xl space-y-6 pb-16">
+    <div className="mx-auto w-full min-w-0 max-w-4xl space-y-6 px-3 pb-24 sm:px-0">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-start gap-3">
           <button onClick={() => router.push("/dashboard/assistant")} className="mt-1 rounded-xl border border-border p-2 text-muted-foreground transition hover:bg-muted" aria-label="Back to assistant"><ArrowLeft className="h-4 w-4" /></button>
@@ -212,14 +212,6 @@ export default function AISettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border p-5"><div><h2 className="font-semibold">Connected providers</h2><p className="text-sm text-muted-foreground">Manage saved credentials.</p></div><button onClick={() => void loadCredentials()} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label="Reload providers"><RefreshCw className="h-4 w-4"/></button></div>
-        <div className="divide-y divide-border">{credentials.length ? credentials.map((credential) => <div key={credential.id} className="flex flex-wrap items-center justify-between gap-3 p-4"><div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="h-5 w-5"/></div><div className="min-w-0"><p className="truncate text-sm font-medium">{credential.providerName}</p><p className="text-xs text-muted-foreground">{credential.isDefault ? "Default provider" : "Connected"} · API key hidden</p></div></div><button onClick={() => void removeCredential(credential)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground transition hover:bg-red-500/10 hover:text-red-600"><Trash2 className="h-3.5 w-3.5"/>Disconnect</button></div>) : <div className="p-6 text-center text-sm text-muted-foreground"><Unplug className="mx-auto mb-2 h-5 w-5"/>No providers connected yet.</div>}</div>
-      </section>
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-        <p className="font-medium">Document upload needs an embeddings provider</p>
-        <p className="mt-1 text-muted-foreground">Some chat providers (including NVIDIA and Groq in this app) do not provide document embeddings. For upload, indexing and document search, also connect an OpenAI, Google Gemini, or Mistral API key. Your chat model can remain unchanged.</p>
-      </div>
       <p className="text-center text-xs text-muted-foreground">Model availability, pricing and access depend on your provider account and API key.</p>
     </div>
   )

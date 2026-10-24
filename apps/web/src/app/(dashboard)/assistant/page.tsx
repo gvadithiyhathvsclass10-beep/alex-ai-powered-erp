@@ -45,7 +45,7 @@ export default function AssistantPage() {
   const [newConversationTitle, setNewConversationTitle] = React.useState("")
   const [isCreatingNew, setIsCreatingNew] = React.useState(false)
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
-  const [leftPanelOpen, setLeftPanelOpen] = React.useState(true)
+  const [leftPanelOpen, setLeftPanelOpen] = React.useState(false)
   const [selectedProviderId, setSelectedProviderId] = React.useState<string>("")
 
   const {
@@ -212,12 +212,15 @@ export default function AssistantPage() {
 
   return (
     <div className="flex h-[100dvh] min-h-0 bg-background overflow-hidden">
+      {/* Mobile drawer backdrop: keep the chat usable on narrow screens. */}
+      {leftPanelOpen && (
+        <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setLeftPanelOpen(false)} />
+      )}
       {/* LEFT PANEL - Navigation & Conversation History */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 h-[100dvh] min-h-0 border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
-          leftPanelOpen ? "w-80 lg:w-80" : "w-16 lg:w-16",
-          "lg:translate-x-0"
+          "fixed left-0 top-0 z-50 h-[100dvh] min-h-0 border-r bg-sidebar transition-transform duration-300 ease-out flex flex-col w-[min(20rem,88vw)] lg:w-80",
+          leftPanelOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-16"
         )}
         aria-label="Navigation & conversations"
       >
@@ -458,10 +461,11 @@ export default function AssistantPage() {
       )}>
         {/* Top Bar with Provider Selector */}
         <div className="flex h-14 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-background/80 backdrop-blur">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setLeftPanelOpen(true)} aria-label="Open navigation"><MessageSquare className="h-5 w-5" /></Button>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <h1 className="text-xl font-semibold text-foreground">AI Assistant</h1>
-              <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
+              <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
                 RAG Enabled
               </span>
             </div>
