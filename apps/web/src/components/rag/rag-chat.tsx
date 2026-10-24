@@ -18,6 +18,10 @@ import {
   AlertCircle,
   CheckCircle2,
   BookmarkPlus,
+  Sparkles,
+  Zap,
+  FileText,
+  ExternalLink,
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -61,6 +65,8 @@ export interface Message {
   groundingStatus?: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED" | "NO_SOURCES"
   groundingNote?: string
   createdAt: string
+  provider?: string
+  model?: string
 }
 
 interface RAGChatProps {
@@ -96,16 +102,18 @@ export function RAGChat({
   const [showSources, setShowSources] = React.useState<Record<string, boolean>>({})
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
+  // Sync conversationId prop to state
   React.useEffect(() => {
     setActiveConversationId(conversationId)
   }, [conversationId])
 
+  // Reset when context changes (notebookId, projectId, subjectId)
   React.useEffect(() => {
     if (!conversationId) {
       setActiveConversationId(undefined)
       setMessages(initialMessages)
     }
-  }, [notebookId, projectId, subjectId])
+  }, [notebookId, projectId, subjectId, conversationId, initialMessages])
 
   const {
     data: conversationData,
@@ -126,13 +134,15 @@ export function RAGChat({
     enabled: Boolean(activeConversationId),
   })
 
+  // Load conversation messages when data is available
   React.useEffect(() => {
     if (!activeConversationId) {
       return
     }
     if (conversationData?.messages && Array.isArray(conversationData.messages)) {
-      setMessages(
-        conversationData.messages.map((m: any) => ({
+      setMessages((prevMessages) => {
+        // Only update if we have new data
+        const newMessages = conversationData.messages.map((m: { id: string; role: string; content: string; metadata?: any; createdAt?: string }) => ({
           id: m.id,
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content,
@@ -141,9 +151,17 @@ export function RAGChat({
           isSourceSupported: m.metadata?.isSourceSupported,
           groundingStatus: m.metadata?.groundingStatus,
           groundingNote: m.metadata?.groundingNote,
+          provider: m.metadata?.provider,
+          model: m.metadata?.model,
           createdAt: m.createdAt || new Date().toISOString(),
         }))
-      )
+        // Prevent unnecessary updates
+        if (prevMessages.length === newMessages.length && 
+            prevMessages.every((msg, i) => msg.id === newMessages[i].id)) {
+          return prevMessages
+        }
+        return newMessages
+      })
     }
   }, [activeConversationId, conversationData])
 
@@ -188,6 +206,8 @@ export function RAGChat({
         isSourceSupported: data.isSourceSupported,
         groundingStatus: data.groundingStatus,
         groundingNote: data.groundingNote,
+        provider: data.provider,
+        model: data.model,
         createdAt: new Date().toISOString(),
       }
       setMessages((prev) => [...prev, newMessage])
@@ -236,38 +256,67 @@ export function RAGChat({
   }
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
-            {conversationData?.conversation?.title ||
-              (notebookId ? "Notebook Grounded Q&A" : "AI Assistant")}
-            <Badge variant="outline" className="text-xs font-normal">
-              {notebookId ? "Source-Grounded" : "RAG"}
-            </Badge>
-          </CardTitle>
-          {activeConversationId && messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={() => {
-                setActiveConversationId(undefined)
-                setMessages([])
-              }}
-            >
-              New Thread
-            </Button>
-          )}
+    <Card className="flex flex-col h-full panel">
+      <CardHeader className="pb-3 border-b border-border/50">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary flex-shrink-0">
+              <Bot className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="text-lg font-semibold truncate">
+                {conversationData?.conversation?.title ||
+                  (notebookId ? "Notebook Grounded Q&A" : "AI Assistant")}
+                <Badge 
+                  variant="outline" 
+                  className="text-xs font-normal ml-2 border-primary/30 text-primary bg-primary/10"
+                >
+                  {notebookId ? "Source-Grounded" : "RAG"}
+                </Badge>
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {activeConversationId 
+                  ? `Conversation • ${conversationData?.conversation?._count?.messages || 0} messages`
+                  : "Start a new conversation"}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {activeConversationId && messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs gap-1 hover:bg-secondary"
+                onClick={() => {
+                  setActiveConversationId(undefined)
+                  setMessages([])
+                }}
+              >
+                <Sparkles className="h-3 w-3" />
+                New Thread
+              </Button>
+            )}
+            
+            {/* Provider indicator */}
+            {conversationData?.conversation && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-secondary border border-border/50 text-xs text-muted-foreground">
+                <Zap className="h-3 w-3" />
+                <span>{conversationData.conversation.provider || "AI"}</span>
+                <span className="text-muted-foreground/50">/</span>
+                <span>{conversationData.conversation.model || "default"}</span>
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
+      
       <CardContent className="flex-1 flex flex-col min-h-0">
         <ScrollArea className="flex-1 pr-2">
           <div className="space-y-4 pb-4">
             {isLoadingHistory ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 <span>Loading conversation history...</span>
               </div>
             ) : isHistoryError ? (
@@ -278,14 +327,7 @@ export function RAGChat({
                 </span>
               </div>
             ) : messages.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Bot className="mx-auto h-10 w-10 text-muted-foreground/50 mb-2" />
-                <p className="text-sm">
-                  {notebookId
-                    ? "Ask a question about your notebook sources. Answers cite the exact source, page, and section, and clearly flag unsupported topics."
-                    : "No messages in this conversation yet. Ask a question below to begin."}
-                </p>
-              </div>
+              <WelcomeEmptyState notebookId={notebookId} />
             ) : (
               messages.map((message) => (
                 <MessageBubble
@@ -301,23 +343,14 @@ export function RAGChat({
               ))
             )}
             {isLoading && (
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Bot className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <div className="bg-muted rounded-lg p-3 animate-pulse">
-                    <div className="h-4 bg-muted-foreground/50 rounded w-3/4 mb-2"></div>
-                    <div className="h-4 bg-muted-foreground/50 rounded w-1/2"></div>
-                  </div>
-                </div>
-              </div>
+              <LoadingIndicator />
             )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
-        <Separator />
-        <form onSubmit={handleSubmit} className="mt-4">
+        
+        <Separator className="border-border/50" />
+        <form onSubmit={handleSubmit} className="mt-4 space-y-2">
           <div className="flex gap-2">
             <Textarea
               placeholder={
@@ -333,7 +366,7 @@ export function RAGChat({
                   handleSubmit(e)
                 }
               }}
-              className="flex-1 min-h-[80px] max-h-[200px] resize-none"
+              className="flex-1 min-h-[80px] max-h-[200px] resize-none input-futuristic"
               disabled={isLoading}
               rows={2}
             />
@@ -341,17 +374,61 @@ export function RAGChat({
               type="submit"
               disabled={!input.trim() || isLoading}
               size="lg"
-              className="self-end"
+              className="self-end h-12 btn-primary-gradient"
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              <span className="flex items-center gap-2">
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">{isLoading ? "Sending..." : "Send"}</span>
+              </span>
             </Button>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground text-center">
+          <p className="text-xs text-muted-foreground/60 text-center">
             Responses cite source title, page, and section when supported, and explicitly identify unsupported questions.
+            {notebookId && " Notebook mode: answers cite exact source, page, and section."}
           </p>
         </form>
       </CardContent>
     </Card>
+  )
+}
+
+function WelcomeEmptyState({ notebookId }: { notebookId?: string }) {
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <div className="relative mx-auto mb-4">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary">
+          <Bot className="h-8 w-8 text-primary-foreground" />
+        </div>
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-2">
+        {notebookId ? "Notebook Grounded Q&A" : "No messages yet"}
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+        {notebookId
+          ? "Ask a question about your notebook sources. Answers cite the exact source, page, and section, and clearly flag unsupported topics."
+          : "Ask a question below to begin your conversation with ALEX."}
+      </p>
+    </div>
+  )
+}
+
+function LoadingIndicator() {
+  return (
+    <div className="flex items-start gap-3 animate-in">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+        <Bot className="h-4 w-4 text-primary" />
+      </div>
+      <div className="flex-1">
+        <div className="bg-secondary border border-border/50 rounded-lg p-3 animate-pulse">
+          <div className="h-4 bg-primary/20 rounded w-3/4 mb-2"></div>
+          <div className="h-4 bg-primary/20 rounded w-1/2"></div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -378,12 +455,19 @@ function MessageBubble({
       ? message.isSourceSupported
       : message.groundingStatus === "SUPPORTED" || hasCitations
 
+  const groundingStatusColor = {
+    SUPPORTED: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+    PARTIAL: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+    UNSUPPORTED: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+    NO_SOURCES: "text-muted-foreground bg-muted border-border/50",
+  }
+
   return (
-    <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
+    <div className={cn("flex gap-3 animate-in", isUser && "flex-row-reverse")}>
       <div
         className={cn(
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+          isUser ? "bg-gradient-primary text-primary-foreground" : "bg-primary/10 text-primary"
         )}
       >
         {isUser ? (
@@ -402,71 +486,107 @@ function MessageBubble({
       <div className={cn("flex-1 max-w-[85%]", isUser ? "text-right" : "text-left")}>
         <div
           className={cn(
-            "inline-block rounded-2xl px-4 py-2.5",
-            isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"
+            "inline-block rounded-2xl px-4 py-3",
+            isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-secondary border border-border/50 rounded-tl-none"
           )}
         >
+          {/* Grounding Status Badge */}
           {!isUser && (message.groundingStatus || message.isSourceSupported !== undefined) && (
-            <div className="mb-2 flex items-center gap-2 flex-wrap">
-              {isSupported ? (
+            <div className="mb-2.5 flex items-center gap-2 flex-wrap">
+              {message.groundingStatus && (
                 <Badge
                   variant="outline"
-                  className="text-[11px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 flex items-center gap-1"
+                  className={cn("text-[11px] flex items-center gap-1", groundingStatusColor[message.groundingStatus])}
                 >
-                  <CheckCircle2 className="h-3 w-3" />
-                  Source-Supported
-                </Badge>
-              ) : (
-                <Badge
-                  variant="outline"
-                  className="text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1"
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  Unsupported by Sources
+                  {message.groundingStatus === "SUPPORTED" && <CheckCircle2 className="h-3 w-3" />}
+                  {message.groundingStatus === "PARTIAL" && <AlertCircle className="h-3 w-3" />}
+                  {message.groundingStatus === "UNSUPPORTED" && <AlertCircle className="h-3 w-3" />}
+                  {message.groundingStatus === "NO_SOURCES" && <FileText className="h-3 w-3" />}
+                  {message.groundingStatus === "SUPPORTED" && "Source-Supported"}
+                  {message.groundingStatus === "PARTIAL" && "Partially Supported"}
+                  {message.groundingStatus === "UNSUPPORTED" && "Not Supported by Sources"}
+                  {message.groundingStatus === "NO_SOURCES" && "No Sources Available"}
                 </Badge>
               )}
               {message.groundingNote && (
-                <span className="text-[11px] text-muted-foreground">{message.groundingNote}</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  {message.groundingNote}
+                </span>
               )}
             </div>
           )}
 
-          <div className="whitespace-pre-wrap">{message.content}</div>
+          {/* Message Content with Markdown */}
+          <div className="whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+            {message.content}
+          </div>
 
+          {/* Citations */}
           {hasCitations && (
-            <div className="mt-2.5 pt-2 border-t border-border/50 flex flex-wrap gap-1.5">
+            <div className="mt-3 pt-2 border-t border-border/50 flex flex-wrap gap-1.5">
               {message.citations!.map((citation, index) => (
                 <Badge
                   key={citation.id || index}
                   variant="outline"
-                  className="text-xs cursor-pointer hover:bg-accent"
+                  className="text-xs cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 flex items-center gap-1"
                   onClick={() => navigator.clipboard.writeText(citation.excerpt || "")}
                   title={citation.excerpt}
                 >
-                  [{index + 1}] {citation.documentTitle}
-                  {citation.pageNumber && <span className="ml-1">· p.{citation.pageNumber}</span>}
-                  {citation.sectionTitle && <span className="ml-1">· {citation.sectionTitle}</span>}
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-primary/20 text-primary">
+                    {index + 1}
+                  </span>
+                  <span className="truncate max-w-[200px]">{citation.documentTitle}</span>
+                  {citation.pageNumber && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-secondary text-muted-foreground">
+                      p.{citation.pageNumber}
+                    </span>
+                  )}
+                  {citation.sectionTitle && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent/20 text-accent">
+                      {citation.sectionTitle}
+                    </span>
+                  )}
                 </Badge>
               ))}
             </div>
           )}
+
+          {/* Model Info */}
+          {!isUser && (message.provider || message.model) && (
+            <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {message.provider && (
+                  <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-primary/10 text-primary">
+                    {message.provider}
+                  </span>
+                )}
+                {message.model && (
+                  <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-accent/10 text-accent">
+                    {message.model}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
+        
+        <div className="flex items-center gap-1.5 mt-1.5">
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-7 w-7 hover:bg-secondary"
             onClick={() => onCopy(message.content)}
             title="Copy message"
           >
-            <Copy className="h-3 w-3" />
+            <Copy className="h-3.5 w-3.5" />
           </Button>
           {!isUser && onSaveAsNote && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="h-7 w-7 hover:bg-secondary"
               onClick={() =>
                 onSaveAsNote(
                   `Q&A Note (${new Date().toLocaleDateString()})`,
@@ -475,23 +595,24 @@ function MessageBubble({
               }
               title="Save answer to Notebook Notes"
             >
-              <BookmarkPlus className="h-3 w-3" />
+              <BookmarkPlus className="h-3.5 w-3.5" />
             </Button>
           )}
           {(hasCitations || hasSources) && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="h-7 w-7 hover:bg-secondary"
               onClick={onToggleSources}
               title={showSources ? "Hide cited excerpts" : "Show cited excerpts"}
             >
-              {showSources ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {showSources ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
           )}
         </div>
+        
         {showSources && (
-          <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-muted pl-3">
+          <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-primary/20 pl-3 animate-in">
             {(message.sources && message.sources.length > 0
               ? message.sources
               : (message.citations || []).map(c => ({
@@ -522,22 +643,25 @@ function SourceCard({ source, index }: SourceCardProps) {
   const title = source.documentTitle || source.document?.title || `Source ${index + 1}`
   const text = source.excerpt || source.content || ""
   return (
-    <div className="bg-muted/50 rounded-lg p-3">
+    <div className="bg-secondary/50 border border-border/50 rounded-lg p-3 hover:border-primary/20 transition-all duration-200">
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="font-medium text-sm">
-          [{index + 1}] {title}
+        <span className="font-medium text-sm flex items-center gap-1">
+          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-primary/20 text-primary">
+            {index + 1}
+          </span>
+          {title}
         </span>
         {typeof source.similarity === "number" && (
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/10">
             {Math.round(source.similarity * 100)}% match
           </Badge>
         )}
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        {source.pageNumber && <span>Page {source.pageNumber}</span>}
-        {source.sectionTitle && <span>· Section: {source.sectionTitle}</span>}
+        {source.pageNumber && <span className="flex items-center gap-1"><FileText className="h-2.5 w-2.5" />Page {source.pageNumber}</span>}
+        {source.sectionTitle && <span className="flex items-center gap-1"><Sparkles className="h-2.5 w-2.5" />Section: {source.sectionTitle}</span>}
       </div>
-      {text && <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{text}</div>}
+      {text && <div className="mt-2 text-xs text-muted-foreground/80 whitespace-pre-wrap bg-background/50 p-2 rounded">{text}</div>}
     </div>
   )
 }
