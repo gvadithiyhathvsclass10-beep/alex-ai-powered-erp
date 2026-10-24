@@ -9,6 +9,7 @@ import { chunkBySemanticUnits } from '@/lib/document-processing/chunker'
 import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
 import { uploadFile, fileExists, downloadFile as storageDownloadFile } from '@/lib/storage/client'
 import { canMutateDocument } from '@/lib/document-processing/access'
+import { enqueueJob, JobPayload } from '@/lib/job-queue'
 
 export interface ProcessingContext {
   documentId: string
@@ -195,6 +196,55 @@ async function updateStatus(documentId: string, status: DocumentStatus) {
       startedAt: new Date(),
     },
   })
+}
+
+/**
+ * Process a document from a job queue payload.
+ * Handles retries and idempotency.
+ */
+export async function processDocumentFromJob(job: JobPayload): Promise<void> {
+  const { documentId, userId, storageBucket, storagePath, fileName, mimeType, documentType, retryCount, maxRetries } = job
+
+  const document = await prisma.document.findUnique({ where: { id: documentId } })
+  if (!document) {
+    throw new Error(`Document ${documentId} not found`)
+  }
+
+  // Skip if already processed or failed (idempotency)
+  if (document.status === DocumentStatus.READY || document.status === DocumentStatus.FAILED) {
+    return
+  }
+
+  // Download the file from storage
+  let fileBuffer: Buffer
+  try {
+    fileBuffer = await storageDownloadFile(storageBucket, storagePath)
+  } catch (downloadError) {
+    const msg = downloadError instanceof Error ? downloadError.message : 'Failed to download file from storage'
+    throw new Error(`Failed to retrieve file for processing: ${msg}`)
+  }
+
+  try {
+    await processDocument({
+      documentId,
+      userId,
+      fileBuffer,
+      fileName,
+      mimeType,
+      documentType: documentType as DocumentType,
+      subjectId: document.subjectId || undefined,
+      projectId: document.projectId || undefined,
+      notebookId: document.notebookId || undefined,
+    })
+  } catch (error) {
+    // Check if we should retry
+    const doc = await prisma.document.findUnique({ where: { id: documentId } })
+    if (doc?.status === DocumentStatus.FAILED && retryCount < maxRetries) {
+      const retryError = error instanceof Error ? error : new Error(String(error))
+      throw new Error(`Processing failed (retry ${retryCount + 1}/${maxRetries}): ${retryError.message}`)
+    }
+    throw error
+  }
 }
 
 export async function createDocumentRecord(

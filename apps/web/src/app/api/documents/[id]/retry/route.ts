@@ -1,8 +1,9 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { reprocessDocument } from '@/lib/document-processing/pipeline'
 import { canMutateDocument } from '@/lib/document-processing/access'
+import { enqueueJob } from '@/lib/job-queue'
+import { DocumentStatus } from '@prisma/client'
 
 export async function POST(
   _request: Request,
@@ -22,25 +23,41 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const stats = await reprocessDocument(id, user.id, user.role)
-    const updated = await prisma.document.findUnique({
+    // Reset document to queued state
+    await prisma.documentChunk.deleteMany({ where: { documentId: id } })
+    await prisma.documentProcessingJob.deleteMany({ where: { documentId: id } })
+
+    await prisma.document.update({
       where: { id },
-      include: { _count: { select: { chunks: true } } },
+      data: { status: DocumentStatus.QUEUED, errorMessage: null },
+    })
+
+    // Create processing job record
+    await prisma.documentProcessingJob.create({
+      data: {
+        documentId: id,
+        step: 'queued',
+        status: DocumentStatus.QUEUED,
+      },
+    })
+
+    // Enqueue async document processing job
+    const jobId = await enqueueJob({
+      type: 'document_reprocess',
+      documentId: id,
+      userId: user.id,
+      fileName: document.fileName,
+      mimeType: document.mimeType,
+      documentType: document.documentType,
+      storageBucket: document.storageBucket,
+      storagePath: document.storagePath,
     })
 
     return NextResponse.json({
       success: true,
-      message: 'Document reprocessed successfully',
-      document: updated
-        ? serializeBigInt({
-            id: updated.id,
-            title: updated.title,
-            status: updated.status,
-            pageCount: updated.pageCount ?? stats.pageCount,
-            chunksCount: updated._count?.chunks ?? stats.chunksCount,
-            processedAt: updated.processedAt,
-          })
-        : stats,
+      message: 'Document queued for reprocessing',
+      jobId,
+      status: DocumentStatus.QUEUED,
     })
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {

@@ -1,13 +1,14 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma, serializeBigInt } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { processDocument, createDocumentRecord } from '@/lib/document-processing/pipeline'
+import { createDocumentRecord } from '@/lib/document-processing/pipeline'
 import { DocumentValidationError } from '@/lib/document-processing/extractors'
 import {
   canUploadToTarget,
   buildAccessibleDocumentsWhere,
 } from '@/lib/document-processing/access'
 import { DocumentStatus } from '@prisma/client'
+import { enqueueJob } from '@/lib/job-queue'
 
 export async function POST(request: Request) {
   try {
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       description
     )
 
+    // Create processing job record
     await prisma.documentProcessingJob.create({
       data: {
         documentId: document.id,
@@ -57,50 +59,17 @@ export async function POST(request: Request) {
       },
     })
 
-    // Run extraction, chunking, embedding, and indexing synchronously so we never report
-    // success before the file is stored AND processing has reached DocumentStatus.READY.
-    let processingStats: {
-      status: DocumentStatus
-      pageCount: number
-      chunksCount: number
-      tokenCount: number
-    }
-    try {
-      processingStats = await processDocument({
-        documentId: document.id,
-        userId: user.id,
-        fileBuffer: buffer,
-        fileName: file.name,
-        mimeType: document.mimeType,
-        documentType: document.documentType,
-        subjectId,
-        projectId,
-        notebookId,
-      })
-    } catch (processingError) {
-      const reason =
-        processingError instanceof Error
-          ? processingError.message
-          : 'Document text extraction and indexing failed'
-      return NextResponse.json(
-        {
-          error: reason,
-          code: 'PROCESSING_FAILED',
-          document: serializeBigInt({
-            id: document.id,
-            title: document.title,
-            fileName: document.fileName,
-            fileSize: document.fileSize.toString(),
-            mimeType: document.mimeType,
-            documentType: document.documentType,
-            status: DocumentStatus.FAILED,
-            errorMessage: reason,
-            createdAt: document.createdAt,
-          }),
-        },
-        { status: 422 }
-      )
-    }
+    // Enqueue async document processing job
+    const jobId = await enqueueJob({
+      type: 'document_process',
+      documentId: document.id,
+      userId: user.id,
+      fileName: file.name,
+      mimeType: document.mimeType,
+      documentType: document.documentType,
+      storageBucket: document.storageBucket,
+      storagePath: document.storagePath,
+    })
 
     // If uploaded into a research notebook, ensure a ResearchSource entry is linked
     if (notebookId && prisma.researchSource?.create) {
@@ -117,35 +86,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const updatedDoc = await prisma.document.findUnique({
-      where: { id: document.id },
-      include: {
-        subject: { select: { id: true, name: true, code: true } },
-        project: { select: { id: true, title: true } },
-        notebook: { select: { id: true, title: true } },
-        _count: { select: { chunks: true } },
-      },
-    })
-
     return NextResponse.json({
       document: serializeBigInt({
-        id: updatedDoc?.id || document.id,
-        title: updatedDoc?.title || document.title,
-        description: updatedDoc?.description ?? document.description ?? null,
-        fileName: updatedDoc?.fileName || document.fileName,
-        fileSize: (updatedDoc?.fileSize ?? document.fileSize).toString(),
-        mimeType: updatedDoc?.mimeType || document.mimeType,
-        documentType: updatedDoc?.documentType || document.documentType,
-        status: updatedDoc?.status || processingStats.status,
-        pageCount: updatedDoc?.pageCount ?? processingStats.pageCount,
-        chunksCount: updatedDoc?._count?.chunks ?? processingStats.chunksCount,
-        errorMessage: updatedDoc?.errorMessage ?? null,
-        subject: updatedDoc?.subject ?? null,
-        project: updatedDoc?.project ?? null,
-        notebook: updatedDoc?.notebook ?? null,
-        processedAt: updatedDoc?.processedAt ?? new Date(),
-        createdAt: updatedDoc?.createdAt || document.createdAt,
+        id: document.id,
+        title: document.title,
+        description: document.description ?? null,
+        fileName: document.fileName,
+        fileSize: document.fileSize.toString(),
+        mimeType: document.mimeType,
+        documentType: document.documentType,
+        status: DocumentStatus.QUEUED,
+        pageCount: null,
+        chunksCount: 0,
+        errorMessage: null,
+        subject: null,
+        project: null,
+        notebook: null,
+        processedAt: null,
+        createdAt: document.createdAt,
       }),
+      jobId,
+      status: DocumentStatus.QUEUED,
+      message: 'Document uploaded and queued for processing',
     })
   } catch (error) {
     if (error instanceof DocumentValidationError) {

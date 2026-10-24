@@ -110,12 +110,20 @@ COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./apps/web/publ
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./apps/web/prisma
 COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
 
-# Copy worker entry point
-COPY --chown=worker:nodejs docker/worker-entrypoint.js ./worker-entrypoint.js
+# Copy worker source (TypeScript) and run with tsx
+COPY --chown=worker:nodejs apps/web/src/worker ./apps/web/src/worker
+COPY --chown=worker:nodejs apps/web/src/lib ./apps/web/src/lib
+COPY --chown=worker:nodejs apps/web/prisma ./apps/web/prisma
+COPY --chown=worker:nodejs apps/web/tsconfig.json ./apps/web/tsconfig.json
 
 USER worker
 
-CMD ["node", "worker-entrypoint.js"]
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["sh", "-c", "node node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema=apps/web/prisma/schema.prisma --skip-generate && npx tsx apps/web/src/worker/index.ts"]
 
 # -----------------------------------------------------------------------------
 # Default production target: API
