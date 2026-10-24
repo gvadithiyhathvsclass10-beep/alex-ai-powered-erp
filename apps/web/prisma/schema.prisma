@@ -140,6 +140,7 @@ enum AIProviderType {
   OPENROUTER
   TOGETHER_AI
   OTHER
+  UNIVERSAL_GATEWAY
 }
 
 model Institution {
@@ -742,9 +743,14 @@ model AICredential {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  // Universal AI Gateway support
+  gatewayType  String?        // e.g., "openrouter", "custom", "anthropic-gateway"
+  baseUrl      String?        // Custom gateway base URL
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, provider])
+  @@index([userId, gatewayType])
   @@map("ai_credentials")
 }
 

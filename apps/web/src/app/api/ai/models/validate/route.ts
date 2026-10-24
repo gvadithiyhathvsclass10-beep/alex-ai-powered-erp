@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       'OPENROUTER',
       'TOGETHER_AI',
       'OTHER',
+      'UNIVERSAL_GATEWAY',
     ]
 
     if (!validProviders.includes(provider)) {

@@ -5,7 +5,7 @@ import {
   normalizeProvider,
   validateProviderModel,
   formatAIServiceErrorResponse,
-  SUPPORTED_AI_PROVIDERS,
+  getProviderMetadata,
   type AITaskType,
 } from '@/lib/ai/service'
 import { validateCustomModel } from '@/lib/ai/model-discovery'
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       ? taskType
       : 'chat') as AITaskType
 
-    const meta = SUPPORTED_AI_PROVIDERS[provider]
+    const meta = getProviderMetadata(provider)
 
     // If not a custom model, validate against known models
     let modelId: string
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         provider,
         String(rawModelId).trim(),
         validTaskType,
-        meta ? [...meta.models, ...meta.embeddingModels] : [],
+        meta ? ([meta.defaultChatModel, meta.defaultEmbeddingModel].filter(Boolean) as string[]) : [],
         false // Don't allow custom models for non-custom entries
       )
     } else {
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       where: {
         userId_provider_modelId_taskType: {
           userId: user.id,
-          provider,
+          provider: provider as any,
           modelId,
           taskType,
         },
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       },
       create: {
         userId: user.id,
-        provider,
+        provider: provider as any,
         modelId,
         taskType,
         isDefault: Boolean(isDefault),
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     // If custom model, optionally validate in background
     if (isCustomModel) {
       // Fire and forget - log validation result
-      validateCustomModel(user.id, provider, modelId, undefined).then(result => {
+      validateCustomModel(user.id, provider as any, modelId, undefined).then(result => {
         if (!result.valid) {
           console.warn(`[AI Models] Custom model validation warning for ${provider}/${modelId}: ${result.error}`)
         }

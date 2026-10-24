@@ -1,40 +1,23 @@
+/**
+ * AI Embeddings - Unified Gateway Architecture
+ * 
+ * Delegates all embedding operations to the new Universal AI Gateway
+ * (@/lib/ai/gateway). Maintains backward compatibility with existing
+ * imports from '@/lib/ai/embeddings'.
+ */
+
 import { AICredential, AIProviderType as PrismaAIProviderType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
+import {
+  gatewayEmbeddings,
+  resolveGatewayConfig,
+  type GatewayEmbeddingsInput,
+  GatewayModelNotSupportedError,
+  GatewayConfigError,
+} from './gateway'
 
-type AIProviderType = PrismaAIProviderType | 'MOCK'
-
-const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
-  'OPENAI',
-  'GOOGLE_GEMINI',
-  'MISTRAL',
-]
-
-export function getAIRequestTimeoutMs(): number {
-  const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30000
-}
-
-export async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs = getAIRequestTimeoutMs()
-): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`[AI Embeddings] Request timed out after ${timeoutMs}ms: ${url}`)
-      throw new Error(`AI embedding request timed out after ${timeoutMs}ms`)
-    }
-    throw error
-  } finally {
-    clearTimeout(timer)
-  }
-}
+export type AIProviderType = PrismaAIProviderType | 'MOCK'
 
 export interface EmbeddingResult {
   embeddings: number[][]
@@ -46,10 +29,22 @@ export interface EmbeddingProvider {
   generateEmbeddings(texts: string[]): Promise<EmbeddingResult>
 }
 
-async function getCredentialKey(credential: AICredential): Promise<string> {
-  return decrypt(credential.encryptedKey)
+export const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
+  'OPENAI',
+  'GOOGLE_GEMINI',
+  'MISTRAL',
+]
+
+export function getAIRequestTimeoutMs(): number {
+  const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30000
 }
 
+// ============================================================================
+// Legacy Provider Classes (backward compatibility)
+// ============================================================================
+
+// These classes are kept for backward compatibility but delegate to gateway
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   private apiKey: string
   private model: string
@@ -60,34 +55,17 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-    if (texts.length === 0) {
-      return { embeddings: [], tokenCount: 0, model: this.model }
-    }
-
-    const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
-    const response = await fetchWithTimeout(`${baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: texts,
-        model: this.model,
-        encoding_format: 'float',
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(`OpenAI embeddings error: ${error.error?.message || response.statusText}`)
-    }
-
-    const data = await response.json()
-    return {
-      embeddings: data.data.map((d: { embedding: number[] }) => d.embedding),
-      tokenCount: data.usage?.total_tokens ?? texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
+    const result = await gatewayEmbeddings({
+      texts,
+      provider: 'OPENAI',
       model: this.model,
+      apiKey: this.apiKey,
+      baseUrl: process.env.OPENAI_BASE_URL,
+    })
+    return {
+      embeddings: result.embeddings,
+      tokenCount: result.tokenCount,
+      model: result.model,
     }
   }
 }
@@ -102,35 +80,17 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-    if (texts.length === 0) {
-      return { embeddings: [], tokenCount: 0, model: this.model }
-    }
-
-    const baseUrl = (process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
-    const response = await fetchWithTimeout(
-      `${baseUrl}/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: texts.map(text => ({
-            model: `models/${this.model}`,
-            content: { parts: [{ text }] },
-          })),
-        }),
-      }
-    )
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(`Google embeddings error: ${error.error?.message || response.statusText}`)
-    }
-
-    const data = await response.json()
-    return {
-      embeddings: data.embeddings?.map((e: { values: number[] }) => e.values) || [],
-      tokenCount: texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
+    const result = await gatewayEmbeddings({
+      texts,
+      provider: 'GOOGLE_GEMINI',
       model: this.model,
+      apiKey: this.apiKey,
+      baseUrl: process.env.GOOGLE_GEMINI_BASE_URL,
+    })
+    return {
+      embeddings: result.embeddings,
+      tokenCount: result.tokenCount,
+      model: result.model,
     }
   }
 }
@@ -145,33 +105,17 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
   }
 
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
-    if (texts.length === 0) {
-      return { embeddings: [], tokenCount: 0, model: this.model }
-    }
-
-    const baseUrl = (process.env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1').replace(/\/+$/, '')
-    const response = await fetchWithTimeout(`${baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: texts,
-        model: this.model,
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(`Mistral embeddings error: ${error.error?.message || response.statusText}`)
-    }
-
-    const data = await response.json()
-    return {
-      embeddings: data.data.map((d: { embedding: number[] }) => d.embedding),
-      tokenCount: data.usage?.total_tokens ?? texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
+    const result = await gatewayEmbeddings({
+      texts,
+      provider: 'MISTRAL',
       model: this.model,
+      apiKey: this.apiKey,
+      baseUrl: process.env.MISTRAL_BASE_URL,
+    })
+    return {
+      embeddings: result.embeddings,
+      tokenCount: result.tokenCount,
+      model: result.model,
     }
   }
 }
@@ -195,25 +139,9 @@ export function createEmbeddingProvider(
   }
 }
 
-function hashTokenToIndex(token: string, seed = 0, dims = 1536): { idx: number; sign: number } {
-  let h = 2166136261 ^ seed
-
-  for (let i = 0; i < token.length; i++) {
-    h ^= token.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-
-  const unsigned = h >>> 0
-  return {
-    idx: unsigned % dims,
-    sign: (unsigned & 1) === 0 ? 1 : -1,
-  }
-}
-
 export class MockEmbeddingProvider implements EmbeddingProvider {
   async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
     const dims = 1536
-
     const embeddings = texts.map(text => {
       const vec = new Array(dims).fill(0)
       const normalized = text
@@ -255,6 +183,23 @@ export class MockEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
+function hashTokenToIndex(token: string, seed = 0, dims = 1536): { idx: number; sign: number } {
+  let h = 2166136261 ^ seed
+  for (let i = 0; i < token.length; i++) {
+    h ^= token.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  const unsigned = h >>> 0
+  return {
+    idx: unsigned % dims,
+    sign: (unsigned & 1) === 0 ? 1 : -1,
+  }
+}
+
+// ============================================================================
+// Unified Embedding Resolution (uses gateway)
+// ============================================================================
+
 export async function getUserEmbeddingProvider(
   userId: string,
   provider?: AIProviderType
@@ -267,92 +212,93 @@ export async function getUserEmbeddingProvider(
     return { provider: new MockEmbeddingProvider(), model: 'mock', credential: null }
   }
 
-  const embeddingConfig = await prisma.aIModelConfig.findFirst({
-    where: { userId, taskType: 'embeddings', isDefault: true },
-    orderBy: { updatedAt: 'desc' },
-  })
+  // Use gateway to resolve embedding provider
+  try {
+    // We need to resolve the config but the gatewayEmbeddings function handles
+    // the actual embedding call. Here we resolve to determine which provider/model.
+    const config = await resolveGatewayConfig({
+      userId,
+      provider: provider as string,
+      model: undefined,
+      taskType: 'embeddings',
+      messages: [{ role: 'user', content: '' }],
+    } as any)
 
-  const requestedProvider = provider && provider !== 'MOCK'
-    ? provider as PrismaAIProviderType
-    : embeddingConfig?.provider
+    if (config.provider === 'MOCK') {
+      return { provider: new MockEmbeddingProvider(), model: 'mock', credential: null }
+    }
 
-  if (requestedProvider && !EMBEDDING_CAPABLE_PROVIDERS.includes(requestedProvider)) {
-    throw new Error(
-      `The configured ${requestedProvider} provider does not support embeddings in this application. Configure an embeddings model with OpenAI, Google Gemini, or Mistral in AI Settings.`
+    // Return an adapter-based embedding provider
+    return {
+      provider: new GatewayEmbeddingAdapter(config.apiKey, config.provider, config.model, config.baseUrl),
+      model: config.model,
+      credential: config.credential,
+    }
+  } catch {
+    // Fall back to environment variables
+    const envProviders: Array<{ provider: PrismaAIProviderType; key?: string; model: string }> = [
+      { provider: 'OPENAI', key: process.env.OPENAI_API_KEY, model: 'text-embedding-3-small' },
+      {
+        provider: 'GOOGLE_GEMINI',
+        key: process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
+        model: 'text-embedding-004',
+      },
+      { provider: 'MISTRAL', key: process.env.MISTRAL_API_KEY, model: 'mistral-embed' },
+    ]
+
+    const requestedProvider = provider && provider !== 'MOCK' ? provider as PrismaAIProviderType : undefined
+    const envCredential = envProviders.find(
+      item => (!requestedProvider || item.provider === requestedProvider) && item.key?.trim()
+    )
+
+    if (envCredential?.key) {
+      return {
+        provider: createEmbeddingProvider(envCredential.provider, envCredential.key.trim()),
+        model: envCredential.model,
+        credential: null,
+      }
+    }
+
+    throw new GatewayConfigError(
+      requestedProvider
+        ? `No active ${requestedProvider} API credential is configured for embeddings.`
+        : 'No embeddings API key is configured.',
+      requestedProvider
     )
   }
-
-  const allowedProviders = requestedProvider
-    ? [requestedProvider]
-    : EMBEDDING_CAPABLE_PROVIDERS
-
-  const cred = await prisma.aICredential.findFirst({
-    where: {
-      userId,
-      provider: { in: allowedProviders },
-      isActive: true,
-    },
-    orderBy: [
-      ...(requestedProvider ? [] : [{ isDefault: 'desc' as const }]),
-      { updatedAt: 'desc' },
-    ],
-  })
-
-  if (cred) {
-    let apiKey: string
-
-    try {
-      apiKey = await getCredentialKey(cred)
-    } catch {
-      throw new Error(
-        'The saved embeddings API key could not be decrypted. Verify that ENCRYPTION_KEY matches the key used when it was saved, then re-save the credential if necessary.'
-      )
-    }
-
-    const modelConfig = await prisma.aIModelConfig.findFirst({
-      where: { userId, provider: cred.provider, taskType: 'embeddings', isDefault: true },
-      orderBy: { updatedAt: 'desc' },
-    })
-
-    const defaultModel =
-      cred.provider === 'OPENAI'
-        ? 'text-embedding-3-small'
-        : cred.provider === 'GOOGLE_GEMINI'
-          ? 'text-embedding-004'
-          : 'mistral-embed'
-
-    return {
-      provider: createEmbeddingProvider(cred.provider, apiKey, modelConfig?.modelId),
-      model: modelConfig?.modelId || defaultModel,
-      credential: cred,
-    }
-  }
-
-  const envProviders: Array<{ provider: PrismaAIProviderType; key?: string; model: string }> = [
-    { provider: 'OPENAI', key: process.env.OPENAI_API_KEY, model: 'text-embedding-3-small' },
-    {
-      provider: 'GOOGLE_GEMINI',
-      key: process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
-      model: 'text-embedding-004',
-    },
-    { provider: 'MISTRAL', key: process.env.MISTRAL_API_KEY, model: 'mistral-embed' },
-  ]
-
-  const envCredential = envProviders.find(item =>
-    (!requestedProvider || item.provider === requestedProvider) && item.key?.trim()
-  )
-
-  if (envCredential?.key) {
-    return {
-      provider: createEmbeddingProvider(envCredential.provider, envCredential.key.trim()),
-      model: envCredential.model,
-      credential: null,
-    }
-  }
-
-  throw new Error(
-    requestedProvider
-      ? `No active ${requestedProvider} API credential is configured for embeddings. Add a valid key in AI Settings → Credentials tab, then select an embeddings model in AI Settings → Models tab (embeddings task type).`
-      : 'No embeddings API key is configured. To enable document search and RAG: 1) Add an embedding provider credential (OpenAI, Google Gemini, or Mistral) in AI Settings → Credentials tab, 2) Set a default embeddings model in AI Settings → Models tab (select "embeddings" task type).'
-  )
 }
+
+// ============================================================================
+// Gateway-backed embedding adapter
+// ============================================================================
+
+class GatewayEmbeddingAdapter implements EmbeddingProvider {
+  private apiKey: string
+  private providerType: string
+  private model: string
+  private baseUrl?: string
+
+  constructor(apiKey: string, providerType: string, model: string, baseUrl?: string) {
+    this.apiKey = apiKey
+    this.providerType = providerType
+    this.model = model
+    this.baseUrl = baseUrl
+  }
+
+  async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
+    const result = await gatewayEmbeddings({
+      texts,
+      provider: this.providerType,
+      model: this.model,
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+    })
+    return {
+      embeddings: result.embeddings,
+      tokenCount: result.tokenCount,
+      model: result.model,
+    }
+  }
+}
+
+export { GatewayModelNotSupportedError, GatewayConfigError }
