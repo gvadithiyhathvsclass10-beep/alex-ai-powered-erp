@@ -112,7 +112,8 @@ export function RAGChat({
       setActiveConversationId(undefined)
       setMessages(initialMessages)
     }
-  }, [notebookId, projectId, subjectId, conversationId, initialMessages])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notebookId, projectId, subjectId])
 
   const {
     data: conversationData,
