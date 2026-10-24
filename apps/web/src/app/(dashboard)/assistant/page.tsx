@@ -44,7 +44,7 @@ export default function AssistantPage() {
   const [selectedConversation, setSelectedConversation] = React.useState<string | null>(null)
   const [newConversationTitle, setNewConversationTitle] = React.useState("")
   const [isCreatingNew, setIsCreatingNew] = React.useState(false)
-  const [rightPanelOpen, setRightPanelOpen] = React.useState(true)
+  const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
   const [leftPanelOpen, setLeftPanelOpen] = React.useState(true)
   const [selectedProviderId, setSelectedProviderId] = React.useState<string>("")
 
@@ -414,8 +414,8 @@ export default function AssistantPage() {
 
       {/* MAIN CONTENT AREA */}
       <main className={cn(
-        "flex-1 flex flex-col transition-all duration-300",
-        leftPanelOpen ? "lg:pl-80" : "lg:pl-16"
+        "min-w-0 flex-1 flex flex-col transition-all duration-300",
+        leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
       )}>
         {/* Top Bar with Provider Selector */}
         <div className="flex h-14 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-background/80 backdrop-blur">
