@@ -115,11 +115,13 @@ function SectionHeader({ title, collapsed }: { title: string; collapsed: boolean
 interface AssistantSidebarProps {
   userRole: string
   isOpen: boolean
+  collapsed: boolean
+  onToggleCollapse: (collapsed: boolean) => void
+  onClose: () => void
 }
 
-export function AssistantSidebar({ userRole, isOpen, onToggle }: AssistantSidebarProps) {
+export function AssistantSidebar({ userRole, isOpen, collapsed, onToggleCollapse, onClose }: AssistantSidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = React.useState(false)
 
   const filteredItems = navItems.filter(item => item.roles.includes(userRole))
   const filteredLecturerItems = lecturerOnlyItems.filter(item => item.roles.includes(userRole))
@@ -128,8 +130,8 @@ export function AssistantSidebar({ userRole, isOpen, onToggle }: AssistantSideba
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
-        collapsed ? "w-16 lg:w-16" : "w-80 lg:w-80",
+        "h-screen border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
+        collapsed ? "w-16" : "w-80",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}
       aria-label="Navigation & conversations"
@@ -160,7 +162,7 @@ export function AssistantSidebar({ userRole, isOpen, onToggle }: AssistantSideba
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => onToggleCollapse(!collapsed)}
             className="h-9 w-9 rounded-lg transition-all duration-200 hover:bg-secondary relative z-10"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

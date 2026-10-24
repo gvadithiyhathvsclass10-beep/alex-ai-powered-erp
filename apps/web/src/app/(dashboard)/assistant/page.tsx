@@ -206,6 +206,7 @@ export default function AssistantPage() {
               <WelcomeScreen
                 onNewConversation={() => createConversation.mutate("New Conversation")}
                 isCreating={createConversation.isPending}
+                providers={providers}
               />
             )}
           </TabsContent>
@@ -292,7 +293,7 @@ export default function AssistantPage() {
   )
 }
 
-function WelcomeScreen({ onNewConversation, isCreating }: { onNewConversation: () => void; isCreating: boolean }) {
+function WelcomeScreen({ onNewConversation, isCreating, providers }: { onNewConversation: () => void; isCreating: boolean; providers?: Array<{ id: string; name: string; model: string; isActive: boolean; isDefault: boolean }> }) {
   const promptSuggestions = [
     "Summarize my latest uploaded documents",
     "Help me create a study plan for finals",
@@ -302,9 +303,11 @@ function WelcomeScreen({ onNewConversation, isCreating }: { onNewConversation: (
     "Analyze my attendance patterns",
   ]
 
+  const activeProvider = providers?.find(p => p.isDefault) || providers?.[0]
+
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <Card className="max-w-2xl w-full panel-hover animate-in">
+      <Card className="chat-welcome-card w-full panel-hover animate-in">
         <CardContent className="pt-8 pb-6 px-6 sm:px-8">
           <div className="text-center">
             <div className="mx-auto mb-6 relative">
@@ -316,7 +319,7 @@ function WelcomeScreen({ onNewConversation, isCreating }: { onNewConversation: (
             </div>
 
             <h3 className="text-2xl font-bold text-foreground mb-2">Welcome to ALEX</h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+            <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
               Your AI-powered academic assistant with document-grounded RAG, multi-provider support, and real-time citations.
             </p>
 
@@ -334,6 +337,24 @@ function WelcomeScreen({ onNewConversation, isCreating }: { onNewConversation: (
                 <span className="text-sm">Multi-Provider</span>
               </div>
             </div>
+
+            {activeProvider && (
+              <div className="mb-6 p-4 rounded-xl bg-secondary border border-border/50 text-left">
+                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-2">Active Provider</p>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{activeProvider.name}</p>
+                    <p className="text-xs text-muted-foreground">{activeProvider.model}</p>
+                  </div>
+                  <span className="ml-auto px-2 py-1 text-xs font-medium rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
+                    Connected
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 mb-6">
               <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">Try asking:</p>

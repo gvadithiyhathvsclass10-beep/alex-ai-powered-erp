@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -98,9 +100,8 @@ export function AssistantRightPanel({
   return (
     <aside
       className={cn(
-        "fixed right-0 top-0 z-30 h-screen border-l bg-sidebar transition-all duration-300 ease-out flex flex-col",
-        "w-80 lg:w-80",
-        "lg:translate-x-0"
+        "h-screen border-l bg-sidebar transition-all duration-300 ease-out flex flex-col",
+        "w-80"
       )}
       aria-label="Utility panel"
     >
