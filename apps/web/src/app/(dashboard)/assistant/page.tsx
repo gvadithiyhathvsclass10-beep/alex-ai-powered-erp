@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book } from "lucide-react"
+import { usePathname } from "next/navigation"
 import { formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,7 @@ interface AIProvider {
 }
 
 export default function AssistantPage() {
+  const pathname = usePathname()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("chat")
   const [selectedConversation, setSelectedConversation] = React.useState<string | null>(null)
@@ -699,9 +701,6 @@ export default function AssistantPage() {
 // ============================================================================
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-
-const pathname = "/dashboard/assistant" // This will be overridden by the actual pathname in the component
 
 function NavSection({ title, children, collapsed }: { title: string; children: React.ReactNode; collapsed: boolean }) {
   if (collapsed) return null
@@ -749,6 +748,7 @@ function NavLink({ href, icon: Icon, label, badge, isActive, collapsed }: {
     </Link>
   )
 }
+
 
 function ConversationItem({ conversation, isActive, onClick, onDelete }: { 
   conversation: Conversation

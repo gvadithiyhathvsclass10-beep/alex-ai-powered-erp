@@ -21,7 +21,6 @@ import {
   Sparkles,
   Zap,
   FileText,
-  ExternalLink,
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -142,7 +141,7 @@ export function RAGChat({
     if (conversationData?.messages && Array.isArray(conversationData.messages)) {
       setMessages((prevMessages) => {
         // Only update if we have new data
-        const newMessages = conversationData.messages.map((m: { id: string; role: string; content: string; metadata?: any; createdAt?: string }) => ({
+        const newMessages = conversationData.messages.map((m: { id: string; role: string; content: string; metadata?: Record<string, unknown>; createdAt?: string }) => ({
           id: m.id,
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content,

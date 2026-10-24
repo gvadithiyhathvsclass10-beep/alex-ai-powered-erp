@@ -7,18 +7,14 @@ import {
   GraduationCap,
   Bot,
   Brain,
-  BookOpen,
   Calendar,
   Shield,
-  Users,
   ArrowRight,
   Sparkles,
   Zap,
   Target,
   FileText,
   FlaskConical,
-  FolderKanban,
-  CheckCircle2,
 } from "lucide-react"
 
 const features = [
@@ -295,19 +291,6 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* Global animations */}
-      <style jsx global>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.05); }
-        }
-        .animate-pulse-slow {
-          animation: pulse-slow 8s ease-in-out infinite;
-        }
-        .delay-1000 {
-          animation-delay: 1s;
-        }
-      `}</style>
-    </div>
+      </div>
   )
 }

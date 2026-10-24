@@ -30,7 +30,6 @@ import {
   Plus,
   Sparkles,
   Brain,
-  Zap,
 } from "lucide-react"
 
 interface NavItem {

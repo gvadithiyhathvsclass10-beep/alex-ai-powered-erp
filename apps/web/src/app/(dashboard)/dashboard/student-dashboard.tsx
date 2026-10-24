@@ -280,10 +280,10 @@ export function StudentDashboard({ user }: DashboardProps) {
                     </div>
                     <Progress 
                       value={subj.percentage} 
-                      className="h-2" 
-                      style={{ 
-                        '--progress-color': subj.percentage >= 75 ? '#22c55e' : subj.percentage >= 50 ? '#eab308' : '#ef4444' 
-                      }}
+                      className={cn("h-2", 
+                        subj.percentage >= 75 ? "bg-emerald-500" : 
+                        subj.percentage >= 50 ? "bg-amber-500" : "bg-red-500"
+                      )}
                     />
                   </div>
                 ))}

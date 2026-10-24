@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -13,15 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { cn, getInitials } from "@/lib/utils"
+import { getInitials } from "@/lib/utils"
 import {
-  Bell,
   LogOut,
   Moon,
   Settings,
   Sun,
   User,
-  ChevronDown,
   Bot,
   Zap,
 } from "lucide-react"
@@ -41,6 +39,7 @@ interface HeaderProps {
 
 export function Header({ user }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { theme, setTheme } = useTheme()
 
   // Get current page title from pathname
@@ -49,6 +48,10 @@ export function Header({ user }: HeaderProps) {
     if (segments.length <= 1) return "Dashboard"
     const last = segments[segments.length - 1]
     return last.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+  }
+
+  const handleLogout = () => {
+    router.push("/api/auth/logout")
   }
 
   return (
@@ -149,9 +152,7 @@ export function Header({ user }: HeaderProps) {
               <DropdownMenuSeparator className="border-border/50" />
               <DropdownMenuItem
                 className="flex w-full items-center gap-2 px-2 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 rounded-lg -mx-2 focus:text-destructive"
-                onClick={() => {
-                  window.location.href = "/api/auth/logout"
-                }}
+                onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4" />
                 <span>Log out</span>
