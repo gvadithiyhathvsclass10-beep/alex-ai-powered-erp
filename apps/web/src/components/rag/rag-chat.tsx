@@ -222,13 +222,18 @@ export function RAGChat({
     },
     onError: (error) => {
       const detail = error instanceof Error ? error.message : "Failed to send message"
+      // Keep provider failures visible in the conversation, not only in a transient toast.
       setMessages((prev) => [...prev, {
         id: `error-${Date.now()}`,
         role: "assistant",
-        content: `I couldn't get a response from the AI provider. ${detail} Check AI Settings to confirm the API key and selected model, then try again.`,
+        content: `I couldn't generate a response. ${detail}`,
         createdAt: new Date().toISOString(),
       }])
-      toast({ title: "AI response failed", description: detail, variant: "destructive" })
+      toast({
+        title: "AI response failed",
+        description: detail,
+        variant: "destructive",
+      })
     },
     onSettled: () => {
       setIsLoading(false)
@@ -259,7 +264,7 @@ export function RAGChat({
   }
 
   return (
-    <Card className="flex min-h-0 h-full flex-col panel">
+    <Card className="flex min-h-0 flex-col h-full overflow-hidden panel">
       <CardHeader className="pb-3 border-b border-border/50">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -315,7 +320,7 @@ export function RAGChat({
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col min-h-0">
-        <ScrollArea className="flex-1 pr-2">
+        <ScrollArea className="min-h-0 flex-1 pr-2">
           <div className="space-y-4 pb-4">
             {isLoadingHistory ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">

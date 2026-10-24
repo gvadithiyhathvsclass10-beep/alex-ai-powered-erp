@@ -22,7 +22,6 @@ export interface UploadedDocumentInfo {
   status: string
   pageCount?: number | null
   chunksCount?: number
-  searchMode?: "hybrid" | "keyword-only"
 }
 
 interface DocumentUploadProps {
@@ -284,7 +283,7 @@ export function DocumentUpload({
         setProgress(prev => ({ ...prev, [file.name]: 100 }))
         setStageLabels(prev => ({
           ...prev,
-          [file.name]: `Ready (${doc.chunksCount ?? 1} chunks${doc.pageCount ? `, ${doc.pageCount}p` : ""}${doc.searchMode === "keyword-only" ? ", keyword search" : ""})`,
+          [file.name]: `Ready (${doc.chunksCount ?? 1} chunks${doc.pageCount ? `, ${doc.pageCount}p` : ""})`,
         }))
         newlyCompleted.push(doc)
         onSuccess?.(doc)
@@ -304,7 +303,7 @@ export function DocumentUpload({
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })
       toast({
         title: `Processed ${newlyCompleted.length} document${newlyCompleted.length > 1 ? "s" : ""}`,
-        description: `${newlyCompleted.map(d => d.title).join(", ")} ready for AI analysis and search. If embeddings are unavailable, keyword search remains enabled.`,
+        description: `${newlyCompleted.map(d => d.title).join(", ")} ready for AI analysis and search.`,
       })
     }
 

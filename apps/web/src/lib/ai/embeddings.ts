@@ -272,18 +272,15 @@ export async function getUserEmbeddingProvider(
     orderBy: { updatedAt: 'desc' },
   })
 
-  // Chat providers such as NVIDIA and Groq may not support embeddings. A stale or
-  // accidentally selected chat config must not block document uploads when the user
-  // also has a valid OpenAI, Gemini, or Mistral credential available.
-  const explicitProvider = provider && provider !== 'MOCK'
+  const requestedProvider = provider && provider !== 'MOCK'
     ? provider as PrismaAIProviderType
-    : undefined
-  const configuredProvider = embeddingConfig?.provider
-  const requestedProvider = explicitProvider && EMBEDDING_CAPABLE_PROVIDERS.includes(explicitProvider)
-    ? explicitProvider
-    : configuredProvider && EMBEDDING_CAPABLE_PROVIDERS.includes(configuredProvider)
-      ? configuredProvider
-      : undefined
+    : embeddingConfig?.provider
+
+  if (requestedProvider && !EMBEDDING_CAPABLE_PROVIDERS.includes(requestedProvider)) {
+    throw new Error(
+      `The configured ${requestedProvider} provider does not support embeddings in this application. Configure an embeddings model with OpenAI, Google Gemini, or Mistral in AI Settings.`
+    )
+  }
 
   const allowedProviders = requestedProvider
     ? [requestedProvider]

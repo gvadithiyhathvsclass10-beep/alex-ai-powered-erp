@@ -4,7 +4,6 @@ import * as React from "react"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { ReactNode } from 'react'
-import { usePathname } from 'next/navigation'
 import { AIAvatar } from '@/components/ai/Avatar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
@@ -16,7 +15,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [queryClient] = React.useState(
     () =>
@@ -31,17 +29,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   )
 
   const userRole = user?.role || 'STUDENT'
-
-  // The Assistant owns its workspace layout. Do not wrap it in the global
-  // dashboard sidebar/header as that creates nested, overlapping shells.
-  if (pathname.startsWith('/dashboard/assistant')) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>{children}</TooltipProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
-    )
-  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -93,7 +80,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </TooltipProvider>
 
             {/* Page content */}
-            <main className="min-w-0 p-4 sm:p-6 lg:p-8 pt-4">
+            <main className="p-4 sm:p-6 lg:p-8 pt-4">
               <div className="container-responsive">
                 {children}
               </div>

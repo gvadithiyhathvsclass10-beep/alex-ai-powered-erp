@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { User, Shield, Key, Bot, Sparkles, Bell, Palette, Database, Globe, Save, Loader2, XCircle } from "lucide-react"
+import { Shield, Bell, Palette, Database, Globe, Save, Loader2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 
@@ -25,16 +25,6 @@ interface UserProfile {
   createdAt: string
 }
 
-interface AICredential {
-  id: string
-  provider: string
-  providerName: string
-  isActive: boolean
-  isDefault: boolean
-  models: Record<string, unknown> | null
-  usageCount: number
-  lastUsedAt: string | null
-}
 
 interface NotificationPreference {
   category: string
@@ -57,23 +47,7 @@ export default function SettingsPage() {
     },
   })
 
-  const { data: aiCredentials } = useQuery({
-    queryKey: ['ai-credentials'],
-    queryFn: async () => {
-      const res = await fetch('/api/ai/credentials')
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
-  })
 
-  const { data: notifPrefs } = useQuery({
-    queryKey: ['notification-preferences'],
-    queryFn: async () => {
-      const res = await fetch('/api/notifications/preferences')
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
-  })
 
   const updateProfile = useMutation({
     mutationFn: async (data: Partial<UserProfile>) => {
@@ -92,35 +66,7 @@ export default function SettingsPage() {
     onError: () => toast({ title: "Error", description: "Failed to update profile", variant: "destructive" }),
   })
 
-  const addCredential = useMutation({
-    mutationFn: async (data: { provider: string; providerName: string; apiKey: string }) => {
-      const res = await fetch('/api/ai/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) throw new Error('Failed to add')
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-credentials'] })
-      toast({ title: "API key added" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to add API key", variant: "destructive" }),
-  })
 
-  const deleteCredential = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/ai/credentials/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete')
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-credentials'] })
-      toast({ title: "API key removed" })
-    },
-    onError: () => toast({ title: "Error", description: "Failed to remove API key", variant: "destructive" }),
-  })
 
   return (
     <div className="space-y-6">
@@ -132,7 +78,6 @@ export default function SettingsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="ai">AI Providers</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
@@ -211,112 +156,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="ai" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-5 w-5" />
-                AI Provider Configuration
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Add your API keys to enable AI features. Keys are encrypted and stored securely.</p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], color: '#00a67e' },
-                  { id: 'google_gemini', name: 'Google Gemini', models: ['gemini-1.5-pro', 'gemini-1.5-flash'], color: '#4285f4' },
-                  { id: 'anthropic', name: 'Anthropic', models: ['claude-3-5-sonnet', 'claude-3-opus'], color: '#d4a843' },
-                  { id: 'mistral', name: 'Mistral', models: ['mistral-large', 'mistral-medium'], color: '#ff5722' },
-                  { id: 'groq', name: 'Groq', models: ['llama-3.1-70b', 'mixtral-8x7b'], color: '#f55036' },
-                  { id: 'openrouter', name: 'OpenRouter', models: ['various'], color: '#3b82f6' },
-                  { id: 'nvidia_nemotron', name: 'NVIDIA Nemotron', models: ['nvidia/nemotron-3-ultra', 'nvidia/nemotron-3-ultra-550b-a55b'], color: '#76b900' },
-                ].map(provider => {
-                  const credsList: AICredential[] = Array.isArray(aiCredentials) ? aiCredentials : (aiCredentials?.credentials || [])
-                  const cred = credsList.find((c: AICredential) => c.provider.toLowerCase() === provider.id.toLowerCase())
-                  return (
-                    <div key={provider.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white" style={{ backgroundColor: provider.color }}>
-                          <Bot className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{provider.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Models: {provider.models.join(', ')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {cred ? (
-                          <>
-                            <Badge variant={cred.isActive ? 'success' : 'secondary'}>
-                              {cred.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
-                            <Button variant="ghost" size="icon" onClick={() => deleteCredential.mutate(cred.id)}>
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <Button variant="outline" size="sm" asChild>
-                            <a href="/dashboard/ai-settings">
-                              <Key className="mr-2 h-4 w-4" />
-                              Add API Key
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
-                Model Preferences
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label>Default Chat Model</Label>
-                  <Select>
-                    <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                      <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
-                      <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Default Embedding Model</Label>
-                  <Select>
-                    <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text-embedding-3-small">text-embedding-3-small</SelectItem>
-                      <SelectItem value="text-embedding-3-large">text-embedding-3-large</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Default Image Model</Label>
-                  <Select>
-                    <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dall-e-3">DALL-E 3</SelectItem>
-                      <SelectItem value="gpt-image-1">GPT Image</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="notifications" className="mt-4 space-y-6">
           <Card>

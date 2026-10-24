@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book } from "lucide-react"
 import { formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -44,9 +43,8 @@ export default function AssistantPage() {
   const [selectedConversation, setSelectedConversation] = React.useState<string | null>(null)
   const [newConversationTitle, setNewConversationTitle] = React.useState("")
   const [isCreatingNew, setIsCreatingNew] = React.useState(false)
-  const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
-  const [leftPanelOpen, setLeftPanelOpen] = React.useState(false)
-  const [selectedProviderId, setSelectedProviderId] = React.useState<string>("")
+  const [rightPanelOpen, setRightPanelOpen] = React.useState(true)
+  const [leftPanelOpen, setLeftPanelOpen] = React.useState(true)
 
   const {
     data: conversationsData,
@@ -70,45 +68,16 @@ export default function AssistantPage() {
     ? conversationsData
     : conversationsData?.conversations || []
 
-  const { data: providersData, isLoading: providersLoading } = useQuery({
+  const { data: providersData } = useQuery({
     queryKey: ["ai-providers"],
     queryFn: async () => {
-      // Credentials and model configurations are separate APIs. The credentials API
-      // returns providerName/provider, not name/model; treating it as a model list
-      // made the dashboard selector blank and sent credential IDs as provider IDs.
-      const [credentialsResponse, modelsResponse] = await Promise.all([
-        fetch("/api/ai/credentials"),
-        fetch("/api/ai/models"),
-      ])
-      if (!credentialsResponse.ok) throw new Error("Failed to fetch AI credentials")
-      const credentialsPayload = await credentialsResponse.json()
-      const modelConfigs = modelsResponse.ok ? await modelsResponse.json() : []
-      const credentials = Array.isArray(credentialsPayload)
-        ? credentialsPayload
-        : credentialsPayload?.credentials || []
-      const chatConfigs = Array.isArray(modelConfigs)
-        ? modelConfigs.filter((item: any) => item.taskType === "chat")
-        : []
-      const seen = new Set<string>()
-      return credentials
-        .filter((credential: any) => credential.isActive && !seen.has(credential.provider) && seen.add(credential.provider))
-        .map((credential: any) => {
-          const config = chatConfigs.find((item: any) => item.provider === credential.provider && item.isDefault)
-            || chatConfigs.find((item: any) => item.provider === credential.provider)
-          return {
-            id: credential.provider,
-            name: credential.providerName || credential.provider,
-            model: config?.modelId || "Choose a model in AI Settings",
-            isActive: credential.isActive,
-            isDefault: chatConfigs.some((item: any) => item.isDefault)
-              ? Boolean(config?.isDefault)
-              : Boolean(credential.isDefault),
-          }
-        })
+      const res = await fetch("/api/ai/credentials")
+      if (!res.ok) throw new Error("Failed to fetch providers")
+      return res.json()
     },
   })
 
-  const providers: AIProvider[] = Array.isArray(providersData) ? providersData : []
+  const providers: AIProvider[] = Array.isArray(providersData) ? providersData : providersData?.credentials || []
 
   const { data: documentsData, isLoading: docsLoading } = useQuery({
     queryKey: ["documents", "assistant"],
@@ -151,76 +120,23 @@ export default function AssistantPage() {
       }),
   })
 
-  const updateProviderConfig = useMutation({
-    mutationFn: async (data: { provider: string; modelId: string; taskType: string; isDefault: boolean }) => {
-      const res = await fetch("/api/ai/models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || "Failed to update model config")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ai-model-configs"] })
-      queryClient.invalidateQueries({ queryKey: ["ai-providers"] })
-      toast({ title: "Model configuration updated" })
-    },
-    onError: (err) =>
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to update model config",
-        variant: "destructive",
-      }),
-  })
 
   const handleNewConversation = () => {
     const title = newConversationTitle.trim() || "New Conversation"
     createConversation.mutate(title)
   }
 
-  const handleProviderChange = async (providerId: string) => {
-    const provider = providers.find(p => p.id === providerId)
-    if (!provider) return
-    if (!provider.model || provider.model === "Choose a model in AI Settings") {
-      toast({
-        title: "Choose a model first",
-        description: `Open AI Settings to select a chat model for ${provider.name}.`,
-      })
-      router.push("/dashboard/ai-settings")
-      return
-    }
-
-    try {
-      await updateProviderConfig.mutateAsync({
-        provider: providerId,
-        modelId: provider.model,
-        taskType: "chat",
-        isDefault: true,
-      })
-      setSelectedProviderId(providerId)
-      toast({ title: "Model updated", description: `Now using ${provider.name} (${provider.model})` })
-    } catch {
-      // The mutation displays the server's error toast; don't change the selected model.
-    }
-  }
 
   const activeProvider = providers.find(p => p.isDefault) || providers[0]
 
   return (
     <div className="flex h-[100dvh] min-h-0 bg-background overflow-hidden">
-      {/* Mobile drawer backdrop: keep the chat usable on narrow screens. */}
-      {leftPanelOpen && (
-        <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setLeftPanelOpen(false)} />
-      )}
       {/* LEFT PANEL - Navigation & Conversation History */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 h-[100dvh] min-h-0 border-r bg-sidebar transition-transform duration-300 ease-out flex flex-col w-[min(20rem,88vw)] lg:w-80",
-          leftPanelOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-16"
+          "fixed left-0 top-0 z-40 h-screen border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
+          leftPanelOpen ? "w-80 lg:w-80" : "w-16 lg:w-16",
+          "lg:translate-x-0"
         )}
         aria-label="Navigation & conversations"
       >
@@ -456,49 +372,21 @@ export default function AssistantPage() {
 
       {/* MAIN CONTENT AREA */}
       <main className={cn(
-        "min-w-0 min-h-0 h-full flex-1 flex flex-col transition-all duration-300",
-        leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
+        "flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden transition-all duration-300",
+        leftPanelOpen ? "lg:pl-80" : "lg:pl-16"
       )}>
-        {/* Top Bar with Provider Selector */}
+        {/* Top Bar — provider and model are selected automatically */}
         <div className="flex h-14 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-background/80 backdrop-blur">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-            <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setLeftPanelOpen(true)} aria-label="Open navigation"><MessageSquare className="h-5 w-5" /></Button>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <h1 className="text-xl font-semibold text-foreground">AI Assistant</h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
+              <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
                 RAG Enabled
               </span>
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Provider Selector */}
-              <div className="hidden sm:flex items-center gap-2">
-                <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Model</Label>
-                <Select value={selectedProviderId || activeProvider?.id || ""} onValueChange={handleProviderChange}>
-                  <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{p.name}</span>
-                          <span className="text-xs text-muted-foreground">{p.model}</span>
-                          {p.isDefault && (
-                            <CheckCircle2 className="h-3 w-3 text-primary" />
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {providers.length === 0 && (
-                      <SelectItem value="" disabled>
-                        No providers configured
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
+              {/* Automatically uses the active default credential/model. */}
               {/* Connection Status */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50">
                 <div className={cn(
@@ -525,8 +413,8 @@ export default function AssistantPage() {
         </div>
 
         {/* Chat Workspace */}
-        <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <TabsList className="border-b border-border/50 bg-background/50">
               <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Bot className="h-4 w-4" />
@@ -542,9 +430,9 @@ export default function AssistantPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="chat" className="min-h-0 flex-1 flex flex-col overflow-hidden">
+            <TabsContent value="chat" className="flex-1 min-h-0 flex flex-col overflow-hidden">
               {selectedConversation ? (
-                <div className="min-h-0 flex-1 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   <RAGChat
                     conversationId={selectedConversation}
                     onConversationCreated={(id) => setSelectedConversation(id)}

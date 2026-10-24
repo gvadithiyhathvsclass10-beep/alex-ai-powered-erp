@@ -55,7 +55,7 @@ export function decodeEmbeddingFromBytes(bytes?: Buffer | Uint8Array | null): nu
 
 export async function processDocument(
   context: ProcessingContext
-): Promise<{ status: DocumentStatus; pageCount: number; chunksCount: number; tokenCount: number; searchMode: 'hybrid' | 'keyword-only' }> {
+): Promise<{ status: DocumentStatus; pageCount: number; chunksCount: number; tokenCount: number }> {
   const { documentId, userId, fileBuffer, mimeType, documentType } = context
 
   try {
@@ -91,25 +91,16 @@ export async function processDocument(
 
     await updateStatus(documentId, DocumentStatus.EMBEDDING)
 
-    // Embeddings improve semantic retrieval, but should not make file upload unusable
-    // for users whose chat provider has no embeddings endpoint. In that case, store
-    // searchable text chunks without vectors and let hybridSearch use keyword search.
-    let embeddingProvider: Awaited<ReturnType<typeof getUserEmbeddingProvider>> | null = null
-    let embeddings: number[][] = []
-    let tokenCount = 0
-    try {
-      embeddingProvider = await getUserEmbeddingProvider(userId)
-      if (embeddingProvider && chunks.length > 0) {
-        const result = await embeddingProvider.provider.generateEmbeddings(chunks.map(c => c.content))
-        embeddings = result.embeddings
-        tokenCount = result.tokenCount
-      }
-    } catch (embeddingError) {
-      console.warn('[Document Pipeline] Embeddings unavailable; using keyword-only indexing:', embeddingError)
-      embeddingProvider = null
-      embeddings = []
-      tokenCount = 0
+    const embeddingProvider = await getUserEmbeddingProvider(userId)
+    if (!embeddingProvider) {
+      throw new Error('No embedding provider configured for user')
     }
+
+    const chunkTexts = chunks.map(c => c.content)
+    const { embeddings, tokenCount } =
+      chunkTexts.length > 0
+        ? await embeddingProvider.provider.generateEmbeddings(chunkTexts)
+        : { embeddings: [] as number[][], tokenCount: 0 }
 
     await prisma.document.update({
       where: { id: documentId },
@@ -127,7 +118,7 @@ export async function processDocument(
         const embeddingBytes = embedding.length > 0 ? encodeEmbeddingToBytes(embedding) : null
         const chunkMetadata = {
           ...(chunk.metadata || {}),
-          ...(embedding.length > 0 && embeddingProvider ? { embeddingModel: embeddingProvider.model } : {}),
+          ...(embedding.length > 0 ? { embeddingModel: embeddingProvider.model } : {}),
         }
 
         await tx.documentChunk.create({
@@ -161,12 +152,7 @@ export async function processDocument(
         step: 'completed',
         status: DocumentStatus.READY,
         completedAt: processedAt,
-        metadata: {
-          chunksCreated: chunks.length,
-          tokensUsed: tokenCount,
-          pageCount,
-          searchMode: embeddingProvider ? 'hybrid' : 'keyword-only',
-        },
+        metadata: { chunksCreated: chunks.length, tokensUsed: tokenCount, pageCount },
       },
     })
 
@@ -175,7 +161,6 @@ export async function processDocument(
       pageCount,
       chunksCount: chunks.length,
       tokenCount,
-      searchMode: embeddingProvider ? 'hybrid' : 'keyword-only',
     }
   } catch (error) {
     console.error('[Document Pipeline] Processing error:', error)

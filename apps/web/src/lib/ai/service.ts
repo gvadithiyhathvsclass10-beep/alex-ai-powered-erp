@@ -1293,7 +1293,15 @@ export async function saveUserAICredential(input: {
     validatedModels.push(meta.defaultChatModel)
   }
 
-  if (input.isDefault) {
+  // The first saved credential becomes the default automatically. Users should not
+  // have to configure a separate provider/model selector just to start chatting.
+  const existingDefaultCredential = await prisma.aICredential.findFirst({
+    where: { userId: input.userId, isActive: true, isDefault: true },
+    select: { id: true },
+  })
+  const shouldBeDefault = Boolean(input.isDefault) || !existingDefaultCredential
+
+  if (shouldBeDefault) {
     await prisma.aICredential.updateMany({
       where: { userId: input.userId, isDefault: true },
       data: { isDefault: false },
@@ -1311,7 +1319,7 @@ export async function saveUserAICredential(input: {
       encryptedKey,
       keyHash,
       models: validatedModels,
-      isDefault: Boolean(input.isDefault),
+      isDefault: shouldBeDefault,
       usageLimit: input.usageLimit ? Number(input.usageLimit) : null,
       isActive: true,
     },
@@ -1329,7 +1337,13 @@ export async function saveUserAICredential(input: {
     const existing = await prisma.aIModelConfig.findFirst({
       where: { userId: input.userId, taskType, isDefault: true },
     })
-    if (!existing) {
+    if (!existing || (shouldBeDefault && taskType === 'chat')) {
+      if (existing && shouldBeDefault && taskType === 'chat') {
+        await prisma.aIModelConfig.updateMany({
+          where: { userId: input.userId, taskType: 'chat', isDefault: true },
+          data: { isDefault: false },
+        })
+      }
       await prisma.aIModelConfig.create({
         data: {
           userId: input.userId,
