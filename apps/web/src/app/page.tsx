@@ -178,7 +178,7 @@ export default function LandingPage() {
 
         {/* How It Works */}
         <section id="how-it-works" className="container mx-auto px-4 py-20 md:py-28 relative">
-          <div className="absolute inset-0 bg-gradient-radial pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-radial pointer-events-none -z-10" />
           <div className="relative text-center mb-16 animate-in">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-4 py-1.5 rounded-full mb-4">
               <Target className="h-4 w-4" />
@@ -215,10 +215,10 @@ export default function LandingPage() {
 
         {/* CTA Section */}
         <section className="container mx-auto px-4 py-20 md:py-28 text-center relative">
-          <div className="absolute inset-0 bg-gradient-radial pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-radial pointer-events-none -z-10" />
           <div className="relative max-w-3xl mx-auto animate-in">
             <div className="panel p-8 md:p-12 rounded-2xl border border-primary/20 bg-gradient-subtle relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5" />
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 -z-10" />
               <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6 relative">Ready to Transform Your Academic Life?</h2>
               <p className="text-xl text-muted-foreground mb-8 relative">
                 Join thousands of students and educators using ALEX to study smarter, research faster, and achieve more.

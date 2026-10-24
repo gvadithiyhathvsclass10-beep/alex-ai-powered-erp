@@ -10,14 +10,13 @@ import { AssistantHeader } from '@/components/layout/assistant-header'
 import { AssistantRightPanel } from '@/components/layout/assistant-right-panel'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { Menu, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function AssistantLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [leftPanelOpen, setLeftPanelOpen] = React.useState(true)
   const [rightPanelOpen, setRightPanelOpen] = React.useState(true)
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = React.useState(false)
   const [queryClient] = React.useState(
     () =>
       new QueryClient({
@@ -35,20 +34,27 @@ export default function AssistantLayout({ children }: { children: React.ReactNod
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen bg-background flex">
-          {/* Left Panel - Navigation & Conversation History */}
-          <AssistantSidebar 
-            userRole={userRole} 
-            isOpen={leftPanelOpen} 
-          />
-
-          {/* Main Content Area */}
+        <div className="min-h-screen bg-background">
+          {/* Three-panel grid layout: Left sidebar | Center content | Right panel */}
           <div className={cn(
-            "flex-1 flex flex-col min-w-0 transition-all duration-300",
-            leftPanelOpen ? "lg:pl-80" : "lg:pl-16"
+            "grid h-screen",
+            leftPanelOpen 
+              ? (leftPanelCollapsed ? "lg:grid-cols-[64px_1fr_320px]" : "lg:grid-cols-[280px_1fr_320px]")
+              : "lg:grid-cols-[0_1fr_320px]",
+            rightPanelOpen ? "" : "lg:grid-cols-[280px_1fr_0]"
           )}>
-            {/* Header with mobile menu button */}
-            <TooltipProvider>
+            {/* Left Panel - Navigation & Conversation History */}
+            <AssistantSidebar 
+              userRole={userRole} 
+              isOpen={leftPanelOpen}
+              collapsed={leftPanelCollapsed}
+              onToggleCollapse={setLeftPanelCollapsed}
+              onClose={() => setLeftPanelOpen(false)}
+            />
+
+            {/* Center Content Area */}
+            <div className="flex flex-col min-w-0 lg:min-w-0">
+              {/* Header */}
               <AssistantHeader 
                 user={{ 
                   id: user?.id || '', 
@@ -59,22 +65,38 @@ export default function AssistantLayout({ children }: { children: React.ReactNod
                   role: userRole 
                 }} 
               />
-            </TooltipProvider>
 
-            {/* Page content */}
-            <main className="flex-1 flex flex-col min-w-0">
-              {children}
-            </main>
+              {/* Page content */}
+              <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                {children}
+              </main>
+            </div>
+
+            {/* Right Panel - Utility Panel */}
+            <AssistantRightPanel 
+              isOpen={rightPanelOpen} 
+              onToggle={setRightPanelOpen} 
+            />
+
+            {/* Mobile drawer overlays */}
+            {leftPanelOpen && (
+              <div 
+                className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                onClick={() => setLeftPanelOpen(false)}
+                aria-hidden="true"
+              />
+            )}
+            {rightPanelOpen && (
+              <div 
+                className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                onClick={() => setRightPanelOpen(false)}
+                aria-hidden="true"
+              />
+            )}
+
+            {/* Floating AI Avatar */}
+            <AIAvatar />
           </div>
-
-          {/* Right Panel - Utility Panel */}
-          <AssistantRightPanel 
-            isOpen={rightPanelOpen} 
-            onToggle={setRightPanelOpen} 
-          />
-
-          {/* Floating AI Avatar */}
-          <AIAvatar />
         </div>
       </TooltipProvider>
       <ReactQueryDevtools initialIsOpen={false} />
