@@ -221,11 +221,14 @@ export function RAGChat({
       }
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message",
-        variant: "destructive",
-      })
+      const detail = error instanceof Error ? error.message : "Failed to send message"
+      setMessages((prev) => [...prev, {
+        id: `error-${Date.now()}`,
+        role: "assistant",
+        content: `I couldn't get a response from the AI provider. ${detail} Check AI Settings to confirm the API key and selected model, then try again.`,
+        createdAt: new Date().toISOString(),
+      }])
+      toast({ title: "AI response failed", description: detail, variant: "destructive" })
     },
     onSettled: () => {
       setIsLoading(false)
@@ -256,7 +259,7 @@ export function RAGChat({
   }
 
   return (
-    <Card className="flex flex-col h-full panel">
+    <Card className="flex min-h-0 h-full flex-col panel">
       <CardHeader className="pb-3 border-b border-border/50">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">

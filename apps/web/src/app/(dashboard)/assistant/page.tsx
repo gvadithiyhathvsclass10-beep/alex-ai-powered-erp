@@ -73,13 +73,42 @@ export default function AssistantPage() {
   const { data: providersData, isLoading: providersLoading } = useQuery({
     queryKey: ["ai-providers"],
     queryFn: async () => {
-      const res = await fetch("/api/ai/credentials")
-      if (!res.ok) throw new Error("Failed to fetch providers")
-      return res.json()
+      // Credentials and model configurations are separate APIs. The credentials API
+      // returns providerName/provider, not name/model; treating it as a model list
+      // made the dashboard selector blank and sent credential IDs as provider IDs.
+      const [credentialsResponse, modelsResponse] = await Promise.all([
+        fetch("/api/ai/credentials"),
+        fetch("/api/ai/models"),
+      ])
+      if (!credentialsResponse.ok) throw new Error("Failed to fetch AI credentials")
+      const credentialsPayload = await credentialsResponse.json()
+      const modelConfigs = modelsResponse.ok ? await modelsResponse.json() : []
+      const credentials = Array.isArray(credentialsPayload)
+        ? credentialsPayload
+        : credentialsPayload?.credentials || []
+      const chatConfigs = Array.isArray(modelConfigs)
+        ? modelConfigs.filter((item: any) => item.taskType === "chat")
+        : []
+      const seen = new Set<string>()
+      return credentials
+        .filter((credential: any) => credential.isActive && !seen.has(credential.provider) && seen.add(credential.provider))
+        .map((credential: any) => {
+          const config = chatConfigs.find((item: any) => item.provider === credential.provider && item.isDefault)
+            || chatConfigs.find((item: any) => item.provider === credential.provider)
+          return {
+            id: credential.provider,
+            name: credential.providerName || credential.provider,
+            model: config?.modelId || "Choose a model in AI Settings",
+            isActive: credential.isActive,
+            isDefault: chatConfigs.some((item: any) => item.isDefault)
+              ? Boolean(config?.isDefault)
+              : Boolean(credential.isDefault),
+          }
+        })
     },
   })
 
-  const providers: AIProvider[] = Array.isArray(providersData) ? providersData : providersData?.credentials || []
+  const providers: AIProvider[] = Array.isArray(providersData) ? providersData : []
 
   const { data: documentsData, isLoading: docsLoading } = useQuery({
     queryKey: ["documents", "assistant"],
@@ -156,27 +185,37 @@ export default function AssistantPage() {
   const handleProviderChange = async (providerId: string) => {
     const provider = providers.find(p => p.id === providerId)
     if (!provider) return
-    
-    // Update the default model config for chat to use this provider
-    await updateProviderConfig.mutateAsync({
-      provider: providerId,
-      modelId: provider.model,
-      taskType: "chat",
-      isDefault: true,
-    })
-    
-    setSelectedProviderId(providerId)
-    toast({ title: "Provider updated", description: `Now using ${provider.name} (${provider.model})` })
+    if (!provider.model || provider.model === "Choose a model in AI Settings") {
+      toast({
+        title: "Choose a model first",
+        description: `Open AI Settings to select a chat model for ${provider.name}.`,
+      })
+      router.push("/dashboard/ai-settings")
+      return
+    }
+
+    try {
+      await updateProviderConfig.mutateAsync({
+        provider: providerId,
+        modelId: provider.model,
+        taskType: "chat",
+        isDefault: true,
+      })
+      setSelectedProviderId(providerId)
+      toast({ title: "Model updated", description: `Now using ${provider.name} (${provider.model})` })
+    } catch {
+      // The mutation displays the server's error toast; don't change the selected model.
+    }
   }
 
   const activeProvider = providers.find(p => p.isDefault) || providers[0]
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-[100dvh] min-h-0 bg-background overflow-hidden">
       {/* LEFT PANEL - Navigation & Conversation History */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 h-screen border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
+          "fixed left-0 top-0 z-40 h-[100dvh] min-h-0 border-r bg-sidebar transition-all duration-300 ease-out flex flex-col",
           leftPanelOpen ? "w-80 lg:w-80" : "w-16 lg:w-16",
           "lg:translate-x-0"
         )}
@@ -414,7 +453,7 @@ export default function AssistantPage() {
 
       {/* MAIN CONTENT AREA */}
       <main className={cn(
-        "min-w-0 flex-1 flex flex-col transition-all duration-300",
+        "min-w-0 min-h-0 h-full flex-1 flex flex-col transition-all duration-300",
         leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
       )}>
         {/* Top Bar with Provider Selector */}
@@ -482,8 +521,8 @@ export default function AssistantPage() {
         </div>
 
         {/* Chat Workspace */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 flex flex-col">
             <TabsList className="border-b border-border/50 bg-background/50">
               <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Bot className="h-4 w-4" />
@@ -499,9 +538,9 @@ export default function AssistantPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="chat" className="flex-1 flex flex-col overflow-hidden">
+            <TabsContent value="chat" className="min-h-0 flex-1 flex flex-col overflow-hidden">
               {selectedConversation ? (
-                <div className="flex-1 flex flex-col">
+                <div className="min-h-0 flex-1 flex flex-col">
                   <RAGChat
                     conversationId={selectedConversation}
                     onConversationCreated={(id) => setSelectedConversation(id)}

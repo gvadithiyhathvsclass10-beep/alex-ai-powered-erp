@@ -93,7 +93,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </TooltipProvider>
 
             {/* Page content */}
-            <main className="p-4 sm:p-6 lg:p-8 pt-4">
+            <main className="min-w-0 p-4 sm:p-6 lg:p-8 pt-4">
               <div className="container-responsive">
                 {children}
               </div>

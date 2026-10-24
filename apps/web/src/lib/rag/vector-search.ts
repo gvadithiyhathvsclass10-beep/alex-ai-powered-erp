@@ -78,12 +78,14 @@ function buildAccessibleDocumentWhere(options: SearchOptions): Prisma.DocumentWh
 export async function vectorSearch(options: SearchOptions): Promise<SearchResult[]> {
   const { query, userId, limit = 10, threshold = 0.5 } = options
 
-  const embeddingProvider = await getUserEmbeddingProvider(userId)
-  if (!embeddingProvider) {
-    return []
-  }
-
   try {
+    // Chat must still work when the user has configured a chat-only provider (for
+    // example NVIDIA/Groq) but has not configured a separate embeddings provider.
+    // In that case hybridSearch can continue with keyword results instead of failing
+    // the entire chat request before generation starts.
+    const embeddingProvider = await getUserEmbeddingProvider(userId)
+    if (!embeddingProvider) return []
+
     const { embeddings } = await embeddingProvider.provider.generateEmbeddings([query])
     const queryEmbedding = embeddings[0]
     if (!queryEmbedding || queryEmbedding.length === 0) return []
