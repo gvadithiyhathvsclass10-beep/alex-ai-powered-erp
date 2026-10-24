@@ -2,7 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { hybridSearch, type SearchResult } from '@/lib/rag/vector-search'
-import { getUserChatProvider, type AIProviderType } from '@/lib/rag/generation'
+import { getUserChatProvider, type AIProviderType, extractCitationsFromText } from '@/lib/rag/generation'
 import { canAccessDocument } from '@/lib/document-processing/access'
 import { formatAIServiceErrorResponse } from '@/lib/ai/service'
 
@@ -323,6 +323,9 @@ Guidelines:
 
     if (stream && 'generateStream' in chatProvider && typeof chatProvider.generateStream === 'function') {
       const encoder = new TextEncoder()
+      let accumulatedAnswer = ''
+      let conversationSaved = false
+      
       const readable = new ReadableStream({
         async start(controller) {
           try {
@@ -331,9 +334,112 @@ Guidelines:
               context: effectiveContextForGeneration,
               systemPrompt: fullSystemPrompt,
             })) {
+              accumulatedAnswer += chunk
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`))
             }
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', citations: [] })}\n\n`))
+            
+            // Generate citations from accumulated answer
+            const answerIndicatesUnsupported =
+              /not supported by (?:the )?(?:provided |uploaded )?(?:notebook )?sources|no matching evidence was found|sources do not (?:contain|mention)|not mentioned in (?:the )?(?:provided )?sources/i.test(
+                accumulatedAnswer
+              )
+
+            const isSourceSupported = Boolean(
+              hasRelevantSourceEvidence && !answerIndicatesUnsupported && effectiveContextForGeneration.length > 0
+            )
+
+            let finalCitations = isSourceSupported 
+              ? extractCitationsFromText(accumulatedAnswer, effectiveContextForGeneration) 
+              : []
+            
+            if (isSourceSupported && finalCitations.length === 0 && effectiveContextForGeneration.length > 0) {
+              const topSource = effectiveContextForGeneration[0]
+              finalCitations = [{
+                id: topSource.id,
+                documentId: topSource.documentId,
+                documentTitle: topSource.document.title,
+                pageNumber: topSource.pageNumber ?? null,
+                sectionTitle: topSource.sectionTitle ?? null,
+                excerpt: topSource.content.slice(0, 200) + (topSource.content.length > 200 ? '...' : ''),
+                relevanceScore: topSource.similarity,
+              }]
+            }
+
+            const groundingStatus: 'SUPPORTED' | 'UNSUPPORTED' | 'NO_SOURCES' = searchResults.length === 0
+              ? 'NO_SOURCES'
+              : isSourceSupported ? 'SUPPORTED' : 'UNSUPPORTED'
+
+            const groundingNote =
+              groundingStatus === 'SUPPORTED'
+                ? `Grounded in ${finalCitations.length} cited source${finalCitations.length === 1 ? '' : 's'} (${[...new Set(finalCitations.map(c => `${c.documentTitle}${c.pageNumber ? ` p.${c.pageNumber}` : ''}${c.sectionTitle ? ` · ${c.sectionTitle}` : ''}`))].join(', ')}).`
+                : groundingStatus === 'NO_SOURCES'
+                  ? 'No processed sources are available in this scope — response is not backed by uploaded source documents.'
+                  : 'Not supported by the uploaded sources — the available documents do not contain evidence for this query.'
+
+            let finalAnswer = accumulatedAnswer
+            if (notebookId && !isSourceSupported && !/not supported by/i.test(finalAnswer)) {
+              finalAnswer = `Not supported by the provided notebook sources: ${finalAnswer}`
+            }
+
+            // Save conversation & messages
+            if (!targetConversationId) {
+              const createdConv = await prisma.conversation.create({
+                data: {
+                  userId: user.id,
+                  title: query.slice(0, 80),
+                  projectId: projectId || null,
+                  notebookId: notebookId || null,
+                },
+              })
+              targetConversationId = createdConv.id
+            }
+
+            const serializedSources = (isSourceSupported ? effectiveContextForGeneration : []).map(r => ({
+              id: r.id,
+              documentId: r.documentId,
+              documentTitle: r.document.title,
+              pageNumber: r.pageNumber,
+              sectionTitle: r.sectionTitle,
+              similarity: r.similarity,
+              excerpt: r.content.slice(0, 200),
+            }))
+
+            if (targetConversationId && !conversationSaved) {
+              await prisma.message.createMany({
+                data: [
+                  {
+                    conversationId: targetConversationId,
+                    senderId: user.id,
+                    role: 'user',
+                    content: query,
+                  },
+                  {
+                    conversationId: targetConversationId,
+                    senderId: user.id,
+                    role: 'assistant',
+                    content: finalAnswer,
+                    metadata: {
+                      citations: finalCitations,
+                      sources: serializedSources,
+                      isSourceSupported,
+                      groundingStatus,
+                      groundingNote,
+                    } as any,
+                  },
+                ],
+              })
+              conversationSaved = true
+            }
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              type: 'done', 
+              citations: finalCitations,
+              isSourceSupported,
+              groundingStatus,
+              groundingNote,
+              conversationId: targetConversationId,
+              sources: serializedSources,
+            })}\n\n`))
           } catch (streamErr) {
             const msg = streamErr instanceof Error ? streamErr.message : 'Generation failed'
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`))

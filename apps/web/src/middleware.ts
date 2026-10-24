@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { getLocalUserId, LOCAL_AUTH_COOKIE } from '@/lib/local-auth'
+import { getCsrfToken, validateCsrfToken, CSRF_COOKIE_NAME } from '@/lib/csrf'
 
 export const runtime = 'nodejs'
 
@@ -9,8 +10,35 @@ const PUBLIC_API_ROUTES = [
   '/api/health',
 ]
 
+const STATE_CHANGING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
+
 export function isPublicApiRoute(pathname: string): boolean {
   return PUBLIC_API_ROUTES.some(route => pathname.startsWith(route))
+}
+
+export function getAppOrigin(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+}
+
+export function validateOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get('origin')
+  const referer = request.headers.get('referer')
+  const appOrigin = getAppOrigin()
+  
+  if (!origin && !referer) {
+    return true
+  }
+  
+  const checkOrigin = origin || referer
+  if (!checkOrigin) return true
+  
+  try {
+    const originUrl = new URL(checkOrigin)
+    const appUrl = new URL(appOrigin)
+    return originUrl.origin === appUrl.origin
+  } catch {
+    return false
+  }
 }
 
 export function addSecurityHeaders(response: NextResponse): NextResponse {
@@ -19,9 +47,11 @@ export function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-XSS-Protection', '1; mode=block')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  response.headers.set('Content-Security-Policy', [
+  
+  const isProduction = process.env.NODE_ENV === 'production'
+  const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
@@ -29,7 +59,13 @@ export function addSecurityHeaders(response: NextResponse): NextResponse {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-  ].join('; '))
+  ]
+  
+  if (!isProduction) {
+    cspDirectives[1] = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net"
+  }
+  
+  response.headers.set('Content-Security-Policy', cspDirectives.join('; '))
   return response
 }
 
@@ -76,6 +112,32 @@ export async function middleware(request: NextRequest) {
 
   if (isApiRoute && !isPublicApiRoute(pathname) && !isAuthenticated) {
     return addSecurityHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
+  }
+
+  if (isApiRoute && isAuthenticated && STATE_CHANGING_METHODS.includes(request.method)) {
+    if (!validateOrigin(request)) {
+      return addSecurityHeaders(NextResponse.json({ error: "Invalid origin" }, { status: 403 }))
+    }
+
+    if (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/health')) {
+      return addSecurityHeaders(response)
+    }
+
+    const csrfToken = request.headers.get('x-csrf-token') || request.cookies.get(CSRF_COOKIE_NAME)?.value
+    if (!csrfToken || !validateCsrfToken(csrfToken, userId)) {
+      return addSecurityHeaders(NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 }))
+    }
+  }
+
+  if (isApiRoute && isAuthenticated && !request.cookies.get(CSRF_COOKIE_NAME)) {
+    const newToken = getCsrfToken(userId)
+    response.cookies.set(CSRF_COOKIE_NAME, newToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    })
   }
 
   return addSecurityHeaders(response)

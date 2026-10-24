@@ -1,3 +1,5 @@
+"use client"
+
 export interface VoiceProvider {
   name: string
   supportsSTT: boolean
@@ -83,7 +85,6 @@ export class BrowserSpeechProvider implements VoiceProvider {
       return
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel()
 
     this.utterance = new SpeechSynthesisUtterance(options.text)
@@ -92,7 +93,6 @@ export class BrowserSpeechProvider implements VoiceProvider {
     this.utterance.pitch = options.pitch ?? 1
     this.utterance.volume = options.volume ?? 1
 
-    // Try to find a matching voice
     if (options.voice) {
       const voices = window.speechSynthesis.getVoices()
       const voice = voices.find(v => v.name === options.voice || v.lang.startsWith(options.language || 'en'))
@@ -115,44 +115,43 @@ export class BrowserSpeechProvider implements VoiceProvider {
   }
 }
 
-export class ElevenLabsProvider implements VoiceProvider {
-  name = 'elevenlabs'
+export class ServerTTSProvider implements VoiceProvider {
+  name = 'server-tts'
   supportsSTT = false
   supportsTTS = true
-  languages = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-PT', 'pl-PL', 'hi-IN', 'zh-CN']
+  languages = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-PT', 'pl-PL', 'hi-IN', 'zh-CN', 'ja-JP', 'ko-KR']
 
-  private apiKey: string
-  private baseUrl = 'https://api.elevenlabs.io/v1'
+  private provider: 'elevenlabs' | 'openai'
+  private baseUrl: string
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey
+  constructor(provider: 'elevenlabs' | 'openai', baseUrl = '') {
+    this.provider = provider
+    this.baseUrl = baseUrl
   }
 
   async speak(options: TTSOptions): Promise<void> {
     options.onStart()
 
     try {
-      const voiceId = options.voice || '21m00Tcm4TlvDq8ikWAM' // Default voice
-      
-      const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceId}`, {
+      const endpoint = this.provider === 'elevenlabs'
+        ? '/api/ai/voice/tts/elevenlabs'
+        : '/api/ai/voice/tts/openai'
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': this.apiKey,
         },
         body: JSON.stringify({
           text: options.text,
-          model_id: 'eleven_monolingual_v1',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5,
-          },
+          voice: options.voice,
+          rate: options.rate,
         }),
       })
 
       if (!response.ok) {
-        throw new Error(`ElevenLabs error: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `${this.provider} TTS error: ${response.statusText}`)
       }
 
       const audioBlob = await response.blob()
@@ -173,142 +172,50 @@ export class ElevenLabsProvider implements VoiceProvider {
       options.onError(error instanceof Error ? error.message : 'TTS failed')
     }
   }
-}
-
-export class OpenAITTSProvider implements VoiceProvider {
-  name = 'openai-tts'
-  supportsSTT = false
-  supportsTTS = true
-  languages = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'ja-JP', 'ko-KR', 'zh-CN']
-
-  private apiKey: string
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey
-  }
-
-  async speak(options: TTSOptions): Promise<void> {
-    options.onStart()
-
-    try {
-      const response = await fetch('https://api.openai.com/v1/audio/speech', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'tts-1',
-          input: options.text,
-          voice: options.voice || 'alloy',
-          response_format: 'mp3',
-          speed: options.rate || 1,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`OpenAI TTS error: ${response.statusText}`)
-      }
-
-      const audioBlob = await response.blob()
-      const audioUrl = URL.createObjectURL(audioBlob)
-      const audio = new Audio(audioUrl)
-      
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl)
-        options.onEnd()
-      }
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl)
-        options.onError('Failed to play audio')
-      }
-      
-      audio.play()
-    } catch (error) {
-      options.onError(error instanceof Error ? error.message : 'TTS failed')
-    }
-  }
-}
-
-export class GoogleSTTProvider implements VoiceProvider {
-  name = 'google-stt'
-  supportsSTT = true
-  supportsTTS = false
-  languages = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'ja-JP', 'ko-KR', 'zh-CN', 'hi-IN']
-
-  private apiKey: string
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey
-  }
-
-  async startListening(options: STTOptions): Promise<void> {
-    options.onError('Google STT requires WebSocket connection - use browser speech recognition instead')
-  }
-
-  stopListening(): void {}
 }
 
 export function createVoiceProvider(
-  type: 'browser' | 'elevenlabs' | 'openai-tts' | 'google-stt',
-  apiKey?: string
+  type: 'browser' | 'elevenlabs' | 'openai-tts',
+  _apiKey?: string,
+  baseUrl = ''
 ): VoiceProvider {
   switch (type) {
     case 'browser':
       return new BrowserSpeechProvider()
     case 'elevenlabs':
-      if (!apiKey) throw new Error('ElevenLabs API key required')
-      return new ElevenLabsProvider(apiKey)
+      return new ServerTTSProvider('elevenlabs', baseUrl)
     case 'openai-tts':
-      if (!apiKey) throw new Error('OpenAI API key required')
-      return new OpenAITTSProvider(apiKey)
-    case 'google-stt':
-      if (!apiKey) throw new Error('Google Cloud API key required')
-      return new GoogleSTTProvider(apiKey)
+      return new ServerTTSProvider('openai', baseUrl)
     default:
       throw new Error(`Unknown voice provider: ${type}`)
   }
 }
 
-export async function getUserVoiceConfig(userId: string): Promise<{
-  sttProvider: "browser" | "elevenlabs" | "openai-tts" | "google-stt"
+export async function getUserVoiceConfig(): Promise<{
+  sttProvider: "browser"
   ttsProvider: "browser" | "elevenlabs" | "openai-tts"
-  hasSttCredential?: boolean
-  hasTtsCredential?: boolean
-  defaultVoice?: string
-  defaultLanguage?: string
+  hasSttCredential: boolean
+  hasTtsCredential: boolean
+  defaultLanguage: string
 } | null> {
-  const { prisma } = await import("@/lib/prisma")
-
-  const voiceCreds = await prisma.aICredential.findFirst({
-    where: {
-      userId,
-      provider: "OTHER",
-      providerName: { in: ["elevenlabs", "openai-tts", "google-stt"] },
-      isActive: true,
-    },
-  })
-
-  if (!voiceCreds) {
+  try {
+    const response = await fetch('/api/ai/voice-config')
+    if (!response.ok) return null
+    const data = await response.json()
     return {
-      sttProvider: "browser",
-      ttsProvider: "browser",
+      sttProvider: 'browser',
+      ttsProvider: data.ttsProvider || 'browser',
+      hasSttCredential: data.hasSttCredential || false,
+      hasTtsCredential: data.hasTtsCredential || false,
+      defaultLanguage: data.defaultLanguage || 'en-US',
+    }
+  } catch {
+    return {
+      sttProvider: 'browser',
+      ttsProvider: 'browser',
       hasSttCredential: false,
       hasTtsCredential: false,
-      defaultLanguage: "en-US",
+      defaultLanguage: 'en-US',
     }
-  }
-
-  return {
-    sttProvider: voiceCreds.providerName === "google-stt" ? "google-stt" : "browser",
-    ttsProvider:
-      voiceCreds.providerName === "elevenlabs"
-        ? "elevenlabs"
-        : voiceCreds.providerName === "openai-tts"
-          ? "openai-tts"
-          : "browser",
-    hasSttCredential: voiceCreds.providerName === "google-stt",
-    hasTtsCredential: ["elevenlabs", "openai-tts"].includes(voiceCreds.providerName),
-    defaultLanguage: "en-US",
   }
 }

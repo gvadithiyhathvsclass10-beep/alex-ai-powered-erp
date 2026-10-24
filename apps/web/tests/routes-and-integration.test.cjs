@@ -908,7 +908,36 @@ test('3. Authentication routes: /api/auth/register, /api/auth/login, /api/auth/m
   assert.equal(regRes.status, 200)
   assert.equal(regRes.body.ok, true)
   assert.equal(regRes.body.user.firstName, 'Neha')
+  assert.equal(regRes.body.user.role, 'STUDENT')
   assert.ok(regRes.cookies.get('alex_local_session')?.value)
+
+  // Regression: public registration must not accept ADMIN role
+  const regAdminRes = await registerRoute.POST({
+    json: async () => ({
+      firstName: 'Admin',
+      lastName: 'User',
+      email: 'admin@alex.edu',
+      password: 'securePassword123',
+      role: 'ADMIN',
+    }),
+  })
+  assert.equal(regAdminRes.status, 200)
+  assert.equal(regAdminRes.body.ok, true)
+  assert.equal(regAdminRes.body.user.role, 'STUDENT', 'Public registration must assign STUDENT role even when ADMIN requested')
+
+  // Regression: public registration must not accept LECTURER role
+  const regLecturerRes = await registerRoute.POST({
+    json: async () => ({
+      firstName: 'Lecturer',
+      lastName: 'User',
+      email: 'lecturer@alex.edu',
+      password: 'securePassword123',
+      role: 'LECTURER',
+    }),
+  })
+  assert.equal(regLecturerRes.status, 200)
+  assert.equal(regLecturerRes.body.ok, true)
+  assert.equal(regLecturerRes.body.user.role, 'STUDENT', 'Public registration must assign STUDENT role even when LECTURER requested')
 
   // Login with existing user
   const loginRes = await loginRoute.POST({

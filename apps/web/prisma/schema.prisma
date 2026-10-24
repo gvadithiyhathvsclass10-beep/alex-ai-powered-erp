@@ -291,9 +291,11 @@ model User {
   projectMentorships  ProjectMentor[]          @relation("ProjectMentorships")
   studyMaterials      StudyMaterial[]
   flashcardDecks      FlashcardDeck[]
+  flashcardReviews    FlashcardReview[]
   mindMaps            MindMap[]
   diagrams            Diagram[]
   quizzes             Quiz[]
+  quizAttempts        QuizAttempt[]
   generatedImages     GeneratedImage[]
   subjectEnrollments  SubjectEnrollment[]      @relation("SubjectEnrollmentUser")
   projectOwned        Project[]                @relation("ProjectOwner")
@@ -666,7 +668,8 @@ model Notification {
   metadata      Json?
   createdAt     DateTime             @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries       NotificationDelivery[]
 
   @@index([userId, isRead])
   @@index([createdAt])
@@ -715,6 +718,8 @@ model NotificationDelivery {
   deliveredAt      DateTime?
   errorMessage     String?
   createdAt        DateTime  @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
   @@index([notificationId])
   @@index([status])
@@ -1287,6 +1292,7 @@ model FlashcardReview {
   reviewedAt       DateTime @default(now())
 
   card Flashcard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([cardId])
   @@index([userId, reviewedAt])
@@ -1373,6 +1379,7 @@ model QuizAttempt {
   metadata    Json?
 
   quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([quizId])
   @@index([userId])

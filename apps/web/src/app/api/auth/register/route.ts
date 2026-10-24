@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 })
     }
 
-    const role = body.role === 'LECTURER' ? 'LECTURER' : body.role === 'ADMIN' ? 'ADMIN' : 'STUDENT'
+    const role = 'STUDENT'
 
     const user = await prisma.user.create({
       data: {

@@ -15,19 +15,20 @@ function getEncryptionKey(): string {
     return dedicatedKey
   }
 
-  // Never couple encrypted credentials to an authentication secret in production.
-  // Before deploying this change, set ENCRYPTION_KEY to the exact value that was
-  // previously effective (ENCRYPTION_KEY, else AUTH_SECRET, else NEXTAUTH_SECRET)
-  // so existing ciphertext remains decryptable. Keep that value stable thereafter.
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'ENCRYPTION_KEY environment variable is required in production. Set it to a stable secret; if existing records were encrypted using AUTH_SECRET or NEXTAUTH_SECRET, use that previous effective value to preserve access.'
+      'ENCRYPTION_KEY environment variable is required in production. Set it to a stable 32+ character secret; if existing records were encrypted using AUTH_SECRET or NEXTAUTH_SECRET, use that previous effective value to preserve access.'
     )
   }
 
-  // Development/test fallback only. Production must always use the dedicated key.
-  const legacyDevelopmentKey = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET
-  return legacyDevelopmentKey?.trim() || 'alex-local-dev-encryption-key-32chars'
+  const devKey = process.env.ENCRYPTION_KEY_DEV
+  if (devKey && devKey.trim().length > 0) {
+    return devKey
+  }
+
+  throw new Error(
+    'ENCRYPTION_KEY or ENCRYPTION_KEY_DEV environment variable is required. Set ENCRYPTION_KEY_DEV for development with a 32+ character secret.'
+  )
 }
 
 async function deriveKey(password: string, salt: Buffer): Promise<Buffer> {

@@ -36,7 +36,10 @@ export function serializeBigInt<T>(value: T): T {
 }
 
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'postgresql://alex:alex@localhost:5432/alex'
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('DATABASE_URL environment variable is required in production')
+  }
+  throw new Error('DATABASE_URL environment variable is required. Set it to your PostgreSQL connection string.')
 }
 
 const globalForPrisma = globalThis as unknown as {

@@ -3,11 +3,14 @@ import crypto from 'node:crypto'
 export const LOCAL_AUTH_COOKIE = 'alex_local_session'
 
 function secret(): string {
-  return (
-    process.env.AUTH_SECRET ||
-    process.env.NEXTAUTH_SECRET ||
-    'alex-local-development-secret-change-me'
-  )
+  const authSecret = process.env.AUTH_SECRET
+  if (!authSecret || authSecret.trim().length === 0) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('AUTH_SECRET environment variable is required in production')
+    }
+    throw new Error('AUTH_SECRET environment variable is required. Set it to a stable 32+ character secret.')
+  }
+  return authSecret
 }
 
 export function createLocalSession(userId: string): string {
