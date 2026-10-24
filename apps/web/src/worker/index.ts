@@ -14,6 +14,19 @@ const prisma = new PrismaClient()
 let isShuttingDown = false
 let workerInterval: NodeJS.Timeout | null = null
 
+// Structured logging
+const log = {
+  info: (message: string, meta?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, timestamp: new Date().toISOString(), ...meta }))
+  },
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, timestamp: new Date().toISOString(), ...meta }))
+  },
+  error: (message: string, meta?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, timestamp: new Date().toISOString(), ...meta }))
+  },
+}
+
 async function processJob() {
   if (isShuttingDown) return
 
@@ -21,35 +34,35 @@ async function processJob() {
     const job = await dequeueJob()
     if (!job) return
 
-    console.log(`[Worker] Processing job ${job.id} (type: ${job.type}, document: ${job.documentId})`)
+    log.info('Processing job', { jobId: job.id, type: job.type, documentId: job.documentId })
 
     try {
       await processDocumentFromJob(job)
-      console.log(`[Worker] Job ${job.id} completed successfully`)
+      log.info('Job completed successfully', { jobId: job.id })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[Worker] Job ${job.id} failed:`, msg)
+      log.error('Job failed', { jobId: job.id, error: msg })
 
       // Handle retry logic - re-enqueue if under max retries
       if (job.retryCount < job.maxRetries) {
         await reEnqueueJob(job)
-        console.log(`[Worker] Job ${job.id} re-queued for retry ${job.retryCount + 1}/${job.maxRetries}`)
+        log.info('Job re-queued for retry', { jobId: job.id, retryCount: job.retryCount + 1, maxRetries: job.maxRetries })
       } else {
-        console.error(`[Worker] Job ${job.id} exhausted all retries`)
+        log.error('Job exhausted all retries', { jobId: job.id })
       }
     }
   } catch (error) {
-    console.error('[Worker] Error processing job:', error)
+    log.error('Error processing job', { error: error instanceof Error ? error.message : String(error) })
   }
 }
 
 async function startWorker() {
   if (!isRedisConnected()) {
-    console.error('[Worker] Redis not connected, waiting...')
+    log.error('Redis not connected, waiting...')
     return
   }
 
-  console.log('[Worker] Starting document processing worker...')
+  log.info('Starting document processing worker...')
 
   workerInterval = setInterval(async () => {
     if (isShuttingDown) return
@@ -58,81 +71,103 @@ async function startWorker() {
 }
 
 async function stopWorker() {
+  log.info('Shutting down worker...')
   isShuttingDown = true
+  
   if (workerInterval) {
     clearInterval(workerInterval)
     workerInterval = null
   }
-  await closeRedis()
-  await prisma.$disconnect()
+  
+  try {
+    await closeRedis()
+    log.info('Redis connection closed')
+  } catch (error) {
+    log.error('Error closing Redis', { error: error instanceof Error ? error.message : String(error) })
+  }
+  
+  try {
+    await prisma.$disconnect()
+    log.info('Prisma disconnected')
+  } catch (error) {
+    log.error('Error disconnecting Prisma', { error: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 // Scheduled jobs
 async function cleanupOldNotifications() {
-  console.log('[Worker] Running scheduled cleanup of old notifications')
+  log.info('Running scheduled cleanup of old notifications')
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-  const result = await prisma.notification.deleteMany({
-    where: {
-      createdAt: { lt: thirtyDaysAgo },
-      isRead: true,
-    },
-  })
+  try {
+    const result = await prisma.notification.deleteMany({
+      where: {
+        createdAt: { lt: thirtyDaysAgo },
+        isRead: true,
+      },
+    })
 
-  console.log(`[Worker] Cleaned up ${result.count} old notifications`)
+    log.info('Cleaned up old notifications', { count: result.count })
+  } catch (error) {
+    log.error('Failed to cleanup old notifications', { error: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 async function attendanceAlerts() {
-  console.log('[Worker] Running scheduled attendance alerts')
+  log.info('Running scheduled attendance alerts')
 
-  const students = await prisma.user.findMany({
-    where: { role: 'STUDENT', isActive: true },
-    include: {
-      memberships: { where: { status: 'ACTIVE' } },
-    },
-  })
+  try {
+    const students = await prisma.user.findMany({
+      where: { role: 'STUDENT', isActive: true },
+      include: {
+        memberships: { where: { status: 'ACTIVE' } },
+      },
+    })
 
-  for (const student of students) {
-    for (const membership of student.memberships) {
-      if (!membership.semesterId) continue
+    for (const student of students) {
+      for (const membership of student.memberships) {
+        if (!membership.semesterId) continue
 
-      const sessions = await prisma.attendanceSession.findMany({
-        where: {
-          semesterId: membership.semesterId,
-          isCancelled: false,
-        },
-        include: {
-          records: { where: { userId: student.id } },
-        },
-      })
+        const sessions = await prisma.attendanceSession.findMany({
+          where: {
+            semesterId: membership.semesterId,
+            isCancelled: false,
+          },
+          include: {
+            records: { where: { userId: student.id } },
+          },
+        })
 
-      let present = 0
-      let total = 0
+        let present = 0
+        let total = 0
 
-      for (const session of sessions) {
-        const record = session.records[0]
-        if (record) {
-          total++
-          if (record.status === 'PRESENT') present++
+        for (const session of sessions) {
+          const record = session.records[0]
+          if (record) {
+            total++
+            if (record.status === 'PRESENT') present++
+          }
         }
-      }
 
-      if (total > 0) {
-        const percentage = (present / total) * 100
-        if (percentage < 35) {
-          await prisma.notification.create({
-            data: {
-              userId: student.id,
-              category: 'ATTENDANCE',
-              title: 'Low Attendance Alert',
-              message: `Your attendance is ${percentage.toFixed(1)}%. Please attend classes regularly.`,
-              isRead: false,
-            },
-          })
-          console.log(`[Worker] Attendance alert sent to ${student.email}: ${percentage.toFixed(1)}%`)
+        if (total > 0) {
+          const percentage = (present / total) * 100
+          if (percentage < 35) {
+            await prisma.notification.create({
+              data: {
+                userId: student.id,
+                category: 'ATTENDANCE',
+                title: 'Low Attendance Alert',
+                message: `Your attendance is ${percentage.toFixed(1)}%. Please attend classes regularly.`,
+                isRead: false,
+              },
+            })
+            log.info('Attendance alert sent', { studentId: student.id, email: student.email, percentage: percentage.toFixed(1) })
+          }
         }
       }
     }
+  } catch (error) {
+    log.error('Failed to run attendance alerts', { error: error instanceof Error ? error.message : String(error) })
   }
 }
 
@@ -144,7 +179,7 @@ function startScheduler() {
   // Daily at 8 AM - attendance alerts
   scheduleJob('0 8 * * *', attendanceAlerts)
 
-  console.log('[Worker] Scheduler started')
+  log.info('Scheduler started')
 }
 
 function scheduleJob(cron: string, fn: () => Promise<void>) {
@@ -165,20 +200,28 @@ function scheduleJob(cron: string, fn: () => Promise<void>) {
 }
 
 if (require.main === module) {
-  console.log('[Worker] Starting ALEX background worker...')
+  log.info('Starting ALEX background worker...')
   startScheduler()
   startWorker()
 
-  process.on('SIGTERM', async () => {
-    console.log('[Worker] Shutting down...')
+  // Graceful shutdown handlers
+  const shutdown = async (signal: string) => {
+    log.info(`Received ${signal}, initiating graceful shutdown...`)
     await stopWorker()
     process.exit(0)
-  })
+  }
 
-  process.on('SIGINT', async () => {
-    console.log('[Worker] Shutting down...')
-    await stopWorker()
-    process.exit(0)
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    log.error('Uncaught exception', { error: error.message, stack: error.stack })
+    stopWorker().finally(() => process.exit(1))
+  })
+  
+  process.on('unhandledRejection', (reason) => {
+    log.error('Unhandled rejection', { reason: String(reason) })
   })
 }
 

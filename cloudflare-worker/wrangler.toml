@@ -1,3 +1,10 @@
 name = "alex-ai-powered-erp"
 main = "worker.js"
 compatibility_date = "2026-10-21"
+
+# Environment variables (set in Cloudflare dashboard or via wrangler secret put)
+# RENDER_API_URL = "https://your-render-service.onrender.com"
+
+[vars]
+# Default fallback - override in production
+RENDER_API_URL = "https://alex-api.onrender.com"

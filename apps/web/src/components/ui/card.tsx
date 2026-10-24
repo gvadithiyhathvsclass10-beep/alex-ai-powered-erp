@@ -5,7 +5,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}
+      className={cn("rounded-lg border bg-card text-card-foreground shadow-sm glass-transition", className)}
       {...props}
     />
   )
@@ -47,4 +47,39 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 )
 CardFooter.displayName = "CardFooter"
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+/**
+ * Glass Card variant - uses frosted glass styling
+ */
+const GlassCard = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("rounded-xl glass-card glass-transition", className)}
+      {...props}
+    />
+  )
+)
+GlassCard.displayName = "GlassCard"
+
+const GlassCardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("flex flex-col space-y-1.5 p-5", className)} {...props} />
+  )
+)
+GlassCardHeader.displayName = "GlassCardHeader"
+
+const GlassCardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("p-5 pt-0", className)} {...props} />
+  )
+)
+GlassCardContent.displayName = "GlassCardContent"
+
+const GlassCardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("flex items-center p-5 pt-0", className)} {...props} />
+  )
+)
+GlassCardFooter.displayName = "GlassCardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, GlassCard, GlassCardHeader, GlassCardContent, GlassCardFooter }

@@ -4,7 +4,7 @@ import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, GlassCard, GlassCardContent, GlassCardHeader } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -236,8 +236,8 @@ export function RAGChat({
   }
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader className="pb-3">
+    <GlassCard className="flex flex-col h-full">
+      <GlassCardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
@@ -251,7 +251,7 @@ export function RAGChat({
             <Button
               variant="ghost"
               size="sm"
-              className="text-xs"
+              className="text-xs glass-btn"
               onClick={() => {
                 setActiveConversationId(undefined)
                 setMessages([])
@@ -261,8 +261,8 @@ export function RAGChat({
             </Button>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0">
+      </GlassCardHeader>
+      <GlassCardContent className="flex-1 flex flex-col min-h-0">
         <ScrollArea className="flex-1 pr-2">
           <div className="space-y-4 pb-4">
             {isLoadingHistory ? (
@@ -333,7 +333,7 @@ export function RAGChat({
                   handleSubmit(e)
                 }
               }}
-              className="flex-1 min-h-[80px] max-h-[200px] resize-none"
+              className="glass-input flex-1 min-h-[80px] max-h-[200px] resize-none"
               disabled={isLoading}
               rows={2}
             />
@@ -341,6 +341,7 @@ export function RAGChat({
               type="submit"
               disabled={!input.trim() || isLoading}
               size="lg"
+              variant="glass-primary"
               className="self-end"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -350,8 +351,8 @@ export function RAGChat({
             Responses cite source title, page, and section when supported, and explicitly identify unsupported questions.
           </p>
         </form>
-      </CardContent>
-    </Card>
+      </GlassCardContent>
+    </GlassCard>
   )
 }
 
@@ -383,7 +384,7 @@ function MessageBubble({
       <div
         className={cn(
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+          isUser ? "bg-primary text-primary-foreground" : "bg-glass-surface text-primary backdrop-blur supports-[backdrop-filter]:bg-glass-surface"
         )}
       >
         {isUser ? (
@@ -403,30 +404,30 @@ function MessageBubble({
         <div
           className={cn(
             "inline-block rounded-2xl px-4 py-2.5",
-            isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"
+            isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-glass-surface text-glass-text backdrop-blur supports-[backdrop-filter]:bg-glass-surface border border-glass-border rounded-tl-none"
           )}
         >
           {!isUser && (message.groundingStatus || message.isSourceSupported !== undefined) && (
             <div className="mb-2 flex items-center gap-2 flex-wrap">
               {isSupported ? (
                 <Badge
-                  variant="outline"
-                  className="text-[11px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 flex items-center gap-1"
+                  variant="glass-success"
+                  className="text-[11px] flex items-center gap-1"
                 >
                   <CheckCircle2 className="h-3 w-3" />
                   Source-Supported
                 </Badge>
               ) : (
                 <Badge
-                  variant="outline"
-                  className="text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 flex items-center gap-1"
+                  variant="glass-warning"
+                  className="text-[11px] flex items-center gap-1"
                 >
                   <AlertCircle className="h-3 w-3" />
                   Unsupported by Sources
                 </Badge>
               )}
               {message.groundingNote && (
-                <span className="text-[11px] text-muted-foreground">{message.groundingNote}</span>
+                <span className="text-[11px] text-glass-muted">{message.groundingNote}</span>
               )}
             </div>
           )}
@@ -434,12 +435,12 @@ function MessageBubble({
           <div className="whitespace-pre-wrap">{message.content}</div>
 
           {hasCitations && (
-            <div className="mt-2.5 pt-2 border-t border-border/50 flex flex-wrap gap-1.5">
+            <div className="mt-2.5 pt-2 border-t border-glass-border flex flex-wrap gap-1.5">
               {message.citations!.map((citation, index) => (
                 <Badge
                   key={citation.id || index}
-                  variant="outline"
-                  className="text-xs cursor-pointer hover:bg-accent"
+                  variant="glass"
+                  className="text-xs cursor-pointer hover:border-glass-border-hover transition-colors"
                   onClick={() => navigator.clipboard.writeText(citation.excerpt || "")}
                   title={citation.excerpt}
                 >
@@ -452,9 +453,9 @@ function MessageBubble({
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
+          <span className="text-xs text-glass-muted">{formatRelativeTime(message.createdAt)}</span>
           <Button
-            variant="ghost"
+            variant="glass-ghost"
             size="icon"
             className="h-6 w-6"
             onClick={() => onCopy(message.content)}
@@ -464,7 +465,7 @@ function MessageBubble({
           </Button>
           {!isUser && onSaveAsNote && (
             <Button
-              variant="ghost"
+              variant="glass-ghost"
               size="icon"
               className="h-6 w-6"
               onClick={() =>
@@ -480,7 +481,7 @@ function MessageBubble({
           )}
           {(hasCitations || hasSources) && (
             <Button
-              variant="ghost"
+              variant="glass-ghost"
               size="icon"
               className="h-6 w-6"
               onClick={onToggleSources}
@@ -491,7 +492,7 @@ function MessageBubble({
           )}
         </div>
         {showSources && (
-          <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-muted pl-3">
+          <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-glass-border pl-3">
             {(message.sources && message.sources.length > 0
               ? message.sources
               : (message.citations || []).map(c => ({
@@ -522,22 +523,22 @@ function SourceCard({ source, index }: SourceCardProps) {
   const title = source.documentTitle || source.document?.title || `Source ${index + 1}`
   const text = source.excerpt || source.content || ""
   return (
-    <div className="bg-muted/50 rounded-lg p-3">
+    <div className="bg-glass-surface rounded-lg p-3 border border-glass-border">
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="font-medium text-sm">
+        <span className="font-medium text-sm text-glass-text">
           [{index + 1}] {title}
         </span>
         {typeof source.similarity === "number" && (
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="glass" className="text-xs">
             {Math.round(source.similarity * 100)}% match
           </Badge>
         )}
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-glass-muted">
         {source.pageNumber && <span>Page {source.pageNumber}</span>}
         {source.sectionTitle && <span>· Section: {source.sectionTitle}</span>}
       </div>
-      {text && <div className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">{text}</div>}
+      {text && <div className="mt-2 text-xs text-glass-muted whitespace-pre-wrap">{text}</div>}
     </div>
   )
 }

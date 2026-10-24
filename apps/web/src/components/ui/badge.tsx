@@ -15,6 +15,11 @@ const badgeVariants = cva(
         outline: "text-foreground",
         success: "border-transparent bg-green-500 text-white hover:bg-green-600",
         warning: "border-transparent bg-yellow-500 text-white hover:bg-yellow-600",
+        glass: "glass-badge glass-transition",
+        "glass-primary": "glass-badge-primary glass-transition",
+        "glass-success": "glass-badge-success glass-transition",
+        "glass-warning": "glass-badge-warning glass-transition",
+        "glass-destructive": "glass-badge-destructive glass-transition",
       },
     },
     defaultVariants: {

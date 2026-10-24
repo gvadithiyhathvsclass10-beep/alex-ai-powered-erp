@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, GlassCard, GlassCardContent, GlassCardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -480,8 +480,8 @@ export default function AISettingsPage() {
 
         {/* Credentials Tab */}
         <TabsContent value="credentials" className="space-y-6">
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -507,8 +507,8 @@ export default function AISettingsPage() {
                   </DialogContent>
                 </Dialog>
               </div>
-            </CardHeader>
-            <CardContent>
+            </GlassCardHeader>
+            <GlassCardContent>
               {credsLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin" />
@@ -591,39 +591,39 @@ export default function AISettingsPage() {
                   </TableBody>
                 </Table>
               )}
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
 
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
                 Security Notes
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-2 text-sm text-muted-foreground">
               <p>• API keys are encrypted using AES-256-GCM before storage</p>
               <p>• Keys are never logged or exposed in frontend code</p>
               <p>• Each key is scoped to your user account only</p>
               <p>• Usage is tracked per provider for quota management</p>
               <p>• You can set usage limits per credential</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+</GlassCardContent>
+           </GlassCard>
+         </TabsContent>
 
-        {/* Models Tab */}
-        <TabsContent value="models" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Default Models by Task
-              </CardTitle>
-              <CardDescription>
-                Select which model to use for each type of AI task. The default model will be used automatically.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+         {/* Models Tab */}
+         <TabsContent value="models" className="space-y-6">
+            <GlassCard>
+              <GlassCardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Default Models by Task
+                </CardTitle>
+                <CardDescription>
+                  Select which model to use for each type of AI task. The default model will be used automatically.
+                </CardDescription>
+              </GlassCardHeader>
+              <GlassCardContent>
               {modelsLoading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
               ) : (
@@ -709,21 +709,21 @@ export default function AISettingsPage() {
                   </TableBody>
                 </Table>
               )}
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
 
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Brain className="h-5 w-5" />
                 Available Models by Provider
               </CardTitle>
-            </CardHeader>
-            <CardContent>
+            </GlassCardHeader>
+            <GlassCardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(PROVIDER_INFO).map(([provider, info]) => (
-                  <Card key={provider}>
-                    <CardHeader>
+                  <GlassCard key={provider}>
+                    <GlassCardHeader>
                       <div className="flex items-center gap-2">
                         {info.icon}
                         <CardTitle>{info.name}</CardTitle>
@@ -731,25 +731,25 @@ export default function AISettingsPage() {
                       <CardDescription>
                         Capabilities: {info.capabilities.join(", ")}
                       </CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    </GlassCardHeader>
+                    <GlassCardContent>
                       <div className="flex flex-wrap gap-2">
                         {info.models.map((model: string) => (
                           <Badge key={model} variant="outline">{model}</Badge>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </GlassCardContent>
+                  </GlassCard>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+</GlassCardContent>
+          </GlassCard>
         </TabsContent>
 
         {/* Test Tab */}
         <TabsContent value="test" className="space-y-6">
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
                 Test Provider Connection
@@ -757,8 +757,8 @@ export default function AISettingsPage() {
               <CardDescription>
                 Verify your API keys work correctly before saving them.
               </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Provider</Label>
@@ -892,17 +892,17 @@ export default function AISettingsPage() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
 
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Wifi className="h-5 w-5" />
                 Quick Provider Status
               </CardTitle>
-            </CardHeader>
-            <CardContent>
+            </GlassCardHeader>
+            <GlassCardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -944,8 +944,8 @@ export default function AISettingsPage() {
                   })}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
         </TabsContent>
       </Tabs>
     </div>

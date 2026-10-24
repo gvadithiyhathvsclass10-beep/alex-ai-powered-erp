@@ -56,3 +56,43 @@ export function getLocalUserId(token?: string | null): string | null {
 export function isLocalAuth(): boolean {
   return (process.env.AUTH_MODE || 'local').toLowerCase() === 'local'
 }
+
+/**
+ * Determine if the request is using HTTPS.
+ * Checks X-Forwarded-Proto header (set by Cloudflare/Render proxy) first,
+ * then falls back to NODE_ENV.
+ */
+export function isSecureRequest(request?: { headers?: { get: (name: string) => string | null } }): boolean {
+  if (request?.headers?.get) {
+    const forwardedProto = request.headers.get('x-forwarded-proto')
+    if (forwardedProto === 'https') return true
+    const forwardedSsl = request.headers.get('x-forwarded-ssl')
+    if (forwardedSsl === 'on') return true
+  }
+  return process.env.NODE_ENV === 'production'
+}
+
+/**
+ * Get cookie options for auth cookies.
+ * Uses secure: true in production or when behind HTTPS proxy.
+ */
+export function getAuthCookieOptions(request?: { headers?: { get: (name: string) => string | null } }): {
+  httpOnly: boolean
+  sameSite: 'lax' | 'none'
+  secure: boolean
+  path: string
+  maxAge: number
+} {
+  const secure = isSecureRequest(request)
+  // Use 'none' with secure: true for cross-origin (Cloudflare Pages -> Render API)
+  // Use 'lax' for same-origin
+  const sameSite = secure ? 'none' as const : 'lax' as const
+  
+  return {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+  }
+}

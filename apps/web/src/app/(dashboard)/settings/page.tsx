@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, GlassCard, GlassCardContent, GlassCardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -139,11 +139,11 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="profile" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle>Profile Information</CardTitle>
-            </CardHeader>
-            <CardContent>
+            </GlassCardHeader>
+            <GlassCardContent>
               <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); updateProfile.mutate({ firstName: fd.get('firstName') as string, lastName: fd.get('lastName') as string }) }} className="space-y-4 max-w-md">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -168,22 +168,22 @@ export default function SettingsPage() {
                   <Label>Member Since</Label>
                   <Input defaultValue={profile?.user?.createdAt ? formatDate(profile?.user?.createdAt) : 'Unknown'} disabled />
                 </div>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save Changes
-                </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save Changes
+              </Button>
               </form>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
 
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
                 Security
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-4">
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
                   <p className="font-medium">Two-Factor Authentication</p>
@@ -207,20 +207,20 @@ export default function SettingsPage() {
                 </div>
                 <Button variant="outline">View Sessions</Button>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+             </GlassCardContent>
+           </GlassCard>
+         </TabsContent>
 
-        <TabsContent value="ai" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-5 w-5" />
-                AI Provider Configuration
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Add your API keys to enable AI features. Keys are encrypted and stored securely.</p>
-            </CardHeader>
-            <CardContent>
+         <TabsContent value="ai" className="mt-4 space-y-6">
+           <GlassCard>
+             <GlassCardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Bot className="h-5 w-5" />
+                 AI Provider Configuration
+               </CardTitle>
+               <p className="text-sm text-muted-foreground">Add your API keys to enable AI features. Keys are encrypted and stored securely.</p>
+             </GlassCardHeader>
+             <GlassCardContent>
               <div className="space-y-4">
                 {[
                   { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], color: '#00a67e' },
@@ -269,17 +269,17 @@ export default function SettingsPage() {
                   )
                 })}
               </div>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
 
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5" />
                 Model Preferences
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <Label>Default Chat Model</Label>
@@ -314,19 +314,19 @@ export default function SettingsPage() {
                   </Select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
         </TabsContent>
 
-        <TabsContent value="notifications" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Notification Preferences
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+         <TabsContent value="notifications" className="mt-4 space-y-6">
+           <GlassCard>
+             <GlassCardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Bell className="h-5 w-5" />
+                 Notification Preferences
+               </CardTitle>
+             </GlassCardHeader>
+             <GlassCardContent>
               <div className="space-y-4">
                 {CATEGORIES.map(category => (
                   <div key={category} className="flex items-center justify-between p-3 border rounded-lg">
@@ -351,19 +351,19 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
         </TabsContent>
 
         <TabsContent value="appearance" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
+          <GlassCard>
+            <GlassCardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Palette className="h-5 w-5" />
                 Appearance
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-6">
               <div>
                 <Label>Theme</Label>
                 <Select>
@@ -392,19 +392,19 @@ export default function SettingsPage() {
                 <Label>Compact Mode</Label>
                 <Switch />
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+             </GlassCardContent>
+           </GlassCard>
+         </TabsContent>
 
-        <TabsContent value="privacy" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Privacy & Data
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+         <TabsContent value="privacy" className="mt-4 space-y-6">
+           <GlassCard>
+             <GlassCardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Shield className="h-5 w-5" />
+                 Privacy & Data
+               </CardTitle>
+             </GlassCardHeader>
+             <GlassCardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
@@ -422,8 +422,8 @@ export default function SettingsPage() {
                   <Button variant="destructive">Delete Account</Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
         </TabsContent>
       </Tabs>
     </div>

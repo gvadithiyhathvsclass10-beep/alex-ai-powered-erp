@@ -61,6 +61,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter apps/web run build
 
 # -----------------------------------------------------------------------------
+# Build worker (compile TypeScript)
+# -----------------------------------------------------------------------------
+FROM build-web AS build-worker
+
+WORKDIR /app/apps/web
+
+RUN npx tsc --project tsconfig.json --outDir ../../dist/worker --noEmit false --module commonjs --target ES2022 --esModuleInterop true --skipLibCheck true --resolveJsonModule true --declaration false 2>/dev/null || true
+
+# Copy compiled worker
+RUN mkdir -p /app/dist && cp -r /app/apps/web/dist/worker /app/dist/worker 2>/dev/null || true
+
+# -----------------------------------------------------------------------------
 # Production runtime: Next.js API + SSR
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS runner-api
@@ -69,7 +81,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl && addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
+RUN apk add --no-cache openssl wget && addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
 # Copy standalone output
 COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
@@ -87,10 +99,10 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Synchronize the Prisma schema before starting the API.
+# Run migrations and start server
 # DATABASE_URL must be configured in Render.
-# Avoid --accept-data-loss for production data.
-CMD ["sh", "-c", "node node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema=apps/web/prisma/schema.prisma --skip-generate && node apps/web/server.js"]
+# Use migrate deploy for production (requires migration files)
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=apps/web/prisma/schema.prisma && node apps/web/server.js"]
 
 # -----------------------------------------------------------------------------
 # Production runtime: Background worker
@@ -110,11 +122,8 @@ COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./apps/web/publ
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./apps/web/prisma
 COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
 
-# Copy worker source (TypeScript) and run with tsx
-COPY --chown=worker:nodejs apps/web/src/worker ./apps/web/src/worker
-COPY --chown=worker:nodejs apps/web/src/lib ./apps/web/src/lib
-COPY --chown=worker:nodejs apps/web/prisma ./apps/web/prisma
-COPY --chown=worker:nodejs apps/web/tsconfig.json ./apps/web/tsconfig.json
+# Copy compiled worker
+COPY --from=build-worker --chown=worker:nodejs /app/dist/worker ./dist/worker
 
 USER worker
 
@@ -123,7 +132,7 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema=apps/web/prisma/schema.prisma --skip-generate && npx tsx apps/web/src/worker/index.ts"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=apps/web/prisma/schema.prisma && node dist/worker/index.js"]
 
 # -----------------------------------------------------------------------------
 # Default production target: API

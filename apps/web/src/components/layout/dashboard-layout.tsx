@@ -47,7 +47,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <Sidebar userRole={userRole} className={cn("z-50 lg:z-40", sidebarOpen && "translate-x-0")} />
 
           {/* Main content */}
-          <div className="lg:pl-64">
+          <div className="lg:pl-64 relative">
+            <div className="absolute inset-0 -z-1 bg-mesh opacity-40 pointer-events-none" />
             {/* Header with mobile menu button */}
             <TooltipProvider>
               <Header 
@@ -64,7 +65,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="glass-ghost"
                     size="icon"
                     className="lg:hidden h-10 w-10"
                     onClick={() => setSidebarOpen(!sidebarOpen)}

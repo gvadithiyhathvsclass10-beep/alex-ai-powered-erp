@@ -4,7 +4,7 @@ import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { RAGChat } from "@/components/rag/rag-chat"
 import { DocumentList } from "@/components/documents/document-list"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, GlassCard, GlassCardHeader, GlassCardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -228,8 +228,8 @@ export default function AssistantPage() {
               />
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <Card className="max-w-md w-full">
-                  <CardContent className="pt-6">
+              <GlassCard className="max-w-md w-full">
+                <GlassCardContent className="pt-6">
                     <div className="text-center">
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                         <Bot className="h-8 w-8 text-primary" />
@@ -247,8 +247,8 @@ export default function AssistantPage() {
                         New Conversation
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </GlassCardContent>
+                </GlassCard>
               </div>
             )}
           </TabsContent>
@@ -262,11 +262,11 @@ export default function AssistantPage() {
           </TabsContent>
 
           <TabsContent value="settings" className="flex-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>AI Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
+          <GlassCard>
+            <GlassCardHeader>
+              <CardTitle>AI Settings</CardTitle>
+            </GlassCardHeader>
+            <GlassCardContent className="space-y-6">
                 <div>
                   <h4 className="font-medium mb-4">AI Provider Configuration</h4>
                   <p className="text-sm text-muted-foreground mb-4">
@@ -297,8 +297,8 @@ export default function AssistantPage() {
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </GlassCardContent>
+          </GlassCard>
           </TabsContent>
         </Tabs>
       </main>

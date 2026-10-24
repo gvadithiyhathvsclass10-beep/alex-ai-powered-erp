@@ -78,13 +78,13 @@ function NavLink({ item, isActive, userRole }: { item: NavItem; isActive: boolea
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors glass-nav-item",
         isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          ? "glass-nav-item.active text-primary"
+          : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
       )}
     >
-      <item.icon className="h-5 w-5" />
+      <item.icon className="h-5 w-5 flex-shrink-0" />
       {item.label}
     </Link>
   )
@@ -101,33 +101,33 @@ export function Sidebar({ userRole, className }: { userRole: string; className?:
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r bg-sidebar transition-all duration-300",
+        "glass-sidebar fixed left-0 top-0 z-40 h-screen border-r transition-all duration-300",
         collapsed ? "w-16" : "w-64",
         "-translate-x-full lg:translate-x-0",
         className
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="flex h-16 items-center justify-between border-b px-4">
+        <div className="flex h-16 items-center justify-between border-b border-border px-4 bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/30">
           {!collapsed && (
             <Link href="/dashboard" className="flex items-center gap-2 font-bold text-lg">
               <GraduationCap className="h-6 w-6 text-primary" />
-              <span>ALEX</span>
+              <span className="tracking-tight">ALEX</span>
             </Link>
           )}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8"
+            className="h-8 w-8 glass-btn"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
           </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1" aria-label="Main navigation">
-          <div className="space-y-1">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-0.5" aria-label="Main navigation">
+          <div className="space-y-0.5">
             {filteredItems.map((item) => (
               <NavLink
                 key={item.href}
@@ -139,8 +139,8 @@ export function Sidebar({ userRole, className }: { userRole: string; className?:
           </div>
 
           {filteredLecturerItems.length > 0 && !collapsed && (
-            <div className="pt-4 space-y-1 border-t">
-              <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="pt-3 space-y-0.5 border-t border-border/50">
+              <p className="px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Lecturer Tools
               </p>
               {filteredLecturerItems.map((item) => (
@@ -155,8 +155,8 @@ export function Sidebar({ userRole, className }: { userRole: string; className?:
           )}
 
           {filteredAdminItems.length > 0 && !collapsed && (
-            <div className="pt-4 space-y-1 border-t">
-              <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="pt-3 space-y-0.5 border-t border-border/50">
+              <p className="px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Administration
               </p>
               {filteredAdminItems.map((item) => (
@@ -171,9 +171,9 @@ export function Sidebar({ userRole, className }: { userRole: string; className?:
           )}
         </nav>
 
-        <div className="border-t p-4">
+        <div className="border-t border-border/50 p-3 bg-background/30">
           {!collapsed && (
-            <div className="text-xs text-muted-foreground text-center">
+            <div className="text-[10px] text-muted-foreground text-center">
               ALEX v0.1.0
             </div>
           )}

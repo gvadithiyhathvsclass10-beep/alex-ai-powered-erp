@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { getLocalUserId, LOCAL_AUTH_COOKIE } from '@/lib/local-auth'
+import { getLocalUserId, LOCAL_AUTH_COOKIE, getAuthCookieOptions } from '@/lib/local-auth'
 import { getCsrfToken, validateCsrfToken, CSRF_COOKIE_NAME } from '@/lib/csrf'
 
 export const runtime = 'nodejs'
@@ -25,6 +25,7 @@ export function validateOrigin(request: NextRequest): boolean {
   const referer = request.headers.get('referer')
   const appOrigin = getAppOrigin()
   
+  // Allow requests with no origin/referer (e.g., server-to-server, health checks)
   if (!origin && !referer) {
     return true
   }
@@ -35,7 +36,21 @@ export function validateOrigin(request: NextRequest): boolean {
   try {
     const originUrl = new URL(checkOrigin)
     const appUrl = new URL(appOrigin)
-    return originUrl.origin === appUrl.origin
+    
+    // Allow same origin
+    if (originUrl.origin === appUrl.origin) {
+      return true
+    }
+    
+    // Allow Cloudflare proxy origins (Cloudflare adds cf-connecting-ip, etc.)
+    // Check if the origin is a known Cloudflare domain for this app
+    if (originUrl.hostname.endsWith('.cloudflareaccess.com') || 
+        originUrl.hostname.endsWith('.pages.dev') ||
+        originUrl.hostname.endsWith('.web.app')) {
+      return true
+    }
+    
+    return false
   } catch {
     return false
   }
@@ -76,6 +91,12 @@ function cloneRequestUrl(nextUrl: NextRequest['nextUrl'] | URL): URL {
   return new URL(nextUrl.toString())
 }
 
+function getRequestHeaders(request: NextRequest): { get: (name: string) => string | null } {
+  return {
+    get: (name: string) => request.headers.get(name)
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request })
   
@@ -97,6 +118,7 @@ export async function middleware(request: NextRequest) {
     isAuthPage
   const isApiRoute = pathname.startsWith("/api/")
 
+  // Redirect unauthenticated users from protected pages
   if (!isApiRoute && !isPublicPage && !isAuthenticated) {
     const url = cloneRequestUrl(request.nextUrl)
     url.pathname = "/login"
@@ -104,21 +126,25 @@ export async function middleware(request: NextRequest) {
     return addSecurityHeaders(NextResponse.redirect(url))
   }
 
+  // Redirect authenticated users from auth pages
   if (isAuthPage && isAuthenticated) {
     const url = cloneRequestUrl(request.nextUrl)
     url.pathname = "/dashboard"
     return addSecurityHeaders(NextResponse.redirect(url))
   }
 
+  // Protect API routes
   if (isApiRoute && !isPublicApiRoute(pathname) && !isAuthenticated) {
     return addSecurityHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
   }
 
+  // CSRF protection for state-changing API requests
   if (isApiRoute && isAuthenticated && STATE_CHANGING_METHODS.includes(request.method)) {
     if (!validateOrigin(request)) {
       return addSecurityHeaders(NextResponse.json({ error: "Invalid origin" }, { status: 403 }))
     }
 
+    // Skip CSRF for auth and health endpoints
     if (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/health')) {
       return addSecurityHeaders(response)
     }
@@ -129,15 +155,42 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Set CSRF cookie for authenticated API requests
   if (isApiRoute && isAuthenticated && !request.cookies.get(CSRF_COOKIE_NAME)) {
     const newToken = getCsrfToken(userId)
-    response.cookies.set(CSRF_COOKIE_NAME, newToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    const cookieOptions = getAuthCookieOptions({ headers: { get: (name: string) => request.headers.get(name) } })
+    response.cookies.set(CSRF_COOKIE_NAME, newToken, cookieOptions)
+  }
+
+  // Set CORS headers for API routes
+  if (isApiRoute) {
+    const origin = request.headers.get('origin')
+    const appOrigin = getAppOrigin()
+    
+    if (origin) {
+      try {
+        const originUrl = new URL(origin)
+        const appUrl = new URL(appOrigin)
+        
+        // Allow same origin or Cloudflare proxy origins
+        if (originUrl.origin === appUrl.origin || 
+            originUrl.hostname.endsWith('.cloudflareaccess.com') || 
+            originUrl.hostname.endsWith('.pages.dev') ||
+            originUrl.hostname.endsWith('.web.app')) {
+          response.headers.set('Access-Control-Allow-Origin', origin)
+          response.headers.set('Access-Control-Allow-Credentials', 'true')
+          response.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+          response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Content-Type, Authorization')
+        }
+      } catch {
+        // Invalid origin, don't set CORS headers
+      }
+    }
+    
+    // Handle preflight requests
+    if (request.method === 'OPTIONS') {
+      return new NextResponse(null, { status: 204, headers: response.headers })
+    }
   }
 
   return addSecurityHeaders(response)

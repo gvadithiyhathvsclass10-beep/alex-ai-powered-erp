@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, GlassCard, GlassCardContent, GlassCardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -59,20 +59,20 @@ export function StudentDashboard({ user }: DashboardProps) {
     { label: "Upcoming Deadlines", value: String(data?.stats?.upcomingDeadlinesCount ?? 0), icon: Calendar, color: "text-orange-500" },
   ]
 
-  const upcomingDeadlines = data?.upcomingDeadlines || []
-  const recentDocuments = data?.recentDocuments || []
-  const attendanceSummary = data?.attendanceSummary || []
+  const upcomingDeadlines: Array<{ id: string; title: string; subtitle: string; href: string; dueDate: string }> = data?.upcomingDeadlines || []
+  const recentDocuments: Array<{ id: string; title: string; subtitle: string; href: string; updatedAt: string; status: string }> = data?.recentDocuments || []
+  const attendanceSummary: Array<{ subjectId: string; subjectCode: string; subjectName: string; percentage: number }> = data?.attendanceSummary || []
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user.firstName}!</h1>
-        <p className="text-muted-foreground mt-1">Here&apos;s what&apos;s happening with your studies today.</p>
+        <p className="text-muted-foreground mt-1">Here's what's happening with your studies today.</p>
       </div>
 
       {isError && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6 flex items-center justify-between">
+        <GlassCard className="border-destructive/50">
+          <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
               <span>{error instanceof Error ? error.message : "Failed to load dashboard metrics"}</span>
@@ -80,25 +80,25 @@ export function StudentDashboard({ user }: DashboardProps) {
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Retry
             </Button>
-          </CardContent>
-        </Card>
+          </GlassCardHeader>
+        </GlassCard>
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <GlassCard key={stat.label}>
+            <GlassCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
               <stat.icon className={cn("h-4 w-4", stat.color)} />
-            </CardHeader>
-            <CardContent>
+            </GlassCardHeader>
+            <GlassCardContent>
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <div className="text-2xl font-bold">{stat.value}</div>
               )}
-            </CardContent>
-          </Card>
+            </GlassCardContent>
+          </GlassCard>
         ))}
       </div>
 
@@ -108,14 +108,14 @@ export function StudentDashboard({ user }: DashboardProps) {
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {quickActions.map((action) => (
-            <Card key={action.label} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="pt-6">
+            <GlassCard key={action.label} className="hover:border-primary/40 transition-colors cursor-pointer group">
+              <GlassCardContent className="pt-6">
                 <div className="flex items-start gap-4">
-                  <div className={cn("p-3 rounded-lg bg-primary/10 text-primary", "flex-shrink-0")}>
-                    <action.icon className="h-6 w-6" />
+                  <div className={cn("p-3 rounded-lg glass-surface flex-shrink-0", "group-hover:bg-primary/20 transition-colors")}>
+                    <action.icon className="h-6 w-6 text-primary group-hover:text-primary-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <Link href={action.href} className="font-medium hover:text-primary">
+                    <Link href={action.href} className="font-medium hover:text-primary transition-colors">
                       {action.label}
                     </Link>
                     <p className="text-sm text-muted-foreground mt-1">{action.description}</p>
@@ -124,18 +124,18 @@ export function StudentDashboard({ user }: DashboardProps) {
                     <ArrowRight className="h-5 w-5" />
                   </Link>
                 </div>
-              </CardContent>
-            </Card>
+              </GlassCardContent>
+            </GlassCard>
           ))}
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
+        <GlassCard>
+          <GlassCardHeader>
             <CardTitle className="text-lg">Upcoming Deadlines</CardTitle>
-          </CardHeader>
-          <CardContent>
+          </GlassCardHeader>
+          <GlassCardContent>
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -144,8 +144,8 @@ export function StudentDashboard({ user }: DashboardProps) {
               <p className="text-sm text-muted-foreground text-center py-4">No upcoming deadlines</p>
             ) : (
               <div className="space-y-3">
-                {upcomingDeadlines.map((item: { id: string; title: string; subtitle: string; dueDate: string; href: string }) => (
-                  <Link key={item.id} href={item.href} className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent transition-colors">
+                {upcomingDeadlines.map((item) => (
+                  <Link key={item.id} href={item.href} className="flex items-center justify-between p-2 rounded-lg border border-border/50 hover:border-primary/40 hover:bg-accent/30 transition-colors">
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{item.title}</p>
                       <p className="text-xs text-muted-foreground">{item.subtitle}</p>
@@ -157,14 +157,14 @@ export function StudentDashboard({ user }: DashboardProps) {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </GlassCardContent>
+        </GlassCard>
 
-        <Card>
-          <CardHeader>
+        <GlassCard>
+          <GlassCardHeader>
             <CardTitle className="text-lg">Recent Documents</CardTitle>
-          </CardHeader>
-          <CardContent>
+          </GlassCardHeader>
+          <GlassCardContent>
             <div className="space-y-3">
               {isLoading ? (
                 <div className="flex justify-center py-6">
@@ -173,17 +173,19 @@ export function StudentDashboard({ user }: DashboardProps) {
               ) : recentDocuments.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No documents uploaded yet</p>
               ) : (
-                recentDocuments.map((doc: { id: string; title: string; status: string }) => (
-                  <Link key={doc.id} href="/dashboard/documents" className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{doc.title}</span>
-                    </div>
-                    <Badge variant={doc.status === "READY" ? "default" : "outline"} className="text-xs">
-                      {doc.status}
-                    </Badge>
-                  </Link>
-                ))
+                <div>
+                  {recentDocuments.map((doc) => (
+                    <Link key={doc.id} href="/dashboard/documents" className="flex items-center justify-between p-2 rounded-lg border border-border/50 hover:border-primary/40 hover:bg-accent/30 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span className="text-sm font-medium truncate">{doc.title}</span>
+                      </div>
+                      <Badge variant={doc.status === "READY" ? "default" : "outline"} className="text-xs">
+                        {doc.status}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
               )}
               <Button variant="outline" className="w-full mt-2" asChild>
                 <Link href="/dashboard/documents">
@@ -192,14 +194,14 @@ export function StudentDashboard({ user }: DashboardProps) {
                 </Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </GlassCardContent>
+        </GlassCard>
 
-        <Card>
-          <CardHeader>
+        <GlassCard>
+          <GlassCardHeader>
             <CardTitle className="text-lg">Attendance Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
+          </GlassCardHeader>
+          <GlassCardContent>
             {isLoading ? (
               <div className="flex justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -207,8 +209,8 @@ export function StudentDashboard({ user }: DashboardProps) {
             ) : attendanceSummary.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No attendance data available</p>
             ) : (
-              <div className="space-y-3">
-                {attendanceSummary.map((subj: { subjectId: string; subjectCode: string; subjectName: string; percentage: number }) => (
+              <div>
+                {attendanceSummary.map((subj) => (
                   <div key={subj.subjectId} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium truncate">{subj.subjectCode} - {subj.subjectName}</span>
@@ -219,8 +221,8 @@ export function StudentDashboard({ user }: DashboardProps) {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </GlassCardContent>
+        </GlassCard>
       </div>
     </div>
   )

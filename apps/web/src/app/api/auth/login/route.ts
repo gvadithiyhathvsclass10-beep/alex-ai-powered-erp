@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { createLocalSession, LOCAL_AUTH_COOKIE, isLocalAuth } from '@/lib/local-auth'
+import { createLocalSession, LOCAL_AUTH_COOKIE, isLocalAuth, getAuthCookieOptions } from '@/lib/local-auth'
 import { compare } from 'bcryptjs'
 import { NextResponse } from 'next/server'
 
@@ -39,13 +39,8 @@ export async function POST(request: Request) {
       },
     })
 
-    response.cookies.set(LOCAL_AUTH_COOKIE, createLocalSession(user.id), {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    const cookieOptions = getAuthCookieOptions({ headers: { get: (name: string) => request.headers.get(name) } })
+    response.cookies.set(LOCAL_AUTH_COOKIE, createLocalSession(user.id), cookieOptions)
 
     return response
   } catch (error) {

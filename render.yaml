@@ -1,0 +1,242 @@
+# =============================================================================
+# Render Blueprint for ALEX
+# =============================================================================
+# Deploy with: render blueprint apply
+# Or create services manually using this configuration as reference.
+# =============================================================================
+
+services:
+  # -----------------------------------------------------------------------------
+  # PostgreSQL Database (Neon - External)
+  # -----------------------------------------------------------------------------
+  # Neon PostgreSQL is used instead of Render's managed PostgreSQL.
+  # Configure DATABASE_URL as an environment variable pointing to Neon.
+  # No database service defined here - use external Neon connection.
+
+  # -----------------------------------------------------------------------------
+  # Redis (Upstash - External) or Render Managed Redis
+  # -----------------------------------------------------------------------------
+  # Use Upstash Redis (serverless) or Render Redis for job queue.
+  # Configure REDIS_URL as an environment variable.
+  # No redis service defined here - use external connection.
+
+  # -----------------------------------------------------------------------------
+  # Web Service - Next.js API + SSR (Main Application)
+  # -----------------------------------------------------------------------------
+  - type: web
+    name: alex-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerBuildTarget: runner-api
+    plan: standard
+    region: oregon
+    # Auto-deploy on push to main
+    autoDeploy: true
+    # Health check endpoint
+    healthCheckPath: /api/health
+    # Environment variables (set in Render dashboard - DO NOT commit secrets)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_URL
+        # Update after first deploy with actual Render URL
+        value: https://alex-api.onrender.com
+      - key: NEXTAUTH_URL
+        value: https://alex-api.onrender.com
+      - key: AUTH_MODE
+        value: local
+      - key: NEXT_PUBLIC_AUTH_MODE
+        value: local
+      # DATABASE_URL - Set in Render dashboard (Neon connection string with SSL)
+      # Example: postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/alex?sslmode=require&pgbouncer=true
+      - key: DATABASE_URL
+        sync: false
+      # AUTH_SECRET - Generate with: openssl rand -base64 32
+      - key: AUTH_SECRET
+        sync: false
+      # ENCRYPTION_KEY - Generate with: openssl rand -hex 32 (must be stable!)
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AI_MODE
+        value: nemotron
+      # AI Provider API Keys (configure only providers you use)
+      - key: NVIDIA_NEMOTRON_API_KEY
+        sync: false
+      - key: NVIDIA_NEMOTRON_MODEL
+        value: nvidia/nemotron-3-ultra
+      - key: NVIDIA_NEMOTRON_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TOGETHER_AI_API_KEY
+        sync: false
+      # Storage configuration
+      - key: STORAGE_MODE
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: STORAGE_BUCKET_DOCUMENTS
+        value: documents
+      - key: STORAGE_BUCKET_AVATARS
+        value: avatars
+      - key: STORAGE_BUCKET_RESOURCES
+        value: resources
+      - key: MAX_FILE_SIZE_MB
+        value: "50"
+      - key: ALLOWED_FILE_TYPES
+        value: pdf,doc,docx,txt,md,csv,xls,xlsx,ppt,pptx,png,jpg,jpeg
+      # Optional: Redis for job queue (Upstash or Render Redis)
+      - key: REDIS_URL
+        sync: false
+      # Optional: Email
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Optional: Dropbox integration
+      - key: DROPBOX_APP_KEY
+        sync: false
+      - key: DROPBOX_APP_SECRET
+        sync: false
+      - key: DROPBOX_REDIRECT_URI
+        value: https://alex-api.onrender.com/api/storage/dropbox/callback
+      # Optional: Monitoring
+      - key: SENTRY_DSN
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+  # -----------------------------------------------------------------------------
+  # Background Worker - Document Processing & Scheduled Jobs
+  # -----------------------------------------------------------------------------
+  - type: worker
+    name: alex-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerBuildTarget: runner-worker
+    plan: standard
+    region: oregon
+    autoDeploy: true
+    # Same environment variables as web service
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: local
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AI_MODE
+        value: nemotron
+      - key: NVIDIA_NEMOTRON_API_KEY
+        sync: false
+      - key: NVIDIA_NEMOTRON_MODEL
+        value: nvidia/nemotron-3-ultra
+      - key: NVIDIA_NEMOTRON_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TOGETHER_AI_API_KEY
+        sync: false
+      - key: STORAGE_MODE
+        value: s3
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: STORAGE_BUCKET_DOCUMENTS
+        value: documents
+      - key: STORAGE_BUCKET_AVATARS
+        value: avatars
+      - key: STORAGE_BUCKET_RESOURCES
+        value: resources
+      - key: MAX_FILE_SIZE_MB
+        value: "50"
+      - key: ALLOWED_FILE_TYPES
+        value: pdf,doc,docx,txt,md,csv,xls,xlsx,ppt,pptx,png,jpg,jpeg
+      - key: REDIS_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: DROPBOX_APP_KEY
+        sync: false
+      - key: DROPBOX_APP_SECRET
+        sync: false
+      - key: DROPBOX_REDIRECT_URI
+        value: https://alex-api.onrender.com/api/storage/dropbox/callback
+      - key: SENTRY_DSN
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+  # -----------------------------------------------------------------------------
+  # Static Site - Frontend (Alternative: Deploy to Cloudflare Pages)
+  # -----------------------------------------------------------------------------
+  # If using Cloudflare Pages for frontend, this service is not needed.
+  # This is provided as an alternative for Render-only deployment.
+  - type: static
+    name: alex-frontend
+    buildCommand: cd apps/web && npm run build
+    staticPublishPath: apps/web/out
+    pullRequestPreviewsEnabled: true
+    envVars:
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://alex-api.onrender.com
+      - key: NEXT_PUBLIC_AUTH_MODE
+        value: local
+      # Add any other NEXT_PUBLIC_* variables needed by the frontend
+    # Note: For SPA fallback, ensure next.config.mjs has output: 'export'
+    # Or use Cloudflare Pages with _redirects for SPA routing
