@@ -1241,7 +1241,6 @@ test('10. Frontend pages & components compilation and contract verification', ()
     'app/(dashboard)/documents/page.tsx',
     'app/(dashboard)/subjects/page.tsx',
     'app/(dashboard)/planner/page.tsx',
-    'app/(dashboard)/achievements/page.tsx',
     'app/(dashboard)/drive/page.tsx',
     'app/(dashboard)/ai-settings/page.tsx',
     'components/layout/sidebar.tsx',

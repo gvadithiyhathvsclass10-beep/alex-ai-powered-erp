@@ -18,7 +18,6 @@ import {
   ClipboardCheck,
   FileText,
   Cloud,
-  Award,
   Bell,
   Settings,
   GraduationCap,
@@ -54,7 +53,6 @@ const navItems: NavItem[] = [
   { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
   { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
   { label: "Assignments", href: "/dashboard/assignments", icon: FileText, roles: ["STUDENT", "LECTURER"] },
-  { label: "Achievements", href: "/dashboard/achievements", icon: Award, roles: ["STUDENT"] },
   { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
 ]

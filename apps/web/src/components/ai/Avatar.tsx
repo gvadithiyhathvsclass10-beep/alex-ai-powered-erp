@@ -464,7 +464,6 @@ export function AIAvatar({
     '/dashboard/research': 'Research Lab - notebooks, sources, notes',
     '/dashboard/planner': 'Smart Planner - calendar, tasks, events',
     '/dashboard/subjects': 'Subject enrollment and resources',
-    '/dashboard/achievements': 'Achievements and portfolio',
     '/dashboard/settings': 'Settings and preferences',
     '/dashboard/ai-settings': 'AI Model and API configuration',
   }
