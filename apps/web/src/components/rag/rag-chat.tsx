@@ -3,30 +3,23 @@
 import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { MarkdownRenderer } from "@/components/ui/markdown"
-import {
-  Send,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Bot,
-  AlertCircle,
-  CheckCircle2,
-  BookmarkPlus,
-  Sparkles,
-  Zap,
-  FileText,
-  X,
-  Check,
-} from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
+import { ChatComposer } from "@/components/chat/ChatComposer"
+import { MessageBubble } from "@/components/chat/ChatMessage"
+
+interface AttachedFile {
+  id: string
+  name: string
+  type: string
+  size: number
+  preview?: string
+  file: File
+}
 
 export interface Citation {
   id: string
@@ -201,85 +194,90 @@ export function RAGChat({
   }, [messages])
 
   const sendMessage = useMutation({
-    mutationFn: async (query: string) => {
-      const response = await fetch("/api/rag/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          conversationId: activeConversationId,
-          subjectId,
-          projectId,
-          notebookId,
-          documentIds: effectiveDocumentIds,
-          sourceIds,
-          useDocuments: Boolean(effectiveDocumentIds && effectiveDocumentIds.length > 0),
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.error || "Query failed")
-      }
-
-      return response.json()
-    },
-    onSuccess: (data) => {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: data.answer,
-        citations: data.citations || [],
-        sources: data.sources || [],
-        isSourceSupported: data.isSourceSupported,
-        groundingStatus: data.groundingStatus,
-        groundingNote: data.groundingNote,
-        provider: data.provider,
-        model: data.model,
-        createdAt: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, newMessage])
-      queryClient.invalidateQueries({ queryKey: ["conversations"] })
-      if (data.conversationId) {
-        setActiveConversationId(data.conversationId)
-        queryClient.invalidateQueries({ queryKey: ["conversation", data.conversationId] })
-        if (!conversationId && onConversationCreated) {
-          onConversationCreated(data.conversationId)
+      mutationFn: async ({ query, attachments }: { query: string; attachments?: AttachedFile[] }) => {
+        const formData = new FormData()
+        formData.append("query", query)
+        formData.append("conversationId", activeConversationId || "")
+        formData.append("subjectId", subjectId || "")
+        formData.append("projectId", projectId || "")
+        formData.append("notebookId", notebookId || "")
+        formData.append("documentIds", JSON.stringify(effectiveDocumentIds))
+        formData.append("sourceIds", JSON.stringify(sourceIds))
+        formData.append("useDocuments", JSON.stringify(Boolean(effectiveDocumentIds && effectiveDocumentIds.length > 0)))
+        
+        if (attachments && attachments.length > 0) {
+          attachments.forEach((attachment, index) => {
+            formData.append(`attachments[${index}]`, attachment.file)
+          })
         }
-      }
-    },
-    onError: (error) => {
-      const detail = error instanceof Error ? error.message : "Failed to send message"
-      setMessages((prev) => [...prev, {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content: `I couldn't get a response from the AI provider. ${detail} Check AI Settings to confirm the API key and selected model, then try again.`,
+
+        const response = await fetch("/api/rag/query", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}))
+          throw new Error(error.error || "Query failed")
+        }
+
+        return response.json()
+      },
+      onSuccess: (data) => {
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: data.answer,
+          citations: data.citations || [],
+          sources: data.sources || [],
+          isSourceSupported: data.isSourceSupported,
+          groundingStatus: data.groundingStatus,
+          groundingNote: data.groundingNote,
+          provider: data.provider,
+          model: data.model,
+          createdAt: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, newMessage])
+        queryClient.invalidateQueries({ queryKey: ["conversations"] })
+        if (data.conversationId) {
+          setActiveConversationId(data.conversationId)
+          queryClient.invalidateQueries({ queryKey: ["conversation", data.conversationId] })
+          if (!conversationId && onConversationCreated) {
+            onConversationCreated(data.conversationId)
+          }
+        }
+      },
+      onError: (error) => {
+        const detail = error instanceof Error ? error.message : "Failed to send message"
+        setMessages((prev) => [...prev, {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `I couldn't get a response from the AI provider. ${detail} Check AI Settings to confirm the API key and selected model, then try again.`,
+          createdAt: new Date().toISOString(),
+        }])
+        toast({ title: "AI response failed", description: detail, variant: "destructive" })
+      },
+      onSettled: () => {
+        setIsLoading(false)
+      },
+    })
+
+    const handleSubmit = async (content: string, attachments: AttachedFile[]) => {
+      if (!content.trim() && attachments.length === 0) return
+      if (isLoading) return
+
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content,
         createdAt: new Date().toISOString(),
-      }])
-      toast({ title: "AI response failed", description: detail, variant: "destructive" })
-    },
-    onSettled: () => {
-      setIsLoading(false)
-    },
-  })
+      }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-      createdAt: new Date().toISOString(),
+      setMessages((prev) => [...prev, userMessage])
+      setInput("")
+      setIsLoading(true)
+      await sendMessage.mutateAsync({ query: content, attachments })
     }
-
-    setMessages((prev) => [...prev, userMessage])
-    const currentInput = input
-    setInput("")
-    setIsLoading(true)
-    sendMessage.mutate(currentInput)
-  }
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -403,50 +401,35 @@ export function RAGChat({
         </ScrollArea>
         
         <Separator className="border-border/50" />
-        <form onSubmit={handleSubmit} className="mt-4 space-y-2">
-          <div className="flex gap-2">
-            <Textarea
-              placeholder={
-                notebookId
-                  ? "Ask a question or follow-up grounded in your notebook sources..."
-                  : useDocuments
-                  ? "Ask about your selected documents..."
-                  : "Ask a question..."
-              }
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSubmit(e)
-                }
-              }}
-              className="flex-1 min-h-[80px] max-h-[200px] resize-none input-futuristic"
-              disabled={isLoading}
-              rows={2}
-            />
-            <Button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              size="lg"
-              className="h-12 btn-primary-gradient flex-shrink-0"
-            >
-              <span className="flex items-center gap-2">
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                <span className="hidden sm:inline">{isLoading ? "Sending..." : "Send"}</span>
-              </span>
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground/60 text-center">
-            Responses cite source title, page, and section when supported, and explicitly identify unsupported questions.
-            {notebookId && " Notebook mode: answers cite exact source, page, and section."}
-            {useDocuments && !notebookId && " Document context is active for this conversation."}
-          </p>
-        </form>
+        <ChatComposer
+          onSendMessage={handleSubmit}
+          onVoiceInput={setTranscript}
+          disabled={isLoading}
+          isLoading={isLoading}
+          placeholder={
+            notebookId
+              ? "Ask a question or follow-up grounded in your notebook sources..."
+              : useDocuments
+              ? "Ask about your selected documents..."
+              : "Ask a question..."
+          }
+          maxAttachments={5}
+          maxFileSize={10 * 1024 * 1024}
+          acceptedFileTypes={[
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+            "text/markdown",
+            "text/csv",
+            "application/json",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+          ]}
+        />
       </CardContent>
     </Card>
   )
@@ -488,204 +471,12 @@ function LoadingIndicator() {
   )
 }
 
-interface MessageBubbleProps {
+export interface MessageBubbleProps {
   message: Message
   showSources: boolean
   onToggleSources: () => void
   onCopy: (text: string) => void
   onSaveAsNote?: (title: string, content: string) => void
-}
-
-function MessageBubble({
-  message,
-  showSources,
-  onToggleSources,
-  onCopy,
-  onSaveAsNote,
-}: MessageBubbleProps) {
-  const isUser = message.role === "user"
-  const hasCitations = Boolean(message.citations && message.citations.length > 0)
-  const hasSources = Boolean(message.sources && message.sources.length > 0)
-  const isSupported =
-    message.isSourceSupported !== undefined
-      ? message.isSourceSupported
-      : message.groundingStatus === "SUPPORTED" || hasCitations
-
-  const groundingStatusColor = {
-    SUPPORTED: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
-    PARTIAL: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-    UNSUPPORTED: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-    NO_SOURCES: "text-muted-foreground bg-muted border-border/50",
-  }
-
-  return (
-    <div className={cn("flex gap-3 animate-in", isUser && "flex-row-reverse")}>
-      <div
-        className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser ? "bg-gradient-primary text-primary-foreground" : "bg-primary/10 text-primary"
-        )}
-      >
-        {isUser ? (
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-            />
-          </svg>
-        ) : (
-          <Bot className="h-4 w-4" />
-        )}
-      </div>
-      <div className={cn("flex-1 max-w-[85%]", isUser ? "text-right" : "text-left")}>
-        <div
-          className={cn(
-            "inline-block rounded-2xl px-4 py-3",
-            isUser ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-secondary border border-border/50 rounded-tl-none"
-          )}
-        >
-          {/* Grounding Status Badge */}
-          {!isUser && (message.groundingStatus || message.isSourceSupported !== undefined) && (
-            <div className="mb-2.5 flex items-center gap-2 flex-wrap">
-              {message.groundingStatus && (
-                <Badge
-                  variant="outline"
-                  className={cn("text-[11px] flex items-center gap-1", groundingStatusColor[message.groundingStatus])}
-                >
-                  {message.groundingStatus === "SUPPORTED" && <CheckCircle2 className="h-3 w-3" />}
-                  {message.groundingStatus === "PARTIAL" && <AlertCircle className="h-3 w-3" />}
-                  {message.groundingStatus === "UNSUPPORTED" && <AlertCircle className="h-3 w-3" />}
-                  {message.groundingStatus === "NO_SOURCES" && <FileText className="h-3 w-3" />}
-                  {message.groundingStatus === "SUPPORTED" && "Source-Supported"}
-                  {message.groundingStatus === "PARTIAL" && "Partially Supported"}
-                  {message.groundingStatus === "UNSUPPORTED" && "Not Supported by Sources"}
-                  {message.groundingStatus === "NO_SOURCES" && "No Sources Available"}
-                </Badge>
-              )}
-              {message.groundingNote && (
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  {message.groundingNote}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Message Content with Markdown */}
-          <MarkdownRenderer content={message.content} />
-
-          {/* Citations */}
-          {hasCitations && (
-            <div className="mt-3 pt-2 border-t border-border/50 flex flex-wrap gap-1.5">
-              {message.citations!.map((citation, index) => (
-                <Badge
-                  key={citation.id || index}
-                  variant="outline"
-                  className="text-xs cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 flex items-center gap-1"
-                  onClick={() => navigator.clipboard.writeText(citation.excerpt || "")}
-                  title={citation.excerpt}
-                >
-                  <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-primary/20 text-primary">
-                    {index + 1}
-                  </span>
-                  <span className="truncate max-w-[200px]">{citation.documentTitle}</span>
-                  {citation.pageNumber && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-secondary text-muted-foreground">
-                      p.{citation.pageNumber}
-                    </span>
-                  )}
-                  {citation.sectionTitle && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-accent/20 text-accent">
-                      {citation.sectionTitle}
-                    </span>
-                  )}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* Model Info */}
-          {!isUser && (message.provider || message.model) && (
-            <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {message.provider && (
-                  <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-primary/10 text-primary">
-                    {message.provider}
-                  </span>
-                )}
-                {message.model && (
-                  <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-accent/10 text-accent">
-                    {message.model}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
-            </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 hover:bg-secondary"
-            onClick={() => onCopy(message.content)}
-            title="Copy message"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-          {!isUser && onSaveAsNote && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-secondary"
-              onClick={() =>
-                onSaveAsNote(
-                  `Q&A Note (${new Date().toLocaleDateString()})`,
-                  message.content
-                )
-              }
-              title="Save answer to Notebook Notes"
-            >
-              <BookmarkPlus className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {(hasCitations || hasSources) && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-secondary"
-              onClick={onToggleSources}
-              title={showSources ? "Hide cited excerpts" : "Show cited excerpts"}
-            >
-              {showSources ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-        </div>
-        
-        {showSources && (
-          <div className="mt-2 ml-4 mr-2 space-y-2 border-l-2 border-primary/20 pl-3 animate-in">
-            {(message.sources && message.sources.length > 0
-              ? message.sources
-              : (message.citations || []).map(c => ({
-                  id: c.id,
-                  documentId: c.documentId,
-                  documentTitle: c.documentTitle,
-                  pageNumber: c.pageNumber,
-                  sectionTitle: c.sectionTitle,
-                  similarity: c.relevanceScore,
-                  excerpt: c.excerpt,
-                }))
-            ).map((source, index) => (
-              <SourceCard key={source.id || index} source={source} index={index} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 interface SourceCardProps {
