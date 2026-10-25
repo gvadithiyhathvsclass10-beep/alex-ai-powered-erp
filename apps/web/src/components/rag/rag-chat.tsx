@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { MarkdownRenderer } from "@/components/ui/markdown"
 import {
   Send,
   Loader2,
@@ -573,9 +574,7 @@ function MessageBubble({
           )}
 
           {/* Message Content with Markdown */}
-          <div className="whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
-            {message.content}
-          </div>
+          <MarkdownRenderer content={message.content} />
 
           {/* Citations */}
           {hasCitations && (

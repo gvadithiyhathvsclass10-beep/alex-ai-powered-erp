@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { MarkdownRenderer } from "@/components/ui/markdown"
 
 // Speech Recognition types (not in standard TypeScript lib)
 interface SpeechRecognition extends EventTarget {
@@ -411,7 +412,7 @@ export function AIAvatar({
             "inline-block rounded-2xl px-4 py-2 relative",
             message.role === "user" ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"
           )}>
-            <div className="whitespace-pre-wrap">{message.content}</div>
+            <MarkdownRenderer content={message.content} />
             <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full right-0 mb-1">
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyMessage(message.content)} title="Copy">
                 <Copy className="h-3 w-3" />
