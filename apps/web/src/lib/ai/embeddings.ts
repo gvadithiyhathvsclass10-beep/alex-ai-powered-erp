@@ -163,7 +163,7 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
   private apiKey: string
   private model: string
 
-  constructor(apiKey: string, model = 'text-embedding-004') {
+  constructor(apiKey: string, model = 'gemini-embedding-001') {
     this.apiKey = apiKey
     this.model = model
   }
@@ -175,7 +175,7 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
 
     const baseUrl = (process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '')
     const response = await fetchWithTimeout(
-      `${baseUrl}/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
+      `${baseUrl}/models/${this.model}:batchEmbedContents?key=${encodeURIComponent(this.apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -414,7 +414,7 @@ export async function getUserEmbeddingProvider(
     {
       provider: 'GOOGLE_GEMINI',
       key: process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
-      model: 'text-embedding-004',
+      model: 'gemini-embedding-001',
     },
     { provider: 'MISTRAL', key: process.env.MISTRAL_API_KEY, model: 'mistral-embed' },
   ]

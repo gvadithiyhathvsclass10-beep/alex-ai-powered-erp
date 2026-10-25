@@ -74,6 +74,14 @@ export function ChatComposer({
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
+  React.useEffect(() => {
+    return () => {
+      attachments.forEach((attachment) => {
+        if (attachment.preview) URL.revokeObjectURL(attachment.preview)
+      })
+    }
+  }, [attachments])
+
   // Voice recognition
   const [recognition, setRecognition] = React.useState<SpeechRecognition | null>(null)
   const [interimTranscript, setInterimTranscript] = React.useState("")
@@ -202,6 +210,8 @@ export function ChatComposer({
   }
 
   const removeAttachment = (id: string) => {
+    const removed = attachments.find((attachment) => attachment.id === id)
+    if (removed?.preview) URL.revokeObjectURL(removed.preview)
     setAttachments(prev => prev.filter(a => a.id !== id))
   }
 
@@ -227,7 +237,11 @@ export function ChatComposer({
     
     onSendMessage(content, attachments)
     setInput("")
+    attachments.forEach((attachment) => {
+      if (attachment.preview) URL.revokeObjectURL(attachment.preview)
+    })
     setAttachments([])
+    if (fileInputRef.current) fileInputRef.current.value = ""
     setTranscript("")
   }
 

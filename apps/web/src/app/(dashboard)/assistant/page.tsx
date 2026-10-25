@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book } from "lucide-react"
+import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book, Trash2 } from "lucide-react"
 import { formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -158,6 +158,28 @@ export default function AssistantPage() {
         description: err instanceof Error ? err.message : "Failed to create conversation",
         variant: "destructive",
       }),
+  })
+
+  const deleteConversation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/conversations/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || "Failed to delete conversation")
+      }
+      return id
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      queryClient.removeQueries({ queryKey: ["conversation", id] })
+      if (selectedConversation === id) setSelectedConversation(null)
+      toast({ title: "Conversation deleted" })
+    },
+    onError: (err) => toast({
+      title: "Could not delete conversation",
+      description: err instanceof Error ? err.message : "Please try again.",
+      variant: "destructive",
+    }),
   })
 
   const updateProviderConfig = useMutation({
@@ -431,10 +453,13 @@ export default function AssistantPage() {
                         key={conv.id}
                         conversation={conv}
                         isActive={selectedConversation === conv.id}
-                        onClick={() => setSelectedConversation(conv.id)}
+                        onClick={() => {
+                          setSelectedConversation(conv.id)
+                          setLeftPanelOpen(false)
+                        }}
                         onDelete={(e) => {
                           e.stopPropagation()
-                          // Delete handler would go here
+                          deleteConversation.mutate(conv.id)
                         }}
                       />
                     ))}
@@ -567,6 +592,7 @@ export default function AssistantPage() {
               {selectedConversation ? (
                 <div className="min-h-0 flex-1 flex flex-col">
                   <RAGChat
+                    key={selectedConversation}
                     conversationId={selectedConversation}
                     onConversationCreated={(id) => setSelectedConversation(id)}
                     useDocuments={useDocuments}
@@ -721,17 +747,25 @@ function NavLink({ href, icon: Icon, label, badge, isActive, collapsed }: {
   )
 }
 
-function ConversationItem({ conversation, isActive, onClick, onDelete }: { 
+function ConversationItem({ conversation, isActive, onClick, onDelete }: {
   conversation: Conversation
   isActive: boolean
   onClick: () => void
   onDelete: (e: React.MouseEvent) => void
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onClick()
+        }
+      }}
       className={cn(
-        "w-full text-left p-3 rounded-lg transition-all duration-200 flex items-center gap-2",
+        "group w-full text-left p-3 rounded-lg transition-all duration-200 flex items-center gap-2 cursor-pointer",
         isActive
           ? "bg-primary/15 border border-primary/30 text-foreground"
           : "text-muted-foreground hover:bg-secondary hover:text-foreground hover:border-border"
@@ -744,20 +778,20 @@ function ConversationItem({ conversation, isActive, onClick, onDelete }: {
           {conversation._count?.messages ?? 0} messages
           <span>·</span>
           {formatRelativeTime(conversation.updatedAt)}
-          {conversation.provider && (
-            <>
-              <span>·</span>
-              <span className="px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary">{conversation.provider}</span>
-            </>
-          )}
+          {conversation.provider && <><span>·</span><span className="px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary">{conversation.provider}</span></>}
         </p>
       </div>
-      {!isActive && (
-        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={onDelete}>
-          <History className="h-3 w-3" />
-        </Button>
-      )}
-    </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 opacity-60 hover:opacity-100"
+        onClick={onDelete}
+        aria-label={`Delete ${conversation.title || "conversation"}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   )
 }
 

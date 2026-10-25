@@ -323,7 +323,7 @@ export async function POST(request: Request) {
       )
     const currentOverlap = computeChunkTermOverlap(currentTerms, searchResults)
     const contextualOverlap = computeChunkTermOverlap(contextualTerms, searchResults)
-    const hasRelevantSourceEvidence =
+    let hasRelevantSourceEvidence =
       searchResults.length > 0 &&
       (isBroadOverviewQuery ||
         currentOverlap > 0 ||
@@ -384,9 +384,15 @@ Guidelines:
     // Process file attachments if any
     let attachmentContext: SearchResult[] = []
     if (body.attachments && body.attachments.length > 0) {
+      if (body.attachments.length > 5) {
+        return NextResponse.json({ error: "You can attach up to 5 files per message." }, { status: 400 })
+      }
       try {
         const attachmentResults = await Promise.all(
           body.attachments.map(async (file: File) => {
+            if (file.size > 10 * 1024 * 1024) {
+              throw new Error(`Attachment "${file.name}" exceeds the 10 MB limit.`)
+            }
             // Validate file type
             const { documentType, normalizedMimeType } = validateUploadedFile(
               file.name,
@@ -415,7 +421,7 @@ Guidelines:
             // Generate embeddings for the chunks
             const embeddingResult = await getUserEmbeddingProvider(user.id)
             if (!embeddingResult) {
-              return null
+              throw new Error("File attachments require an active embedding-capable provider. Configure an embeddings model in AI Settings and try again.")
             }
 
             const { embeddings } = await embeddingResult.provider.generateEmbeddings(
@@ -452,13 +458,17 @@ Guidelines:
         // Flatten and filter out null results
         attachmentContext = attachmentResults.flat().filter(Boolean) as SearchResult[]
       } catch (error) {
-        console.warn('[RAG Query] Failed to process attachments:', error)
+        console.warn('[RAG Query] Attachment processing failed:', {
+          reason: error instanceof Error ? error.message.slice(0, 180) : 'UNKNOWN_ATTACHMENT_ERROR',
+        })
+        throw error
       }
     }
 
-    // Combine search results with attachment context
+    // Explicitly attached files are part of the user's requested context. Do not
+    // discard them merely because the saved-document vector search returned no hits.
+    if (attachmentContext.length > 0) hasRelevantSourceEvidence = true
     const combinedContext = [...attachmentContext, ...effectiveContextForGeneration]
-
     const effectiveContextForGenerationFinal = hasRelevantSourceEvidence ? combinedContext : []
 
     if (stream && 'generateStream' in chatProvider && typeof chatProvider.generateStream === 'function') {

@@ -45,10 +45,10 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   GOOGLE_GEMINI: {
     id: 'GOOGLE_GEMINI',
     name: 'Google Gemini',
-    defaultChatModel: 'gemini-1.5-flash',
-    defaultEmbeddingModel: 'text-embedding-004',
-    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.0-pro'],
-    embeddingModels: ['text-embedding-004', 'embedding-001'],
+    defaultChatModel: 'gemini-2.5-flash',
+    defaultEmbeddingModel: 'gemini-embedding-001',
+    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    embeddingModels: ['gemini-embedding-001', 'text-embedding-004', 'embedding-001'],
     capabilities: ['chat', 'embeddings', 'reasoning', 'vision', 'structured', 'summarization'],
     envKey: 'GOOGLE_GEMINI_API_KEY',
     baseUrlEnv: 'GOOGLE_GEMINI_BASE_URL',
@@ -451,6 +451,64 @@ export async function fetchWithAISafeTimeout(
   }
 }
 
+/**
+ * Retries only transient provider overload/rate-limit responses. The request body
+ * is reused unchanged and each attempt gets its own timeout controller.
+ */
+export async function fetchWithAIRetry(
+  url: string,
+  init: RequestInit,
+  provider: string,
+  model: string,
+  timeoutMs = getAIRequestTimeoutMs(),
+  maxRetries = 4
+): Promise<Response> {
+  const retries = Math.max(0, Math.min(4, Math.floor(maxRetries)))
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetchWithAISafeTimeout(url, init, provider, model, timeoutMs)
+    if (![429, 503].includes(response.status) || attempt >= retries) {
+      return response
+    }
+
+    let reason = response.status === 503 ? 'UPSTREAM_UNAVAILABLE' : 'RATE_LIMITED'
+    try {
+      const body = await response.clone().json()
+      const raw = [body?.error?.reason, body?.error?.code, body?.error?.status, body?.error?.message, body?.message]
+        .filter((part) => typeof part === 'string')
+        .join(' ')
+      if (/MODEL_CAPACITY_EXHAUSTED|capacity exhausted|no capacity/i.test(raw)) {
+        reason = 'MODEL_CAPACITY_EXHAUSTED'
+      } else if (/quota|billing|insufficient/i.test(raw)) {
+        // Quota/billing errors are not transient even if the provider uses 429.
+        return response
+      }
+    } catch {
+      // Some providers return non-JSON overload responses; status is sufficient.
+    }
+
+    const retryAfter = response.headers.get('Retry-After')
+    let waitMs = Math.min(4000, 200 * (2 ** attempt))
+    if (retryAfter) {
+      const seconds = Number(retryAfter)
+      const dateMs = Date.parse(retryAfter)
+      if (Number.isFinite(seconds) && retryAfter.trim() !== '') {
+        waitMs = Math.min(30000, Math.max(0, seconds * 1000))
+      } else if (Number.isFinite(dateMs)) {
+        waitMs = Math.min(30000, Math.max(0, dateMs - Date.now()))
+      }
+    }
+    console.warn('[AIService] Transient provider response; retrying', {
+      provider,
+      model,
+      status: response.status,
+      reason,
+      retry: attempt + 1,
+      maxRetries: retries,
+    })
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+  }
+}
+
 export async function classifyProviderHttpError(
   response: Response,
   provider: string,
@@ -482,7 +540,17 @@ export async function classifyProviderHttpError(
 
   if (response.status === 429) {
     throw new AIRateLimitError(
-      `${provider} rate limit or quota exceeded: ${detail}`,
+      `${provider} rate limit or quota exceeded. Wait before trying again or check your provider quota.`,
+      provider,
+      model
+    )
+  }
+
+  if (response.status === 503 || /MODEL_CAPACITY_EXHAUSTED|capacity exhausted|no capacity available/i.test(detail)) {
+    throw new AIServiceError(
+      `${provider} model "${model}" is temporarily unavailable due to provider capacity. Please retry shortly or select another model.`,
+      503,
+      'MODEL_TEMPORARILY_UNAVAILABLE',
       provider,
       model
     )
@@ -841,7 +909,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       generationConfig.responseMimeType = 'application/json'
     }
 
-    const res = await fetchWithAISafeTimeout(
+    const res = await fetchWithAIRetry(
       url,
       {
         method: 'POST',
@@ -881,7 +949,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       { role: 'user' as const, content: input.prompt },
     ]
 
-    const res = await fetchWithAISafeTimeout(
+    const res = await fetchWithAIRetry(
       url,
       {
         method: 'POST',
@@ -945,7 +1013,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       payload.response_format = { type: 'json_object' }
     }
 
-    const res = await fetchWithAISafeTimeout(
+    const res = await fetchWithAIRetry(
       url,
       {
         method: 'POST',

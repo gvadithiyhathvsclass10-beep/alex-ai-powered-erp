@@ -9,7 +9,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/infrastructure.test.cjs && node --test tests/routes-and-integration.test.cjs && node --test tests/ai-service.test.cjs && node --test tests/document-pipeline.test.cjs && node --test tests/research-notebook.test.cjs && node --test tests/teacher-classroom.test.cjs",
+    "test": "node --test tests/repair-regressions.test.cjs && node --test tests/infrastructure.test.cjs && node --test tests/routes-and-integration.test.cjs && node --test tests/ai-service.test.cjs && node --test tests/document-pipeline.test.cjs && node --test tests/research-notebook.test.cjs && node --test tests/teacher-classroom.test.cjs",
     "test:watch": "node --test --watch tests/*.test.cjs",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.cjs",
     "db:generate": "prisma generate --schema=prisma/schema.prisma",

@@ -140,11 +140,13 @@ export function RAGChat({
     isLoading: isLoadingHistory,
     isError: isHistoryError,
     error: historyError,
+    refetch: refetchHistory,
   } = useQuery({
     queryKey: ["conversation", activeConversationId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!activeConversationId) return null
-      const res = await fetch(`/api/conversations/${activeConversationId}`)
+      const requestedConversationId = activeConversationId
+      const res = await fetch(`/api/conversations/${requestedConversationId}`, { signal })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || "Failed to load conversation messages")
@@ -152,6 +154,8 @@ export function RAGChat({
       return res.json()
     },
     enabled: Boolean(activeConversationId),
+    staleTime: 0,
+    refetchOnMount: "always",
   })
 
   // Load conversation messages when data is available
@@ -242,7 +246,7 @@ export function RAGChat({
         if (data.conversationId) {
           setActiveConversationId(data.conversationId)
           queryClient.invalidateQueries({ queryKey: ["conversation", data.conversationId] })
-          if (!conversationId && onConversationCreated) {
+          if (onConversationCreated && data.conversationId !== conversationId) {
             onConversationCreated(data.conversationId)
           }
         }
@@ -276,7 +280,11 @@ export function RAGChat({
       setMessages((prev) => [...prev, userMessage])
       setInput("")
       setIsLoading(true)
-      await sendMessage.mutateAsync({ query: content, attachments })
+      try {
+        await sendMessage.mutateAsync({ query: content, attachments })
+      } catch {
+        // The mutation's onError handler already shows the actionable error message.
+      }
     }
 
   const copyToClipboard = (text: string) => {
@@ -373,9 +381,12 @@ export function RAGChat({
             ) : isHistoryError ? (
               <div className="flex items-center justify-center py-8 text-destructive gap-2">
                 <AlertCircle className="h-5 w-5" />
-                <span>
-                  {historyError instanceof Error ? historyError.message : "Failed to load conversation"}
-                </span>
+                <div className="flex flex-col items-center gap-3">
+                  <span>{historyError instanceof Error ? historyError.message : "Failed to load conversation"}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => refetchHistory()}>
+                    Retry loading history
+                  </Button>
+                </div>
               </div>
             ) : messages.length === 0 ? (
               <WelcomeEmptyState notebookId={notebookId} />
@@ -403,7 +414,6 @@ export function RAGChat({
         <Separator className="border-border/50" />
         <ChatComposer
           onSendMessage={handleSubmit}
-          onVoiceInput={setTranscript}
           disabled={isLoading}
           isLoading={isLoading}
           placeholder={

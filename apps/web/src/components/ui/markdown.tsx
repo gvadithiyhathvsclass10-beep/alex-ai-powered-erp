@@ -26,7 +26,7 @@ export function MarkdownRenderer({
     <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
       {blocks.map((block, index) => (
         <React.Fragment key={index}>
-          {renderBlock(block)}
+          {renderBlock(block, copyCodeEnabled)}
         </React.Fragment>
       ))}
     </div>
@@ -289,14 +289,14 @@ function parseMarkdown(content: string): MarkdownBlock[] {
 /**
  * Render a single markdown block
  */
-function renderBlock(block: MarkdownBlock): React.ReactElement | null {
+function renderBlock(block: MarkdownBlock, copyCodeEnabled: boolean): React.ReactElement | null {
   switch (block.type) {
     case 'heading':
       return renderHeading(block)
     case 'paragraph':
       return renderParagraph(block)
     case 'code':
-      return renderCodeBlock(block)
+      return renderCodeBlock(block, copyCodeEnabled)
     case 'list':
       return renderList(block)
     case 'table':
@@ -329,18 +329,30 @@ function renderParagraph(block: MarkdownBlock): React.ReactElement {
   )
 }
 
-function renderCodeBlock(block: MarkdownBlock): React.ReactElement {
+function renderCodeBlock(block: MarkdownBlock, copyCodeEnabled: boolean): React.ReactElement {
   const language = block.language || ''
   const code = block.code || ''
   
   return (
     <div key="code-block" className="relative my-4 rounded-lg bg-muted border border-border overflow-hidden">
-      {language && (
-        <div className="absolute top-2 right-2 z-10 px-2 py-0.5 text-xs text-muted-foreground bg-background/80 rounded-bl">
-          {language}
-        </div>
-      )}
-      <pre className="p-4 overflow-x-auto"><code className={cn('text-sm font-mono', language && `language-${language}`)}>{code}</code></pre>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 text-xs text-muted-foreground">
+        <span>{language || "Code"}</span>
+        {copyCodeEnabled && (
+          <button
+            type="button"
+            className="rounded px-2 py-1 hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(code)
+              } catch {
+                // Clipboard permissions may be unavailable in insecure contexts.
+              }
+            }}
+            aria-label="Copy code"
+          >Copy code</button>
+        )}
+      </div>
+      <pre className="m-0 p-4 overflow-x-auto"><code className={cn('text-sm font-mono', language && `language-${language}`)}>{code}</code></pre>
     </div>
   )
 }
@@ -376,14 +388,14 @@ function renderTable(block: MarkdownBlock): React.ReactElement {
   
   return (
     <div key="table" className="my-4 overflow-x-auto">
-      <table className="min-w-full text-sm border-collapse">
+      <table className="min-w-full text-sm border-collapse border border-border/70">
         <thead>
           <tr className="bg-muted/50 border-b border-border">
             {block.rows
               .filter(r => r.isHeader)
               .flatMap(r => r.cells.map((cell, idx) => 
                 <th key={idx} className={cn(
-                  "px-3 py-2 text-left font-medium text-foreground",
+                  "px-4 py-3 text-left font-semibold text-foreground border-r border-border/50 last:border-r-0",
                   block.align[idx] === 'center' && 'text-center',
                   block.align[idx] === 'right' && 'text-right'
                 )}>
@@ -399,7 +411,7 @@ function renderTable(block: MarkdownBlock): React.ReactElement {
               <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-muted/30' : ''}>
                 {row.cells.map((cell, cellIdx) => (
                   <td key={cellIdx} className={cn(
-                    "px-3 py-2 border-t border-border/50",
+                    "px-4 py-3 border-t border-r border-border/50 last:border-r-0 align-top",
                     block.align[cellIdx] === 'center' && 'text-center',
                     block.align[cellIdx] === 'right' && 'text-right'
                   )}>
@@ -466,13 +478,16 @@ function processInlineFormatting(text: string): React.ReactNode {
     // Links
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (linkMatch) {
+      const href = linkMatch[2].trim()
+      const safeHref = /^(https?:|mailto:|\/|#)/i.test(href) ? href : null
+      if (!safeHref) return <span key={index}>{linkMatch[1]}</span>
       return (
-        <a 
-          key={index} 
-          href={linkMatch[2]} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-primary underline hover:no-underline"
+        <a
+          key={index}
+          href={safeHref}
+          target={/^https?:/i.test(safeHref) ? "_blank" : undefined}
+          rel={/^https?:/i.test(safeHref) ? "noopener noreferrer" : undefined}
+          className="text-primary underline hover:no-underline break-words"
         >
           {linkMatch[1]}
         </a>

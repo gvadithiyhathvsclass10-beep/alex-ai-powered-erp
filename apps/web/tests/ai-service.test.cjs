@@ -578,7 +578,7 @@ test('AIService: never fakes success when key is missing and classifies 401, 429
           baseUrl,
           prompt: 'Test 503',
         }),
-      (err) => err.statusCode === 502 && err.code === 'UPSTREAM_ERROR'
+      (err) => err.statusCode === 503 && err.code === 'MODEL_TEMPORARILY_UNAVAILABLE'
     )
 
     // 504 Timeout
@@ -595,6 +595,28 @@ test('AIService: never fakes success when key is missing and classifies 401, 429
         }),
       (err) => err.statusCode === 504 && err.code === 'AI_TIMEOUT'
     )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
+test('AIService: retries transient 503 capacity exhaustion only up to the configured bound', async () => {
+  const aiService = require(path.join(srcRoot, 'lib/ai/service.ts'))
+  let attempts = 0
+  const server = http.createServer((_req, res) => {
+    attempts += 1
+    res.writeHead(503, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: { reason: 'MODEL_CAPACITY_EXHAUSTED', message: 'No capacity available' } }))
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address()
+  try {
+    const response = await aiService.fetchWithAIRetry(
+      `http://127.0.0.1:${port}/chat/completions`,
+      { method: 'GET' }, 'OPENAI', 'gpt-test', 1000, 2
+    )
+    assert.equal(response.status, 503)
+    assert.equal(attempts, 3, 'initial request plus two retries')
   } finally {
     await new Promise(resolve => server.close(resolve))
   }
