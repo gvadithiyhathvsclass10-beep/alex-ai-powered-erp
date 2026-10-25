@@ -79,8 +79,14 @@ export default function AISettingsPage() {
           setConnectedCredentialId(active.id)
           setProviderId(active.provider)
         }
+      } else {
+        console.error("Failed to load credentials:", response.status)
+        setCredentials([])
       }
-    } catch { /* Keep the setup screen usable when the initial request fails. */ }
+    } catch (error) {
+      console.error("Error loading credentials:", error)
+      setCredentials([])
+    }
   }, [])
 
   React.useEffect(() => { void loadCredentials() }, [loadCredentials])

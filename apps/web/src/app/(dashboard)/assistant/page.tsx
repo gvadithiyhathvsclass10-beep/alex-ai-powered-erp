@@ -456,7 +456,7 @@ export default function AssistantPage() {
 
       {/* MAIN CONTENT AREA */}
       <main className={cn(
-        "min-w-0 min-h-0 h-full flex-1 flex flex-col transition-all duration-300",
+        "min-w-0 min-h-0 flex-1 flex flex-col transition-all duration-300",
         leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
       )}>
         {/* Top Bar with Provider Selector */}
