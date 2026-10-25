@@ -428,7 +428,7 @@ export function RAGChat({
               type="submit"
               disabled={!input.trim() || isLoading}
               size="lg"
-              className="self-end h-12 btn-primary-gradient"
+              className="h-12 btn-primary-gradient flex-shrink-0"
             >
               <span className="flex items-center gap-2">
                 {isLoading ? (

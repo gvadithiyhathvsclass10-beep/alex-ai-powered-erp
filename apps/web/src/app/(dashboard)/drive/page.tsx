@@ -143,20 +143,21 @@ export default function DrivePage() {
               </div>
               {connected && (
                 <div className="pt-4 border-t border-border">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-2">
                     <Button
                       variant={currentPath ? "outline" : "ghost"}
                       size="sm"
                       onClick={handleGoUp}
                       disabled={!currentPath}
+                      className="w-full sm:w-auto"
                     >
                       <ArrowUp className="mr-1.5 h-3.5 w-3.5" />
                       Up
                     </Button>
-                    <span className="text-sm text-muted-foreground flex-1 truncate">
+                    <span className="text-sm text-muted-foreground flex-1 truncate sm:mt-1">
                       {currentPath ? '/' + currentPath : '/ (root)'}
                     </span>
-                    <Button variant="outline" size="sm" onClick={() => refetchList()}>
+                    <Button variant="outline" size="sm" onClick={() => refetchList()} className="w-full sm:w-auto">
                       <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                       Refresh
                     </Button>
@@ -164,15 +165,18 @@ export default function DrivePage() {
 
                   <Card className="border-border">
                     <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                         <CardTitle className="text-base">Files</CardTitle>
                         {listData?.entries?.some(e => e.isImportable) && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleSelectAll(listData.entries as DropboxEntry[])}
-                              className={selectedFiles.size === (listData.entries as DropboxEntry[])?.filter(e => e.isImportable).length ? "bg-primary text-primary-foreground" : ""}
+                              className={cn(
+                                selectedFiles.size === (listData.entries as DropboxEntry[])?.filter(e => e.isImportable).length ? "bg-primary text-primary-foreground" : "",
+                                "w-full sm:w-auto"
+                              )}
                             >
                               <Check className="mr-1.5 h-3.5 w-3.5" />
                               Select All Importable
@@ -181,6 +185,7 @@ export default function DrivePage() {
                               size="sm"
                               onClick={handleImport}
                               disabled={selectedFiles.size === 0 || isImporting}
+                              className="w-full sm:w-auto"
                             >
                               <Download className="mr-1.5 h-3.5 w-3.5" />
                               Import Selected ({selectedFiles.size})
@@ -212,12 +217,12 @@ export default function DrivePage() {
                                   key={entry.id}
                                   onClick={() => isFolder ? handleNavigate(entry.path) : handleSelectFile(entry.path)}
                                   className={cn(
-                                    "w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left",
+                                    "w-full flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors text-left",
                                     isSelected && "bg-primary/5 border-l-2 border-primary"
                                   )}
                                 >
                                   {isFolder ? (
-                                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                                   ) : isImportable ? (
                                     <Checkbox
                                       checked={isSelected}
@@ -225,31 +230,31 @@ export default function DrivePage() {
                                       className="flex-shrink-0"
                                     />
                                   ) : (
-                                    <span className="w-5 flex-shrink-0" />
+                                    <span className="w-6 flex-shrink-0" />
                                   )}
                                   <div className={cn(
-                                    "flex-1 min-w-0 flex items-center gap-2",
+                                    "flex-1 min-w-0 flex items-center gap-3",
                                     !isImportable && !isFolder && "text-muted-foreground/50"
                                   )}>
                                     {isFolder ? (
-                                      <Folder className="h-5 w-5 text-amber-500" />
+                                      <Folder className="h-6 w-6 text-amber-500" />
                                     ) : isImportable ? (
-                                      <File className="h-5 w-5 text-blue-500" />
+                                      <File className="h-6 w-6 text-blue-500" />
                                     ) : (
-                                      <File className="h-5 w-5 text-muted-foreground/30" />
+                                      <File className="h-6 w-6 text-muted-foreground/30" />
                                     )}
                                     <div className="flex-1 min-w-0">
-                                      <p className={cn("text-sm font-medium truncate", isFolder ? "text-foreground" : "text-foreground")}>
+                                      <p className={cn("text-base font-medium truncate", isFolder ? "text-foreground" : "text-foreground")}>
                                         {entry.name}
                                       </p>
-                                      <p className="text-xs text-muted-foreground truncate flex items-center gap-2">
+                                      <p className="text-sm text-muted-foreground truncate flex items-center gap-2">
                                         {entry.size && formatSize(entry.size)}
                                         {entry.modified && '· Modified ' + new Date(entry.modified).toLocaleDateString()}
                                       </p>
                                     </div>
                                   </div>
                                   {!isFolder && !isImportable && (
-                                    <span className="text-xs text-muted-foreground/50 px-2 py-0.5 rounded bg-muted">
+                                    <span className="text-sm text-muted-foreground/50 px-3 py-1 rounded bg-muted">
                                       Unsupported
                                     </span>
                                   )}

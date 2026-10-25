@@ -3,6 +3,8 @@ import { decrypt, encrypt } from '@/lib/encryption'
 const API = 'https://api.dropboxapi.com/2'
 const CONTENT = 'https://content.dropboxapi.com/2'
 
+const DROPBOX_SCOPES = 'files.content.read files.metadata.read'
+
 function config() {
   const appKey = process.env.DROPBOX_APP_KEY
   const appSecret = process.env.DROPBOX_APP_SECRET
@@ -20,6 +22,7 @@ export function getDropboxAuthorizeUrl(state: string) {
     token_access_type: 'offline',
     redirect_uri: redirectUri,
     state,
+    scope: DROPBOX_SCOPES,
   })
   return `https://www.dropbox.com/oauth2/authorize?${params}`
 }
@@ -53,9 +56,29 @@ export async function dropboxUpload(token: string, path: string, body: Buffer, c
   return response.json()
 }
 
+/**
+ * Gets a valid Dropbox access token, refreshing if necessary.
+ * Returns the access token, whether it was refreshed, the new expiry, and the encrypted access token for persistence.
+ */
 export async function getDropboxToken(encryptedAccessToken: string, encryptedRefreshToken?: string | null, expiresAt?: Date | null) {
   if (expiresAt && expiresAt.getTime() > Date.now() + 60_000) return { accessToken: await decrypt(encryptedAccessToken), refreshed: false }
   if (!encryptedRefreshToken) return { accessToken: await decrypt(encryptedAccessToken), refreshed: false }
   const refreshed = await refreshDropboxToken(await decrypt(encryptedRefreshToken))
   return { accessToken: refreshed.access_token, refreshed: true, expiresAt: new Date(Date.now() + (refreshed.expires_in || 14_400) * 1000), encryptedAccessToken: await encrypt(refreshed.access_token) }
+}
+
+/**
+ * Downloads a file from Dropbox.
+ * Returns the file content as a Buffer.
+ */
+export async function dropboxDownload(token: string, path: string): Promise<Buffer> {
+  const response = await fetch(`${CONTENT}/files/download`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'Dropbox-API-Arg': JSON.stringify({ path }),
+    },
+  })
+  if (!response.ok) throw new Error(`Dropbox download failed: ${response.status}`)
+  return Buffer.from(await response.arrayBuffer())
 }

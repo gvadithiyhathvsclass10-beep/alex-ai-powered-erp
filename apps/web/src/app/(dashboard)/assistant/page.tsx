@@ -481,8 +481,8 @@ export default function AssistantPage() {
 
             <div className="flex items-center gap-3">
               {/* Provider Selector */}
-              <div className="hidden sm:flex items-center gap-2">
-                <Label htmlFor="provider-select" className="text-xs text-muted-foreground">Model</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="provider-select" className="text-xs text-muted-foreground hidden sm:block">Model</Label>
                 <Select value={selectedProviderId || activeProvider?.id || ""} onValueChange={handleProviderChange}>
                   <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
                     <SelectValue placeholder="Select provider" />
@@ -523,7 +523,7 @@ export default function AssistantPage() {
               <Button
                 variant={useDocuments ? "default" : "outline"}
                 size="sm"
-                className="gap-1 hidden sm:flex"
+                className="gap-1"
                 onClick={() => setUseDocuments(!useDocuments)}
                 aria-label={useDocuments ? "Disable document context" : "Enable document context"}
               >

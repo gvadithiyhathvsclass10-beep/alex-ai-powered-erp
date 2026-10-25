@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { getDropboxToken, dropboxRpc, dropboxUpload } from '@/lib/dropbox'
+import { getDropboxToken, dropboxRpc, dropboxDownload } from '@/lib/dropbox'
 import { createDocumentRecord, processDocument } from '@/lib/document-processing/pipeline'
 import { validateUploadedFile } from '@/lib/document-processing/extractors'
 import { DocumentStatus } from '@prisma/client'
@@ -69,29 +69,18 @@ export async function POST(request: Request) {
           }
 
           // Download file from Dropbox
-          const downloadResponse = await fetch(`${process.env.DROPBOX_CONTENT_HOST || 'https://content.dropboxapi.com'}/2/files/download`, {
-            method: 'POST',
-            headers: {
-              authorization: `Bearer ${accessToken}`,
-              'Dropbox-API-Arg': JSON.stringify({ path: dropboxPath }),
-            },
-          })
-
-          if (!downloadResponse.ok) {
-            throw new Error(`Download failed: ${downloadResponse.status}`)
-          }
-
-          const fileBuffer = Buffer.from(await downloadResponse.arrayBuffer())
+          const fileBuffer = await dropboxDownload(accessToken, dropboxPath)
 
           // Validate file type
           const { documentType, normalizedMimeType } = validateUploadedFile(
             metadata.name,
-            downloadResponse.headers.get('content-type') || 'application/octet-stream',
+            'application/octet-stream', // We don't have the content-type from Dropbox download
             fileBuffer
           )
 
-          // Create document record
-          const { document, storagePath } = await createDocumentRecord(user.id, new File([fileBuffer], metadata.name), subjectId, projectId, notebookId)
+          // Create document record using a Blob instead of File (Node.js compatible)
+          const file = new Blob([fileBuffer], { type: normalizedMimeType })
+          const { document, storagePath } = await createDocumentRecord(user.id, file as unknown as File, subjectId, projectId, notebookId, metadata.name)
 
           // Process document
           await processDocument({

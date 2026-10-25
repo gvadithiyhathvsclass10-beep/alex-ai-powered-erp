@@ -84,6 +84,7 @@ LOG_LEVEL=warn
 DROPBOX_APP_KEY=[FROM DROPBOX APP CONSOLE]
 DROPBOX_APP_SECRET=[FROM DROPBOX APP CONSOLE - SERVER ONLY]
 DROPBOX_REDIRECT_URI=https://your-production-domain.com/api/storage/dropbox/callback
+DROPBOX_CONTENT_HOST=https://content.dropboxapi.com
 
 # =============================================================================
 # FIREBASE FUNCTIONS CONFIG (Set via: firebase functions:config:set)

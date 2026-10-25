@@ -9,19 +9,28 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get('state')
   const expected = request.cookies.get('dropbox_oauth_state')?.value
   if (!code || !state || !expected || state !== expected) return NextResponse.json({ error: 'Invalid Dropbox authorization state' }, { status: 400 })
-  const userId = state.split('.')[0]
+  
+  const stateParts = state.split('.')
+  if (stateParts.length < 2) return NextResponse.json({ error: 'Invalid Dropbox authorization state' }, { status: 400 })
+  const userId = stateParts[0]
+  
   try {
     const tokens = await exchangeDropboxCode(code)
     const account = await dropboxRpc<{ email?: string; name?: { display_name?: string } }>(tokens.access_token, 'users/get_current_account', {})
+    
+    // Verify the connected account email matches the expected user (additional security)
+    // Note: In a production app, you might want to verify the user is authenticated here
+    // For now we trust the state parameter which was set by the authenticated user
+    
     await prisma.dropboxConnection.upsert({
       where: { userId },
       create: { userId, accountEmail: account.email, accountName: account.name?.display_name, accessToken: await encrypt(tokens.access_token), refreshToken: tokens.refresh_token ? await encrypt(tokens.refresh_token) : null, expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null },
-      update: { accountEmail: account.email, accountName: account.name?.display_name, accessToken: await encrypt(tokens.access_token), refreshToken: tokens.refresh_token ? await encrypt(tokens.refresh_token) : undefined, expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null },
+      update: { accountEmail: account.email, accountName: account.name?.display_name, accessToken: await encrypt(tokens.access_token), refreshToken: tokens.refresh_token ? await encrypt(tokens.refresh_token) : null, expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null },
     })
-    const response = NextResponse.redirect(new URL('/settings?tab=storage&dropbox=connected', request.url))
+    const response = NextResponse.redirect(new URL('/dashboard/drive?dropbox=connected', request.url))
     response.cookies.delete('dropbox_oauth_state')
     return response
   } catch (error) {
-    return NextResponse.redirect(new URL(`/settings?tab=storage&dropbox=error&message=${encodeURIComponent(error instanceof Error ? error.message : 'connection failed')}`, request.url))
+    return NextResponse.redirect(new URL(`/dashboard/drive?dropbox=error&message=${encodeURIComponent(error instanceof Error ? error.message : 'connection failed')}`, request.url))
   }
 }

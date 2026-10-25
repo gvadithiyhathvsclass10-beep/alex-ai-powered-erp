@@ -120,6 +120,7 @@ export function DocumentList({
   const [searchQuery, setSearchQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [typeFilter, setTypeFilter] = React.useState<string>("all")
+  const [showFilters, setShowFilters] = React.useState(false)
 
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -153,52 +154,99 @@ export function DocumentList({
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
           <CardTitle>Documents ({filteredDocuments.length})</CardTitle>
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search documents..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 w-64"
+                className="pl-8 w-full"
               />
             </div>
-            <SelectWrapper>
-              <Label htmlFor="status-filter" className="sr-only">Filter by status</Label>
-              <select
-                id="status-filter"
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="h-9 w-40 border border-input bg-background px-3 py-2 text-sm rounded-md"
-              >
-                <option value="all">All Status</option>
-                {statuses.map(status => (
-                  <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
-                ))}
-              </select>
-            </SelectWrapper>
-            <SelectWrapper>
-              <Label htmlFor="type-filter" className="sr-only">Filter by type</Label>
-              <select
-                id="type-filter"
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value)}
-                className="h-9 w-40 border border-input bg-background px-3 py-2 text-sm rounded-md"
-              >
-                <option value="all">All Types</option>
-                <option value="PDF">PDF</option>
-                <option value="DOCX">DOCX</option>
-                <option value="TXT">TXT</option>
-                <option value="MARKDOWN">Markdown</option>
-                <option value="CSV">CSV</option>
-                <option value="XLSX">XLSX</option>
-                <option value="PPTX">PPTX</option>
-                <option value="PNG">PNG</option>
-                <option value="JPG">JPG</option>
-              </select>
-            </SelectWrapper>
+            <Button
+              variant="outline"
+              size="sm"
+              className="sm:hidden"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              Filters
+            </Button>
+            <div className="flex flex-wrap items-center gap-2 sm:hidden" style={{ display: showFilters ? 'flex' : 'none' }}>
+              <SelectWrapper className="w-full">
+                <Label htmlFor="status-filter" className="sr-only">Filter by status</Label>
+                <select
+                  id="status-filter"
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="h-9 w-full border border-input bg-background px-3 py-2 text-sm rounded-md"
+                >
+                  <option value="all">All Status</option>
+                  {statuses.map(status => (
+                    <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
+                  ))}
+                </select>
+              </SelectWrapper>
+              <SelectWrapper className="w-full">
+                <Label htmlFor="type-filter" className="sr-only">Filter by type</Label>
+                <select
+                  id="type-filter"
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="h-9 w-full border border-input bg-background px-3 py-2 text-sm rounded-md"
+                >
+                  <option value="all">All Types</option>
+                  <option value="PDF">PDF</option>
+                  <option value="DOCX">DOCX</option>
+                  <option value="TXT">TXT</option>
+                  <option value="MARKDOWN">Markdown</option>
+                  <option value="CSV">CSV</option>
+                  <option value="XLSX">XLSX</option>
+                  <option value="PPTX">PPTX</option>
+                  <option value="PNG">PNG</option>
+                  <option value="JPG">JPG</option>
+                </select>
+              </SelectWrapper>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <SelectWrapper>
+                <Label htmlFor="status-filter" className="sr-only">Filter by status</Label>
+                <select
+                  id="status-filter"
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="h-9 w-40 border border-input bg-background px-3 py-2 text-sm rounded-md"
+                >
+                  <option value="all">All Status</option>
+                  {statuses.map(status => (
+                    <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>
+                  ))}
+                </select>
+              </SelectWrapper>
+              <SelectWrapper>
+                <Label htmlFor="type-filter" className="sr-only">Filter by type</Label>
+                <select
+                  id="type-filter"
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="h-9 w-40 border border-input bg-background px-3 py-2 text-sm rounded-md"
+                >
+                  <option value="all">All Types</option>
+                  <option value="PDF">PDF</option>
+                  <option value="DOCX">DOCX</option>
+                  <option value="TXT">TXT</option>
+                  <option value="MARKDOWN">Markdown</option>
+                  <option value="CSV">CSV</option>
+                  <option value="XLSX">XLSX</option>
+                  <option value="PPTX">PPTX</option>
+                  <option value="PNG">PNG</option>
+                  <option value="JPG">JPG</option>
+                </select>
+              </SelectWrapper>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -245,12 +293,12 @@ function DocumentRow({ document, onRetry, onDelete, onView, onEdit }: DocumentRo
   const statusConfig = STATUS_CONFIG[document.status]
 
   return (
-    <div className="flex items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors">
       <div className="flex-shrink-0 p-2 bg-muted rounded-lg">
         {TYPE_ICONS[document.documentType] || <File className="h-5 w-5 text-muted-foreground" />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium truncate">{document.title}</p>
           <Badge variant="outline" className={cn("text-xs", statusConfig.color)}>
             {statusConfig.icon}
@@ -267,8 +315,8 @@ function DocumentRow({ document, onRetry, onDelete, onView, onEdit }: DocumentRo
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-          <span>{document.fileName}</span>
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-1">
+          <span className="truncate">{document.fileName}</span>
           <span>•</span>
           <span>{(Number(document.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
           {document.pageCount && (
