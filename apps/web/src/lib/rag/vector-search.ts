@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
+import { getUserEmbeddingProvider, providerSupportsEmbeddings } from '@/lib/ai/embeddings'
 import { decodeEmbeddingFromBytes } from '@/lib/document-processing/pipeline'
 import { Prisma } from '@prisma/client'
 
@@ -32,6 +32,12 @@ export interface SearchResult {
     documentType: string
     ownerId: string
   }
+}
+
+export interface SearchContext {
+  searchMode: 'semantic' | 'local' | 'keyword-only' | 'hybrid'
+  embeddingModel?: string
+  hasVectors: boolean
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {
@@ -75,20 +81,18 @@ function buildAccessibleDocumentWhere(options: SearchOptions): Prisma.DocumentWh
   }
 }
 
-export async function vectorSearch(options: SearchOptions): Promise<SearchResult[]> {
+export async function vectorSearch(options: SearchOptions): Promise<{ results: SearchResult[]; context: SearchContext }> {
   const { query, userId, limit = 10, threshold = 0.5 } = options
 
   try {
-    // Chat must still work when the user has configured a chat-only provider (for
-    // example NVIDIA/Groq) but has not configured a separate embeddings provider.
-    // In that case hybridSearch can continue with keyword results instead of failing
-    // the entire chat request before generation starts.
-    const embeddingProvider = await getUserEmbeddingProvider(userId)
-    if (!embeddingProvider) return []
+    const embeddingResult = await getUserEmbeddingProvider(userId)
+    const { provider: embeddingProvider, model, searchMode, credential } = embeddingResult
 
-    const { embeddings } = await embeddingProvider.provider.generateEmbeddings([query])
+    const { embeddings } = await embeddingProvider.generateEmbeddings([query])
     const queryEmbedding = embeddings[0]
-    if (!queryEmbedding || queryEmbedding.length === 0) return []
+    if (!queryEmbedding || queryEmbedding.length === 0) {
+      return { results: [], context: { searchMode: 'keyword-only', embeddingModel: model, hasVectors: false } }
+    }
 
     const rows = await prisma.documentChunk.findMany({
       where: {
@@ -108,9 +112,9 @@ export async function vectorSearch(options: SearchOptions): Promise<SearchResult
       take: 500,
     })
 
-    const effectiveThreshold = embeddingProvider.model === 'mock' ? -1 : threshold
+    const effectiveThreshold = searchMode === 'local' ? 0.1 : (searchMode === 'semantic' ? threshold : 0.5)
 
-    return rows
+    const results = rows
       .map(row => {
         const meta = (row.metadata || {}) as Record<string, unknown>
         const vector =
@@ -142,9 +146,18 @@ export async function vectorSearch(options: SearchOptions): Promise<SearchResult
           ownerId: row.document.ownerId,
         },
       }))
+
+    return {
+      results,
+      context: {
+        searchMode: results.length > 0 ? searchMode : 'keyword-only',
+        embeddingModel: model,
+        hasVectors: results.length > 0,
+      },
+    }
   } catch (error) {
     console.warn('Vector search failed, falling back to keyword search:', error)
-    return []
+    return { results: [], context: { searchMode: 'keyword-only', hasVectors: false } }
   }
 }
 
@@ -267,15 +280,15 @@ export async function keywordSearch(options: SearchOptions): Promise<SearchResul
   }
 }
 
-export async function hybridSearch(options: SearchOptions): Promise<SearchResult[]> {
-  const [vectorResults, keywordResults] = await Promise.all([
+export async function hybridSearch(options: SearchOptions): Promise<{ results: SearchResult[]; context: SearchContext }> {
+  const [vectorResult, keywordResults] = await Promise.all([
     vectorSearch(options),
     keywordSearch(options),
   ])
 
   const combined = new Map<string, SearchResult>()
 
-  for (const result of vectorResults) {
+  for (const result of vectorResult.results) {
     combined.set(result.id, { ...result, similarity: result.similarity * 0.7 })
   }
 
@@ -288,7 +301,20 @@ export async function hybridSearch(options: SearchOptions): Promise<SearchResult
     }
   }
 
-  return Array.from(combined.values())
+  const results = Array.from(combined.values())
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, options.limit || 10)
+
+  // Determine the effective search mode
+  const hasSemanticResults = vectorResult.results.length > 0
+  const effectiveSearchMode = hasSemanticResults ? 'hybrid' : 'keyword-only'
+
+  return {
+    results,
+    context: {
+      searchMode: effectiveSearchMode,
+      embeddingModel: vectorResult.context.embeddingModel,
+      hasVectors: hasSemanticResults,
+    },
+  }
 }

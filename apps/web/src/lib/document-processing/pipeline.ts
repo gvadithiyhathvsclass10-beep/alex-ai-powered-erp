@@ -55,7 +55,7 @@ export function decodeEmbeddingFromBytes(bytes?: Buffer | Uint8Array | null): nu
 
 export async function processDocument(
   context: ProcessingContext
-): Promise<{ status: DocumentStatus; pageCount: number; chunksCount: number; tokenCount: number; searchMode: 'hybrid' | 'keyword-only' }> {
+): Promise<{ status: DocumentStatus; pageCount: number; chunksCount: number; tokenCount: number; searchMode: 'semantic' | 'local' | 'hybrid' | 'keyword-only'; embeddingModel?: string }> {
   const { documentId, userId, fileBuffer, mimeType, documentType } = context
 
   try {
@@ -94,19 +94,19 @@ export async function processDocument(
     // Embeddings improve semantic retrieval, but should not make file upload unusable
     // for users whose chat provider has no embeddings endpoint. In that case, store
     // searchable text chunks without vectors and let hybridSearch use keyword search.
-    let embeddingProvider: Awaited<ReturnType<typeof getUserEmbeddingProvider>> | null = null
+    let embeddingResult: Awaited<ReturnType<typeof getUserEmbeddingProvider>> | null = null
     let embeddings: number[][] = []
     let tokenCount = 0
     try {
-      embeddingProvider = await getUserEmbeddingProvider(userId)
-      if (embeddingProvider && chunks.length > 0) {
-        const result = await embeddingProvider.provider.generateEmbeddings(chunks.map(c => c.content))
+      embeddingResult = await getUserEmbeddingProvider(userId)
+      if (embeddingResult && chunks.length > 0) {
+        const result = await embeddingResult.provider.generateEmbeddings(chunks.map(c => c.content))
         embeddings = result.embeddings
         tokenCount = result.tokenCount
       }
     } catch (embeddingError) {
       console.warn('[Document Pipeline] Embeddings unavailable; using keyword-only indexing:', embeddingError)
-      embeddingProvider = null
+      embeddingResult = null
       embeddings = []
       tokenCount = 0
     }
@@ -127,7 +127,7 @@ export async function processDocument(
         const embeddingBytes = embedding.length > 0 ? encodeEmbeddingToBytes(embedding) : null
         const chunkMetadata = {
           ...(chunk.metadata || {}),
-          ...(embedding.length > 0 && embeddingProvider ? { embeddingModel: embeddingProvider.model } : {}),
+          ...(embedding.length > 0 && embeddingResult ? { embeddingModel: embeddingResult.model } : {}),
         }
 
         await tx.documentChunk.create({
@@ -155,6 +155,8 @@ export async function processDocument(
       })
     })
 
+    const effectiveSearchMode = embeddingResult?.searchMode === 'semantic' ? 'hybrid' : (embeddingResult?.searchMode || 'keyword-only')
+
     await prisma.documentProcessingJob.create({
       data: {
         documentId,
@@ -165,7 +167,8 @@ export async function processDocument(
           chunksCreated: chunks.length,
           tokensUsed: tokenCount,
           pageCount,
-          searchMode: embeddingProvider ? 'hybrid' : 'keyword-only',
+          searchMode: effectiveSearchMode,
+          embeddingModel: embeddingResult?.model,
         },
       },
     })
@@ -175,7 +178,8 @@ export async function processDocument(
       pageCount,
       chunksCount: chunks.length,
       tokenCount,
-      searchMode: embeddingProvider ? 'hybrid' : 'keyword-only',
+      searchMode: effectiveSearchMode,
+      embeddingModel: embeddingResult?.model,
     }
   } catch (error) {
     console.error('[Document Pipeline] Processing error:', error)

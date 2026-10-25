@@ -149,7 +149,12 @@ export default function AISettingsPage() {
       setShowKey(false)
       setConnectedCredentialId(credentialId || "")
       await loadCredentials()
-      setMessage({ type: "success", text: `${provider.name} key saved securely. Finding available models…` })
+      const providerSupportsEmbeddings = ["OPENAI", "GOOGLE_GEMINI", "MISTRAL"].includes(providerId)
+      if (providerSupportsEmbeddings) {
+        setMessage({ type: "success", text: `${provider.name} key saved securely. Embeddings model configured automatically. Finding available chat models…` })
+      } else {
+        setMessage({ type: "success", text: `${provider.name} key saved securely. This provider doesn't support embeddings; document search will use local semantic indexing. Finding available chat models…` })
+      }
       if (credentialId) {
         const found = await discoverModels(credentialId)
         const first = found.find((model) => !model.isDeprecated && (!model.capabilities?.length || model.capabilities.includes("chat")))

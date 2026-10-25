@@ -1,6 +1,7 @@
 import { AICredential, AIProviderType as PrismaAIProviderType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
+import { SUPPORTED_AI_PROVIDERS } from '@/lib/ai/service'
 
 type AIProviderType = PrismaAIProviderType | 'MOCK'
 
@@ -9,6 +10,72 @@ const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
   'GOOGLE_GEMINI',
   'MISTRAL',
 ]
+
+/**
+ * Local embedding provider using deterministic hashing (TF-IDF-like).
+ * This provides semantic-like search without requiring an external API key.
+ * Uses 1536 dimensions to match OpenAI text-embedding-3-small for compatibility.
+ */
+export class LocalEmbeddingProvider implements EmbeddingProvider {
+  async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
+    const dims = 1536
+
+    const embeddings = texts.map(text => {
+      const vec = new Array(dims).fill(0)
+      const normalized = text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 1)
+
+      if (normalized.length === 0) {
+        vec[0] = 1
+        return vec
+      }
+
+      for (let i = 0; i < normalized.length; i++) {
+        const word = normalized[i]
+        const stem = word.length > 4 ? word.slice(0, 4) : word
+        const h1 = hashTokenToIndex(word, 1, dims)
+        const h2 = hashTokenToIndex(stem, 2, dims)
+
+        vec[h1.idx] += h1.sign * 1.5
+        vec[h2.idx] += h2.sign * 0.75
+
+        if (i + 1 < normalized.length) {
+          const bigram = `${word}_${normalized[i + 1]}`
+          const hb = hashTokenToIndex(bigram, 3, dims)
+          vec[hb.idx] += hb.sign
+        }
+      }
+
+      const norm = Math.sqrt(vec.reduce((sum, val) => sum + val * val, 0)) || 1
+      return vec.map(val => val / norm)
+    })
+
+    return {
+      embeddings,
+      tokenCount: texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
+      model: 'local-hash-1536',
+    }
+  }
+}
+
+/**
+ * Determines if a provider supports embeddings based on SUPPORTED_AI_PROVIDERS metadata.
+ */
+export function providerSupportsEmbeddings(provider: PrismaAIProviderType): boolean {
+  const meta = SUPPORTED_AI_PROVIDERS[provider]
+  return meta?.capabilities?.includes('embeddings') === true
+}
+
+/**
+ * Gets the default embedding model for a provider.
+ */
+export function getDefaultEmbeddingModel(provider: PrismaAIProviderType): string {
+  const meta = SUPPORTED_AI_PROVIDERS[provider]
+  return meta?.defaultEmbeddingModel || 'text-embedding-3-small'
+}
 
 export function getAIRequestTimeoutMs(): number {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
@@ -190,6 +257,8 @@ export function createEmbeddingProvider(
       return new MistralEmbeddingProvider(apiKey, model)
     case 'MOCK':
       return new MockEmbeddingProvider()
+    case 'local':
+      return new LocalEmbeddingProvider()
     default:
       throw new Error(`Unsupported embedding provider: ${provider}`)
   }
@@ -258,36 +327,49 @@ export class MockEmbeddingProvider implements EmbeddingProvider {
 export async function getUserEmbeddingProvider(
   userId: string,
   provider?: AIProviderType
-): Promise<{ provider: EmbeddingProvider; model: string; credential: AICredential | null }> {
+): Promise<{ provider: EmbeddingProvider; model: string; credential: AICredential | null; searchMode: 'semantic' | 'local' | 'keyword-only' }> {
   const mockAllowed =
     process.env.NODE_ENV !== 'production' &&
     (provider === 'MOCK' || (process.env.AI_MODE || '').toLowerCase() === 'mock')
 
   if (mockAllowed) {
-    return { provider: new MockEmbeddingProvider(), model: 'mock', credential: null }
+    return { provider: new MockEmbeddingProvider(), model: 'mock', credential: null, searchMode: 'semantic' }
   }
 
-  const embeddingConfig = await prisma.aIModelConfig.findFirst({
-    where: { userId, taskType: 'embeddings', isDefault: true },
+  // First, try to resolve the user's chat provider configuration to see if it supports embeddings
+  // This enables "single AI configuration" - use the same credential for chat and embeddings when possible
+  const chatConfig = await prisma.aIModelConfig.findFirst({
+    where: { userId, taskType: 'chat', isDefault: true },
     orderBy: { updatedAt: 'desc' },
   })
 
-  // Chat providers such as NVIDIA and Groq may not support embeddings. A stale or
-  // accidentally selected chat config must not block document uploads when the user
-  // also has a valid OpenAI, Gemini, or Mistral credential available.
   const explicitProvider = provider && provider !== 'MOCK'
     ? provider as PrismaAIProviderType
     : undefined
-  const configuredProvider = embeddingConfig?.provider
-  const requestedProvider = explicitProvider && EMBEDDING_CAPABLE_PROVIDERS.includes(explicitProvider)
-    ? explicitProvider
-    : configuredProvider && EMBEDDING_CAPABLE_PROVIDERS.includes(configuredProvider)
-      ? configuredProvider
-      : undefined
 
-  const allowedProviders = requestedProvider
-    ? [requestedProvider]
-    : EMBEDDING_CAPABLE_PROVIDERS
+  // Determine the target provider for embeddings:
+  // 1. Explicit provider if it supports embeddings
+  // 2. Chat provider if it supports embeddings
+  // 3. Explicitly configured embedding provider
+  // 4. Any available embedding-capable credential
+  let targetProvider: PrismaAIProviderType | undefined
+
+  if (explicitProvider && providerSupportsEmbeddings(explicitProvider)) {
+    targetProvider = explicitProvider
+  } else if (chatConfig?.provider && providerSupportsEmbeddings(chatConfig.provider)) {
+    targetProvider = chatConfig.provider
+  } else {
+    const embeddingConfig = await prisma.aIModelConfig.findFirst({
+      where: { userId, taskType: 'embeddings', isDefault: true },
+      orderBy: { updatedAt: 'desc' },
+    })
+    const configuredProvider = embeddingConfig?.provider
+    if (configuredProvider && providerSupportsEmbeddings(configuredProvider)) {
+      targetProvider = configuredProvider
+    }
+  }
+
+  const allowedProviders = targetProvider ? [targetProvider] : EMBEDDING_CAPABLE_PROVIDERS
 
   const cred = await prisma.aICredential.findFirst({
     where: {
@@ -296,7 +378,7 @@ export async function getUserEmbeddingProvider(
       isActive: true,
     },
     orderBy: [
-      ...(requestedProvider ? [] : [{ isDefault: 'desc' as const }]),
+      ...(targetProvider ? [] : [{ isDefault: 'desc' as const }]),
       { updatedAt: 'desc' },
     ],
   })
@@ -317,17 +399,13 @@ export async function getUserEmbeddingProvider(
       orderBy: { updatedAt: 'desc' },
     })
 
-    const defaultModel =
-      cred.provider === 'OPENAI'
-        ? 'text-embedding-3-small'
-        : cred.provider === 'GOOGLE_GEMINI'
-          ? 'text-embedding-004'
-          : 'mistral-embed'
+    const defaultModel = getDefaultEmbeddingModel(cred.provider)
 
     return {
       provider: createEmbeddingProvider(cred.provider, apiKey, modelConfig?.modelId),
       model: modelConfig?.modelId || defaultModel,
       credential: cred,
+      searchMode: 'semantic',
     }
   }
 
@@ -342,7 +420,7 @@ export async function getUserEmbeddingProvider(
   ]
 
   const envCredential = envProviders.find(item =>
-    (!requestedProvider || item.provider === requestedProvider) && item.key?.trim()
+    (!targetProvider || item.provider === targetProvider) && item.key?.trim()
   )
 
   if (envCredential?.key) {
@@ -350,12 +428,17 @@ export async function getUserEmbeddingProvider(
       provider: createEmbeddingProvider(envCredential.provider, envCredential.key.trim()),
       model: envCredential.model,
       credential: null,
+      searchMode: 'semantic',
     }
   }
 
-  throw new Error(
-    requestedProvider
-      ? `No active ${requestedProvider} API credential is configured for embeddings. Add a valid key in AI Settings → Credentials tab, then select an embeddings model in AI Settings → Models tab (embeddings task type).`
-      : 'No embeddings API key is configured. To enable document search and RAG: 1) Add an embedding provider credential (OpenAI, Google Gemini, or Mistral) in AI Settings → Credentials tab, 2) Set a default embeddings model in AI Settings → Models tab (select "embeddings" task type).'
-  )
+  // Fallback to local embedding provider (deterministic hashing-based)
+  // This provides semantic-like search without requiring an external API key
+  console.info('[Embeddings] No embedding-capable provider configured; using local hashing-based embeddings')
+  return {
+    provider: new LocalEmbeddingProvider(),
+    model: 'local-hash-1536',
+    credential: null,
+    searchMode: 'local',
+  }
 }

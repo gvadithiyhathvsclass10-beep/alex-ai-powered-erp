@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { hybridSearch, type SearchResult } from '@/lib/rag/vector-search'
+import { hybridSearch, type SearchResult, type SearchContext } from '@/lib/rag/vector-search'
 import { getUserChatProvider, type AIProviderType } from '@/lib/rag/generation'
 import { canAccessDocument } from '@/lib/document-processing/access'
 import { formatAIServiceErrorResponse } from '@/lib/ai/service'
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
       ])
 
     // Perform hybrid search across user's accessible documents
-    const searchResults = await hybridSearch({
+    const { results: searchResults, context: searchContext } = await hybridSearch({
       query: retrievalQuery,
       userId: user.id,
       userRole: user.role,
@@ -469,6 +469,11 @@ Guidelines:
       conversationId: targetConversationId,
       sources: serializedSources,
       tokenUsage: response.tokenUsage,
+      searchContext: {
+        searchMode: searchContext.searchMode,
+        embeddingModel: searchContext.embeddingModel,
+        hasVectors: searchContext.hasVectors,
+      },
     })
   } catch (error) {
     console.error('[RAG Query] Error:', error)
