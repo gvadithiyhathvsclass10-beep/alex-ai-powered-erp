@@ -259,7 +259,7 @@ export function RAGChat({
   }
 
   return (
-    <Card className="flex min-h-0 h-full flex-col panel">
+    <Card className="flex min-h-0 flex-col panel">
       <CardHeader className="pb-3 border-b border-border/50">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -315,7 +315,7 @@ export function RAGChat({
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col min-h-0">
-        <ScrollArea className="flex-1 pr-2">
+        <ScrollArea className="min-h-0 flex-1 pr-2">
           <div className="space-y-4 pb-4">
             {isLoadingHistory ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">

@@ -3,6 +3,16 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
   ArrowLeft, Bot, Check, CheckCircle2, ChevronDown, ExternalLink,
   Eye, EyeOff, KeyRound, Loader2, RefreshCw, Search, ShieldCheck,
   Sparkles, Trash2, Unplug, WandSparkles, XCircle,
@@ -167,7 +177,6 @@ export default function AISettingsPage() {
   }
 
   const removeCredential = async (credential: Credential) => {
-    if (!window.confirm(`Disconnect ${credential.providerName}?`)) return
     try {
       const response = await fetch(`/api/ai/credentials/${credential.id}`, { method: "DELETE" })
       if (!response.ok) throw new Error("Could not disconnect provider")
@@ -175,6 +184,20 @@ export default function AISettingsPage() {
       if (connectedCredentialId === credential.id) setConnectedCredentialId("")
       setMessage({ type: "success", text: `${credential.providerName} disconnected.` })
     } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Disconnect failed" }) }
+  }
+
+  // State for AlertDialog
+  const [credentialToDelete, setCredentialToDelete] = React.useState<Credential | null>(null)
+
+  const handleDeleteConfirm = () => {
+    if (credentialToDelete) {
+      removeCredential(credentialToDelete)
+      setCredentialToDelete(null)
+    }
+  }
+
+  const handleDeleteClick = (credential: Credential) => {
+    setCredentialToDelete(credential)
   }
 
   return (
@@ -199,6 +222,80 @@ export default function AISettingsPage() {
           <div className="space-y-2"><label htmlFor="api-key" className="text-sm font-medium">API key</label><div className="flex gap-2"><div className="relative flex-1"><input id="api-key" autoComplete="off" spellCheck={false} type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste your API key here" className="h-12 w-full rounded-xl border border-input bg-background px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-cyan-500"/><button type="button" onClick={() => setShowKey((value) => !value)} className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground" aria-label={showKey ? "Hide API key" : "Show API key"}>{showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><button type="submit" disabled={loading || !apiKey.trim()} className="inline-flex h-12 min-w-32 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{loading ? "Connecting…" : "Connect"}</button></div><p className="text-xs text-muted-foreground">Your key is sent to the authenticated server over HTTPS and is never shown again after saving.</p></div>
         </form>
       </section>
+
+      {/* Saved Credentials Section */}
+      {credentials.length > 0 && (
+        <section className="rounded-2xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Saved Credentials</h2>
+                <p className="text-sm text-muted-foreground">Manage your connected AI providers. Keys are encrypted and never exposed.</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6 space-y-3">
+            {credentials.map((credential) => (
+              <div key={credential.id} className="flex items-center justify-between p-4 border rounded-xl bg-background/50">
+                <div className="flex items-center gap-4 min-w-0">
+                  {PROVIDERS.find((p) => p.id === credential.provider) && (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{credential.providerName || credential.provider}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant={credential.isActive ? "default" : "secondary"} className="gap-1">
+                        {credential.isActive ? (
+                          <>
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            Active
+                          </>
+                        ) : (
+                          "Inactive"
+                        )}
+                      </Badge>
+                      {credential.isDefault && (
+                        <Badge variant="outline" className="text-xs">Default</Badge>
+                      )}
+                      {credential.models && credential.models.length > 0 && (
+                        <span>Models: {credential.models.slice(0, 3).join(", ")}{credential.models.length > 3 ? "…" : ""}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 hover:bg-red-500/10" onClick={() => handleDeleteClick(credential)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete API Key?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently remove the API key for {credential.providerName || credential.provider}. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="flex gap-2 justify-end">
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 text-white hover:bg-red-700">
+                          Delete
+                        </AlertDialogAction>
+                      </div>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5 sm:p-6"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600"><Bot className="h-5 w-5" /></div><div><h2 className="font-semibold">Choose your chat model</h2><p className="text-sm text-muted-foreground">Search discovered models or enter a model ID.</p></div></div><button type="button" disabled={loadingModels || !(connectedCredentialId || connectedForProvider?.id)} onClick={() => void discoverModels(connectedCredentialId || connectedForProvider!.id, true)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-muted disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loadingModels ? "animate-spin" : ""}`} /> Refresh models</button></div>
