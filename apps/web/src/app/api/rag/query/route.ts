@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       context: extraContext,
       provider,
       model,
+      useDocuments,
     } = body
 
     if (!query || typeof query !== 'string' || !query.trim()) {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     }
 
     // If notebookId is specified, verify access and collect all notebook source documentIds
+    // Notebooks are explicitly source-grounded workflows - always use documents
     let effectiveDocumentIds: string[] | undefined = Array.isArray(documentIds) && documentIds.length > 0
       ? [...documentIds]
       : undefined
@@ -204,6 +206,9 @@ export async function POST(request: Request) {
       }
     }
 
+    // Determine if we should perform document retrieval
+    const shouldRetrieveDocuments = notebookId || (useDocuments && effectiveDocumentIds && effectiveDocumentIds.length > 0)
+
     // Build retrieval query incorporating recent user turn context for follow-up questions
     const priorUserMessages = conversationHistory
       .filter(m => m.role === 'user')
@@ -247,18 +252,25 @@ export async function POST(request: Request) {
         }),
       ])
 
-    // Perform hybrid search across user's accessible documents
-    const { results: searchResults, context: searchContext } = await hybridSearch({
-      query: retrievalQuery,
-      userId: user.id,
-      userRole: user.role,
-      subjectId,
-      projectId,
-      notebookId: effectiveNotebookId,
-      documentIds: effectiveDocumentIds,
-      limit: limit || 10,
-      threshold: threshold ?? 0.5,
-    })
+    // Perform hybrid search across user's accessible documents ONLY when documents are explicitly requested
+    let searchResults: SearchResult[] = []
+    let searchContext: SearchContext = { searchMode: 'none', hasVectors: false }
+
+    if (shouldRetrieveDocuments) {
+      const result = await hybridSearch({
+        query: retrievalQuery,
+        userId: user.id,
+        userRole: user.role,
+        subjectId,
+        projectId,
+        notebookId: effectiveNotebookId,
+        documentIds: effectiveDocumentIds,
+        limit: limit || 10,
+        threshold: threshold ?? 0.5,
+      })
+      searchResults = result.results
+      searchContext = result.context
+    }
 
     // Evaluate whether the query is actually supported by the retrieved source chunks
     const currentTerms = extractQueryTerms(query)
@@ -300,23 +312,29 @@ Rules:
 2. Cite every source-supported claim using [Source X] format (which maps to the exact source title, page number, and section).
 3. Clearly distinguish source-supported information from unsupported information: if the provided notebook sources do NOT contain the answer to the user's question, begin your response with "Not supported by the provided notebook sources:" and state clearly what is missing from the sources without fabricating any citations.
 4. For follow-up questions, use the conversation history together with the provided sources and maintain accurate [Source X] citations.`
-      : `You are ALEX, a personal AI academic assistant for a student. You have access to:
-1. Retrieved document sources (primary evidence when available)
-2. User-approved persistent memories (authoritative facts)
-3. Academic context (enrollments, assignments, attendance, calendar)
-4. Current page context (what the user is viewing)
-
+      : useDocuments
+      ? `You are ALEX, a personal AI academic assistant. The user has enabled document context for this conversation.
 Guidelines:
-- Answer using the provided sources, memories, and academic context
+- Answer using the provided document sources, memories, and academic context
 - Cite document sources using [Source X] format when referencing uploaded documents
 - Reference memories as "According to your saved memory..."
 - If document sources are empty or don't contain enough information, clearly state that no uploaded document supports the claim
+- Be concise, accurate, and never fabricate citations, page numbers, or memories`
+      : `You are ALEX, a personal AI academic assistant for a student. You have access to:
+1. User-approved persistent memories (authoritative facts)
+2. Academic context (enrollments, assignments, attendance, calendar)
+3. Current page context (what the user is viewing)
+
+Guidelines:
+- Answer using memories and academic context
+- Reference memories as "According to your saved memory..."
+- Do not reference uploaded documents unless explicitly provided
 - Be concise, accurate, and never fabricate citations, page numbers, or memories`
 
     const fullSystemPrompt =
       systemPrompt +
       `\n\nConversation History:\n${historyMessages.map(m => `${m.role}: ${m.content}`).join('\n') || 'None'}` +
-      (notebookId ? '' : `\n\nMemories & Academic Context:\n${memoryContext}\n${academicContext}`) +
+      (notebookId || useDocuments ? '' : `\n\nMemories & Academic Context:\n${memoryContext}\n${academicContext}`) +
       `\n\nCurrent Page Context:\n${extraContext || 'None'}`
 
     const effectiveContextForGeneration = hasRelevantSourceEvidence ? searchResults : []
@@ -385,18 +403,22 @@ Guidelines:
       ]
     }
 
-    const groundingStatus: 'SUPPORTED' | 'UNSUPPORTED' | 'NO_SOURCES' = searchResults.length === 0
+    const groundingStatus: 'SUPPORTED' | 'UNSUPPORTED' | 'NO_SOURCES' = shouldRetrieveDocuments && searchResults.length === 0
       ? 'NO_SOURCES'
       : isSourceSupported
         ? 'SUPPORTED'
-        : 'UNSUPPORTED'
+        : shouldRetrieveDocuments
+          ? 'UNSUPPORTED'
+          : 'NO_SOURCES'
 
     const groundingNote =
       groundingStatus === 'SUPPORTED'
         ? `Grounded in ${finalCitations.length} cited source${finalCitations.length === 1 ? '' : 's'} (${[...new Set(finalCitations.map(c => `${c.documentTitle}${c.pageNumber ? ` p.${c.pageNumber}` : ''}${c.sectionTitle ? ` · ${c.sectionTitle}` : ''}`))].join(', ')}).`
         : groundingStatus === 'NO_SOURCES'
           ? 'No processed sources are available in this scope — response is not backed by uploaded source documents.'
-          : 'Not supported by the uploaded sources — the available documents do not contain evidence for this query.'
+          : useDocuments
+            ? 'Not supported by the uploaded sources — the available documents do not contain evidence for this query.'
+            : 'Answered without document context (general chat mode).'
 
     let finalAnswer = response.answer
     if (

@@ -21,6 +21,8 @@ import {
   Sparkles,
   Zap,
   FileText,
+  X,
+  Check,
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -78,6 +80,9 @@ interface RAGChatProps {
   documentIds?: string[]
   sourceIds?: string[]
   initialMessages?: Message[]
+  useDocuments?: boolean
+  onDocumentSelectionChange?: (docIds: string[]) => void
+  selectedDocumentIds?: string[]
 }
 
 export function RAGChat({
@@ -87,9 +92,12 @@ export function RAGChat({
   subjectId,
   projectId,
   notebookId,
-  documentIds,
+  documentIds: propDocumentIds,
   sourceIds,
   initialMessages = [],
+  useDocuments = false,
+  onDocumentSelectionChange,
+  selectedDocumentIds = [],
 }: RAGChatProps) {
   const queryClient = useQueryClient()
   const [activeConversationId, setActiveConversationId] = React.useState<string | undefined>(
@@ -99,6 +107,8 @@ export function RAGChat({
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [showSources, setShowSources] = React.useState<Record<string, boolean>>({})
+  const [showDocumentSelector, setShowDocumentSelector] = React.useState(false)
+  const [localSelectedDocIds, setLocalSelectedDocIds] = React.useState<string[]>(selectedDocumentIds)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   // Sync conversationId prop to state
@@ -114,6 +124,22 @@ export function RAGChat({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookId, projectId, subjectId])
+
+  // Sync selectedDocumentIds prop to local state
+  React.useEffect(() => {
+    setLocalSelectedDocIds(selectedDocumentIds)
+  }, [selectedDocumentIds])
+
+  const effectiveDocumentIds = useDocuments && localSelectedDocIds.length > 0 ? localSelectedDocIds : undefined
+
+  const handleDocumentSelectionChange = (docIds: string[]) => {
+    setLocalSelectedDocIds(docIds)
+    onDocumentSelectionChange?.(docIds)
+  }
+
+  const handleToggleDocumentSelector = () => {
+    setShowDocumentSelector(!showDocumentSelector)
+  }
 
   const {
     data: conversationData,
@@ -184,8 +210,9 @@ export function RAGChat({
           subjectId,
           projectId,
           notebookId,
-          documentIds,
+          documentIds: effectiveDocumentIds,
           sourceIds,
+          useDocuments: Boolean(effectiveDocumentIds && effectiveDocumentIds.length > 0),
         }),
       })
 
@@ -274,7 +301,7 @@ export function RAGChat({
                   variant="outline" 
                   className="text-xs font-normal ml-2 border-primary/30 text-primary bg-primary/10"
                 >
-                  {notebookId ? "Source-Grounded" : "RAG"}
+                  {notebookId ? "Source-Grounded" : useDocuments ? "Document Context" : "General Chat"}
                 </Badge>
               </CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -299,6 +326,28 @@ export function RAGChat({
                 <Sparkles className="h-3 w-3" />
                 New Thread
               </Button>
+            )}
+            
+            {/* Document Context Toggle & Selector */}
+            {!notebookId && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={useDocuments ? "default" : "outline"}
+                  size="sm"
+                  className="gap-1"
+                  onClick={handleToggleDocumentSelector}
+                >
+                  <FileText className="h-3 w-3" />
+                  {useDocuments ? "Documents Active" : "Add Documents"}
+                </Button>
+                {showDocumentSelector && (
+                  <DocumentSelector
+                    selectedIds={localSelectedDocIds}
+                    onChange={handleDocumentSelectionChange}
+                    onClose={handleToggleDocumentSelector}
+                  />
+                )}
+              </div>
             )}
             
             {/* Provider indicator */}
@@ -359,7 +408,9 @@ export function RAGChat({
               placeholder={
                 notebookId
                   ? "Ask a question or follow-up grounded in your notebook sources..."
-                  : "Ask a question about your documents or coursework..."
+                  : useDocuments
+                  ? "Ask about your selected documents..."
+                  : "Ask a question..."
               }
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -392,6 +443,7 @@ export function RAGChat({
           <p className="text-xs text-muted-foreground/60 text-center">
             Responses cite source title, page, and section when supported, and explicitly identify unsupported questions.
             {notebookId && " Notebook mode: answers cite exact source, page, and section."}
+            {useDocuments && !notebookId && " Document context is active for this conversation."}
           </p>
         </form>
       </CardContent>
@@ -665,6 +717,98 @@ function SourceCard({ source, index }: SourceCardProps) {
         {source.sectionTitle && <span className="flex items-center gap-1"><Sparkles className="h-2.5 w-2.5" />Section: {source.sectionTitle}</span>}
       </div>
       {text && <div className="mt-2 text-xs text-muted-foreground/80 whitespace-pre-wrap bg-background/50 p-2 rounded">{text}</div>}
+    </div>
+  )
+}
+
+interface DocumentSelectorProps {
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
+  onClose: () => void
+}
+
+function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorProps) {
+  const [documents, setDocuments] = React.useState<Array<{ id: string; title: string; fileName: string }>>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        const res = await fetch("/api/documents")
+        if (res.ok) {
+          const data = await res.json()
+          setDocuments(data.documents || [])
+        }
+      } catch (e) {
+        console.error("Failed to fetch documents:", e)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchDocuments()
+  }, [])
+
+  const handleToggle = (docId: string) => {
+    const newIds = selectedIds.includes(docId)
+      ? selectedIds.filter(id => id !== docId)
+      : [...selectedIds, docId]
+    onChange(newIds)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg p-2 z-50">
+        <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          Loading documents...
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+      <div className="flex items-center justify-between p-2 border-b border-border">
+        <span className="text-sm font-medium">Select Documents</span>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="max-h-64 overflow-y-auto">
+        {documents.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground text-sm">
+            No documents available. Upload documents first.
+          </div>
+        ) : (
+          <div className="p-1 space-y-1">
+            {documents.map((doc) => (
+              <button
+                key={doc.id}
+                onClick={() => handleToggle(doc.id)}
+                className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition ${
+                  selectedIds.includes(doc.id)
+                    ? "bg-primary/10 border border-primary/30 text-primary"
+                    : "hover:bg-secondary"
+                }`}
+              >
+                <Check
+                  className={`h-4 w-4 shrink-0 ${selectedIds.includes(doc.id) ? "text-primary" : "text-muted-foreground/30"}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{doc.title}</p>
+                  <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="p-2 border-t border-border">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{selectedIds.length} document(s) selected</span>
+          <Button size="sm" variant="outline" onClick={onClose}>Done</Button>
+        </div>
+      </div>
     </div>
   )
 }

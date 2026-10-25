@@ -47,6 +47,15 @@ export default function AssistantPage() {
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
   const [leftPanelOpen, setLeftPanelOpen] = React.useState(false)
   const [selectedProviderId, setSelectedProviderId] = React.useState<string>("")
+  const [useDocuments, setUseDocuments] = React.useState(false)
+  const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([])
+
+  // Clear document selection when document context is disabled
+  React.useEffect(() => {
+    if (!useDocuments) {
+      setSelectedDocumentIds([])
+    }
+  }, [useDocuments])
 
   const {
     data: conversationsData,
@@ -466,7 +475,7 @@ export default function AssistantPage() {
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <h1 className="text-xl font-semibold text-foreground">AI Assistant</h1>
               <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
-                RAG Enabled
+                {useDocuments ? "Document Context" : "General Chat"}
               </span>
             </div>
 
@@ -510,6 +519,18 @@ export default function AssistantPage() {
                 </span>
               </div>
 
+              {/* Document Context Toggle */}
+              <Button
+                variant={useDocuments ? "default" : "outline"}
+                size="sm"
+                className="gap-1 hidden sm:flex"
+                onClick={() => setUseDocuments(!useDocuments)}
+                aria-label={useDocuments ? "Disable document context" : "Enable document context"}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span className="text-xs">{useDocuments ? "Documents Active" : "Add Documents"}</span>
+              </Button>
+
               {/* Right Panel Toggle */}
               <Button
                 variant="ghost"
@@ -548,6 +569,9 @@ export default function AssistantPage() {
                   <RAGChat
                     conversationId={selectedConversation}
                     onConversationCreated={(id) => setSelectedConversation(id)}
+                    useDocuments={useDocuments}
+                    selectedDocumentIds={selectedDocumentIds}
+                    onDocumentSelectionChange={setSelectedDocumentIds}
                   />
                 </div>
               ) : (
