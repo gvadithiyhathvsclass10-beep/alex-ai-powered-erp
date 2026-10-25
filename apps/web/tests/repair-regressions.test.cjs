@@ -35,7 +35,8 @@ test('Attached files are bounded and included in RAG context even without saved-
   assert.match(route, /body\.attachments\.length\s*>\s*5/)
   assert.match(route, /file\.size\s*>\s*10\s*\*\s*1024\s*\*\s*1024/)
   assert.match(route, /if\s*\(attachmentContext\.length\s*>\s*0\)\s*hasRelevantSourceEvidence\s*=\s*true/)
-  assert.match(route, /active embedding-capable provider/i)
+  assert.match(route, /does not need to be embedded or persisted/i)
+  assert.doesNotMatch(route, /getUserEmbeddingProvider\(user\.id\)/)
 })
 
 test('AI provider requests retry transient overload and surface a friendly 503 error', () => {
@@ -53,4 +54,39 @@ test('Markdown renderer has safe link protocols, responsive tables and code-copy
   assert.match(markdown, /overflow-x-auto/)
   assert.match(markdown, /Copy code/)
   assert.match(markdown, /https\?:\|mailto:\|\\\/\|#/)
+})
+
+test('Assistant provider selector does not render an invalid empty SelectItem', () => {
+  const page = read('src/app/(dashboard)/assistant/page.tsx')
+  assert.match(page, /providers\.length\s*>\s*0\s*\?/)
+  assert.match(page, /Configure AI provider/)
+  assert.doesNotMatch(page, /<SelectItem\s+value=""/)
+})
+
+test('RAG query rejects missing or unauthorized conversation IDs before generation', () => {
+  const route = read('src/app/api/rag/query/route.ts')
+  assert.match(route, /Conversation not found\. Start a new chat and try again\./)
+  assert.match(route, /conversation\.userId !== user\.id && user\.role !== 'ADMIN'/)
+  assert.match(route, /You do not have access to this conversation\./)
+})
+
+test('Chat UI surfaces non-JSON API errors and rejects empty AI responses', () => {
+  const chat = read('src/components/rag/rag-chat.tsx')
+  assert.match(chat, /response\.json\(\)\.catch\(\(\) => \(\{\}\)\)/)
+  assert.match(chat, /payload\.error \|\| payload\.message/)
+  assert.match(chat, /AI provider returned an empty response/)
+})
+
+test('RAG endpoint permits attachment-only messages without requiring an embedding model', () => {
+  const route = read('src/app/api/rag/query/route.ts')
+  assert.match(route, /Please analyze the attached file\(s\) and summarize the key information\./)
+  assert.match(route, /const hasAttachments = Array\.isArray\(body\.attachments\)/)
+  assert.doesNotMatch(route, /getUserEmbeddingProvider/)
+})
+
+test('Attachment preview URLs are not revoked on every composer state update', () => {
+  const composer = read('src/components/chat/ChatComposer.tsx')
+  assert.match(composer, /attachmentsRef\.current = attachments/)
+  assert.match(composer, /Revoke preview URLs only when the composer unmounts/)
+  assert.match(composer, /\}, \[\]\)/)
 })

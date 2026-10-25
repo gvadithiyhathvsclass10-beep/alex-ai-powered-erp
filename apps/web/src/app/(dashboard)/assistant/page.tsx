@@ -508,39 +508,35 @@ export default function AssistantPage() {
               {/* Provider Selector */}
               <div className="flex items-center gap-2">
                 <Label htmlFor="provider-select" className="text-xs text-muted-foreground hidden sm:block">Model</Label>
-                <Select value={selectedProviderId || activeProvider?.id || ""} onValueChange={handleProviderChange}>
-                  <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{p.name}</span>
-                          <span className="text-xs text-muted-foreground">{p.model}</span>
-                          {p.isDefault && (
-                            <CheckCircle2 className="h-3 w-3 text-primary" />
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {providers.length === 0 && (
-                      <SelectItem value="" disabled>
-                        No providers configured
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                {providers.length > 0 ? (
+                  <Select value={selectedProviderId || activeProvider?.id || providers[0].id} onValueChange={handleProviderChange}>
+                    <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.name}</span>
+                            <span className="text-xs text-muted-foreground">{p.model}</span>
+                            {p.isDefault && <CheckCircle2 className="h-3 w-3 text-primary" />}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Button id="provider-select" variant="outline" size="sm" onClick={() => router.push("/dashboard/ai-settings")}>
+                    Configure AI provider
+                  </Button>
+                )}
               </div>
 
               {/* Connection Status */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50">
-                <div className={cn(
-                  "flex h-2 w-2 rounded-full",
-                  activeProvider?.isActive ? "bg-neon-green" : "bg-muted-foreground"
-                )} />
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50" title="Credential configured; availability is confirmed when a request succeeds">
+                <div className={cn("flex h-2 w-2 rounded-full", activeProvider?.isActive ? "bg-neon-green" : "bg-muted-foreground")} />
                 <span className="text-xs font-medium text-muted-foreground">
-                  {activeProvider?.isActive ? "Connected" : "Disconnected"}
+                  {activeProvider?.isActive ? "Configured" : "Not configured"}
                 </span>
               </div>
 
@@ -866,8 +862,8 @@ function WelcomeScreen({ onNewConversation, isCreating, providers }: { onNewConv
               {/* Provider Status */}
               <div className="flex items-center justify-center gap-4 mb-6 p-4 rounded-xl bg-secondary border border-border/50">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-2 w-2 rounded-full bg-neon-green" />
-                  <span className="text-sm font-medium text-foreground">Ready</span>
+                  <div className={cn("flex h-2 w-2 rounded-full", activeProvider ? "bg-neon-green" : "bg-muted-foreground")} />
+                  <span className="text-sm font-medium text-foreground">{activeProvider ? "Provider configured" : "Setup required"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Brain className="h-4 w-4" />
@@ -890,8 +886,8 @@ function WelcomeScreen({ onNewConversation, isCreating, providers }: { onNewConv
                       <p className="font-medium text-foreground">{activeProvider.name}</p>
                       <p className="text-xs text-muted-foreground">{activeProvider.model}</p>
                     </div>
-                    <span className="ml-auto px-2 py-1 text-xs font-medium rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
-                      Connected
+                    <span className="ml-auto px-2 py-1 text-xs font-medium rounded-full bg-secondary text-muted-foreground border border-border/50">
+                      Configured · not yet tested
                     </span>
                   </div>
                 </div>

@@ -7,8 +7,6 @@ import { canAccessDocument } from '@/lib/document-processing/access'
 import { formatAIServiceErrorResponse } from '@/lib/ai/service'
 import { extractContent, validateUploadedFile, resolveDocumentType } from '@/lib/document-processing/extractors'
 import { chunkBySemanticUnits } from '@/lib/document-processing/chunker'
-import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
-import { encodeEmbeddingToBytes } from '@/lib/document-processing/pipeline'
 
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'this', 'that', 'from', 'what', 'how', 'why',
@@ -82,7 +80,7 @@ export async function POST(request: Request) {
 
     const body = await parseRequestBody(request)
     const {
-      query,
+      query: rawQuery,
       subjectId,
       projectId,
       notebookId,
@@ -98,8 +96,15 @@ export async function POST(request: Request) {
       useDocuments,
     } = body
 
-    if (!query || typeof query !== 'string' || !query.trim()) {
-      return NextResponse.json({ error: 'Query is required' }, { status: 400 })
+    const hasAttachments = Array.isArray(body.attachments) && body.attachments.length > 0
+    const query = typeof rawQuery === 'string' && rawQuery.trim()
+      ? rawQuery.trim()
+      : hasAttachments
+        ? 'Please analyze the attached file(s) and summarize the key information.'
+        : ''
+
+    if (!query) {
+      return NextResponse.json({ error: 'Enter a message or attach a file to continue.' }, { status: 400 })
     }
 
     // If notebookId is specified, verify access and collect all notebook source documentIds
@@ -240,12 +245,16 @@ export async function POST(request: Request) {
         where: { id: conversationId },
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 20 } },
       })
-      if (conversation && conversation.userId === user.id) {
-        conversationHistory = (conversation.messages || []).map(m => ({
-          role: m.role,
-          content: m.content,
-        }))
+      if (!conversation) {
+        return NextResponse.json({ error: 'Conversation not found. Start a new chat and try again.' }, { status: 404 })
       }
+      if (conversation.userId !== user.id && user.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'You do not have access to this conversation.' }, { status: 403 })
+      }
+      conversationHistory = (conversation.messages || []).map(m => ({
+        role: m.role,
+        content: m.content,
+      }))
     }
 
     // Determine if we should perform document retrieval
@@ -418,15 +427,10 @@ Guidelines:
               return null
             }
 
-            // Generate embeddings for the chunks
-            const embeddingResult = await getUserEmbeddingProvider(user.id)
-            if (!embeddingResult) {
-              throw new Error("File attachments require an active embedding-capable provider. Configure an embeddings model in AI Settings and try again.")
-            }
-
-            const { embeddings } = await embeddingResult.provider.generateEmbeddings(
-              chunks.map(c => c.content)
-            )
+            // Explicitly attached content is sent directly to the chat model as context.
+            // It does not need to be embedded or persisted to the vector index first.
+            // Requiring an embeddings provider here caused otherwise valid file attachments
+            // to fail even though their extracted text was used directly below.
 
             // Create search results for each chunk
             const searchResults: SearchResult[] = chunks.map((chunk, index) => ({

@@ -74,13 +74,18 @@ export function ChatComposer({
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
+  const attachmentsRef = React.useRef<AttachedFile[]>([])
   React.useEffect(() => {
-    return () => {
-      attachments.forEach((attachment) => {
-        if (attachment.preview) URL.revokeObjectURL(attachment.preview)
-      })
-    }
+    attachmentsRef.current = attachments
   }, [attachments])
+
+  // Revoke preview URLs only when the composer unmounts. Using `attachments` as
+  // this effect's dependency revoked every existing preview on each file change.
+  React.useEffect(() => () => {
+    attachmentsRef.current.forEach((attachment) => {
+      if (attachment.preview) URL.revokeObjectURL(attachment.preview)
+    })
+  }, [])
 
   // Voice recognition
   const [recognition, setRecognition] = React.useState<SpeechRecognition | null>(null)

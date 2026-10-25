@@ -163,7 +163,7 @@ export function RAGChat({
     if (!activeConversationId) {
       return
     }
-    if (conversationData?.messages && Array.isArray(conversationData.messages)) {
+    if (conversationData && Array.isArray(conversationData.messages)) {
       setMessages((prevMessages) => {
         // Only update if we have new data
         const newMessages = conversationData.messages.map((m: { id: string; role: string; content: string; metadata?: Record<string, unknown>; createdAt?: string }) => ({
@@ -220,16 +220,18 @@ export function RAGChat({
           body: formData,
         })
 
+        const payload = await response.json().catch(() => ({}))
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}))
-          throw new Error(error.error || "Query failed")
+          throw new Error(payload.error || payload.message || `AI request failed (${response.status})`)
         }
-
-        return response.json()
+        if (typeof payload.answer !== "string" || !payload.answer.trim()) {
+          throw new Error("The AI provider returned an empty response. Check the selected model in AI Settings and try again.")
+        }
+        return payload
       },
       onSuccess: (data) => {
         const newMessage: Message = {
-          id: Date.now().toString(),
+          id: `assistant-${data.messageId || Date.now()}`,
           role: "assistant",
           content: data.answer,
           citations: data.citations || [],
