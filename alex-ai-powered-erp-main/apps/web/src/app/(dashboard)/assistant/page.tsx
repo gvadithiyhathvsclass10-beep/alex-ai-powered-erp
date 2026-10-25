@@ -1,0 +1,934 @@
+"use client"
+
+import * as React from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { RAGChat } from "@/components/rag/rag-chat"
+import { DocumentList } from "@/components/documents/document-list"
+import { AssistantRightPanel } from "@/components/layout/assistant-right-panel"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book, Trash2 } from "lucide-react"
+import { formatRelativeTime } from "@/lib/utils"
+import { toast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+
+interface Conversation {
+  id: string
+  title: string | null
+  createdAt: string
+  updatedAt: string
+  _count?: { messages: number }
+  model?: string
+  provider?: string
+}
+
+interface AIProvider {
+  id: string
+  name: string
+  model: string
+  isActive: boolean
+  isDefault: boolean
+}
+
+export default function AssistantPage() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = React.useState("chat")
+  const [selectedConversation, setSelectedConversation] = React.useState<string | null>(null)
+  const [newConversationTitle, setNewConversationTitle] = React.useState("")
+  const [isCreatingNew, setIsCreatingNew] = React.useState(false)
+  const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
+  const [leftPanelOpen, setLeftPanelOpen] = React.useState(false)
+  const [selectedProviderId, setSelectedProviderId] = React.useState<string>("")
+  const [useDocuments, setUseDocuments] = React.useState(false)
+  const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([])
+
+  // Clear document selection when document context is disabled
+  React.useEffect(() => {
+    if (!useDocuments) {
+      setSelectedDocumentIds([])
+    }
+  }, [useDocuments])
+
+  const {
+    data: conversationsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: async () => {
+      const res = await fetch("/api/conversations")
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to fetch conversations")
+      }
+      return res.json()
+    },
+  })
+
+  const conversations: Conversation[] = Array.isArray(conversationsData)
+    ? conversationsData
+    : conversationsData?.conversations || []
+
+  const { data: providersData, isLoading: providersLoading } = useQuery({
+    queryKey: ["ai-providers"],
+    queryFn: async () => {
+      // Credentials and model configurations are separate APIs. The credentials API
+      // returns providerName/provider, not name/model; treating it as a model list
+      // made the dashboard selector blank and sent credential IDs as provider IDs.
+      const [credentialsResponse, modelsResponse] = await Promise.all([
+        fetch("/api/ai/credentials"),
+        fetch("/api/ai/models"),
+      ])
+      if (!credentialsResponse.ok) throw new Error("Failed to fetch AI credentials")
+      const credentialsPayload = await credentialsResponse.json()
+      const modelConfigs = modelsResponse.ok ? await modelsResponse.json() : []
+      const credentials = Array.isArray(credentialsPayload)
+        ? credentialsPayload
+        : credentialsPayload?.credentials || []
+      const chatConfigs = Array.isArray(modelConfigs)
+        ? modelConfigs.filter((item: any) => item.taskType === "chat")
+        : []
+      const seen = new Set<string>()
+      return credentials
+        .filter((credential: any) => credential.isActive && !seen.has(credential.provider) && seen.add(credential.provider))
+        .map((credential: any) => {
+          const config = chatConfigs.find((item: any) => item.provider === credential.provider && item.isDefault)
+            || chatConfigs.find((item: any) => item.provider === credential.provider)
+          return {
+            id: credential.provider,
+            name: credential.providerName || credential.provider,
+            model: config?.modelId || "Choose a model in AI Settings",
+            isActive: credential.isActive,
+            isDefault: chatConfigs.some((item: any) => item.isDefault)
+              ? Boolean(config?.isDefault)
+              : Boolean(credential.isDefault),
+          }
+        })
+    },
+  })
+
+  const providers: AIProvider[] = Array.isArray(providersData) ? providersData : []
+
+  const { data: documentsData, isLoading: docsLoading } = useQuery({
+    queryKey: ["documents", "assistant"],
+    queryFn: async () => {
+      const res = await fetch("/api/documents")
+      if (!res.ok) throw new Error("Failed to fetch documents")
+      return res.json()
+    },
+    enabled: activeTab === "documents",
+  })
+
+  const createConversation = useMutation({
+    mutationFn: async (title: string) => {
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to create conversation")
+      }
+      return res.json()
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      const created = data?.conversation || data
+      if (created?.id) {
+        setSelectedConversation(created.id)
+      }
+      setNewConversationTitle("")
+      setIsCreatingNew(false)
+      toast({ title: "Conversation created" })
+    },
+    onError: (err) =>
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to create conversation",
+        variant: "destructive",
+      }),
+  })
+
+  const deleteConversation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/conversations/${id}`, { method: "DELETE" })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || "Failed to delete conversation")
+      }
+      return id
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      queryClient.removeQueries({ queryKey: ["conversation", id] })
+      if (selectedConversation === id) setSelectedConversation(null)
+      toast({ title: "Conversation deleted" })
+    },
+    onError: (err) => toast({
+      title: "Could not delete conversation",
+      description: err instanceof Error ? err.message : "Please try again.",
+      variant: "destructive",
+    }),
+  })
+
+  const updateProviderConfig = useMutation({
+    mutationFn: async (data: { provider: string; modelId: string; taskType: string; isDefault: boolean }) => {
+      const res = await fetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || "Failed to update model config")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-model-configs"] })
+      queryClient.invalidateQueries({ queryKey: ["ai-providers"] })
+      toast({ title: "Model configuration updated" })
+    },
+    onError: (err) =>
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to update model config",
+        variant: "destructive",
+      }),
+  })
+
+  const handleNewConversation = () => {
+    const title = newConversationTitle.trim() || "New Conversation"
+    createConversation.mutate(title)
+  }
+
+  const handleProviderChange = async (providerId: string) => {
+    const provider = providers.find(p => p.id === providerId)
+    if (!provider) return
+    if (!provider.model || provider.model === "Choose a model in AI Settings") {
+      toast({
+        title: "Choose a model first",
+        description: `Open AI Settings to select a chat model for ${provider.name}.`,
+      })
+      router.push("/dashboard/ai-settings")
+      return
+    }
+
+    try {
+      await updateProviderConfig.mutateAsync({
+        provider: providerId,
+        modelId: provider.model,
+        taskType: "chat",
+        isDefault: true,
+      })
+      setSelectedProviderId(providerId)
+      toast({ title: "Model updated", description: `Now using ${provider.name} (${provider.model})` })
+    } catch {
+      // The mutation displays the server's error toast; don't change the selected model.
+    }
+  }
+
+  const activeProvider = providers.find(p => p.isDefault) || providers[0]
+
+  return (
+    <div className="flex h-[100dvh] min-h-0 bg-background overflow-hidden">
+      {/* Mobile drawer backdrop: keep the chat usable on narrow screens. */}
+      {leftPanelOpen && (
+        <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setLeftPanelOpen(false)} />
+      )}
+      {/* LEFT PANEL - Navigation & Conversation History */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 h-[100dvh] min-h-0 border-r bg-sidebar transition-transform duration-300 ease-out flex flex-col w-[min(20rem,88vw)] lg:w-80",
+          leftPanelOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-16"
+        )}
+        aria-label="Navigation & conversations"
+      >
+        <div className="flex h-full flex-col">
+          {/* Brand Header */}
+          <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5 pointer-events-none" />
+            
+            {!leftPanelOpen ? (
+              <a href="/dashboard" className="flex items-center justify-center relative z-10 group" title="ALEX Dashboard">
+                <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary group-hover:scale-105 transition-transform duration-200">
+                  <GraduationCap className="h-5 w-5 text-primary-foreground" />
+                  <div className="absolute inset-0 rounded-xl bg-gradient-primary opacity-30 blur-lg" />
+                </div>
+              </a>
+            ) : (
+              <a href="/dashboard" className="flex items-center gap-3 font-bold text-lg relative z-10 group">
+                <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary group-hover:scale-105 transition-transform duration-200">
+                  <GraduationCap className="h-5 w-5 text-primary-foreground" />
+                  <div className="absolute inset-0 rounded-xl bg-gradient-primary opacity-30 blur-lg" />
+                </div>
+                <span className="text-foreground">ALEX</span>
+              </a>
+            )}
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+              className="h-9 w-9 rounded-lg transition-all duration-200 hover:bg-secondary relative z-10"
+              aria-label={leftPanelOpen ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              <ChevronLeft className={cn("h-4 w-4 transition-transform duration-200", leftPanelOpen ? "" : "rotate-180")} />
+            </Button>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1" aria-label="Main navigation">
+            <NavSection title="AI Assistant" collapsed={!leftPanelOpen}>
+              <NavLink
+                href="/dashboard/assistant"
+                icon={Bot}
+                label="AI Chat"
+                badge="NEW"
+                isActive={pathname === "/dashboard/assistant"}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/documents"
+                icon={FileText}
+                label="Documents"
+                isActive={pathname === "/dashboard/documents"}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/ai-settings"
+                icon={Settings}
+                label="AI Settings"
+                isActive={pathname === "/dashboard/ai-settings"}
+                collapsed={!leftPanelOpen}
+              />
+            </NavSection>
+
+            <NavSection title="Academic" collapsed={!leftPanelOpen}>
+              <NavLink
+                href="/dashboard/dashboard"
+                icon={LayoutDashboard}
+                label="Dashboard"
+                isActive={pathname === "/dashboard" || pathname === "/dashboard/dashboard"}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/subjects"
+                icon={Book}
+                label="Subjects"
+                isActive={pathname.startsWith("/dashboard/subjects")}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/assignments"
+                icon={ClipboardCheck}
+                label="Assignments"
+                isActive={pathname.startsWith("/dashboard/assignments")}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/attendance"
+                icon={UserCheck}
+                label="Attendance"
+                isActive={pathname.startsWith("/dashboard/attendance")}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/planner"
+                icon={Calendar}
+                label="Planner"
+                isActive={pathname.startsWith("/dashboard/planner")}
+                collapsed={!leftPanelOpen}
+              />
+            </NavSection>
+
+            <NavSection title="Research & Study" collapsed={!leftPanelOpen}>
+              <NavLink
+                href="/dashboard/research"
+                icon={FlaskConical}
+                label="Research Lab"
+                isActive={pathname.startsWith("/dashboard/research")}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/study-studio"
+                icon={Brain}
+                label="Study Studio"
+                isActive={pathname.startsWith("/dashboard/study-studio")}
+                collapsed={!leftPanelOpen}
+              />
+              <NavLink
+                href="/dashboard/projects"
+                icon={FolderKanban}
+                label="Projects"
+                isActive={pathname.startsWith("/dashboard/projects")}
+                collapsed={!leftPanelOpen}
+              />
+            </NavSection>
+          </nav>
+
+          {/* Conversation History */}
+          {!leftPanelOpen ? null : (
+            <div className="border-t border-sidebar-border flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+                <h2 className="font-semibold text-foreground">Conversations</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsCreatingNew((prev) => !prev)}
+                  aria-label="New conversation"
+                  className="h-8 w-8"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {isCreatingNew && (
+                <div className="p-4 border-b border-sidebar-border space-y-2">
+                  <Input
+                    placeholder="New conversation title..."
+                    value={newConversationTitle}
+                    onChange={(e) => setNewConversationTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleNewConversation()}
+                    autoFocus
+                    className="input-futuristic"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      onClick={handleNewConversation}
+                      disabled={createConversation.isPending}
+                    >
+                      {createConversation.isPending ? "Creating..." : "Create"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsCreatingNew(false)
+                        setNewConversationTitle("")
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <ScrollArea className="flex-1">
+                <div className="p-2 space-y-1">
+                  {isLoading && (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Loading conversations...</span>
+                    </div>
+                  )}
+
+                  {isError && (
+                    <div className="p-4 text-center space-y-2">
+                      <div className="flex items-center justify-center gap-1 text-destructive text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>{error instanceof Error ? error.message : "Failed to load"}</span>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => refetch()}>
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+
+                  {!isLoading &&
+                    !isError &&
+                    conversations.map((conv: Conversation) => (
+                      <ConversationItem
+                        key={conv.id}
+                        conversation={conv}
+                        isActive={selectedConversation === conv.id}
+                        onClick={() => {
+                          setSelectedConversation(conv.id)
+                          setLeftPanelOpen(false)
+                        }}
+                        onDelete={(e) => {
+                          e.stopPropagation()
+                          deleteConversation.mutate(conv.id)
+                        }}
+                      />
+                    ))}
+
+                  {!isLoading && !isError && conversations.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-4">
+                      No conversations yet. Create one to start chatting.
+                    </p>
+                  )}
+                </div>
+              </ScrollArea>
+
+              <div className="p-4 border-t border-sidebar-border">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={createConversation.isPending}
+                  onClick={() => createConversation.mutate("New Conversation")}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Chat
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className={cn(
+        "min-w-0 min-h-0 flex-1 flex flex-col transition-all duration-300",
+        leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
+      )}>
+        {/* Top Bar with Provider Selector */}
+        <div className="flex h-14 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-background/80 backdrop-blur">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setLeftPanelOpen(true)} aria-label="Open navigation"><MessageSquare className="h-5 w-5" /></Button>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <h1 className="text-xl font-semibold text-foreground">AI Assistant</h1>
+              <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
+                {useDocuments ? "Document Context" : "General Chat"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Provider Selector */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="provider-select" className="text-xs text-muted-foreground hidden sm:block">Model</Label>
+                {providers.length > 0 ? (
+                  <Select value={selectedProviderId || activeProvider?.id || providers[0].id} onValueChange={handleProviderChange}>
+                    <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.name}</span>
+                            <span className="text-xs text-muted-foreground">{p.model}</span>
+                            {p.isDefault && <CheckCircle2 className="h-3 w-3 text-primary" />}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Button id="provider-select" variant="outline" size="sm" onClick={() => router.push("/dashboard/ai-settings")}>
+                    Configure AI provider
+                  </Button>
+                )}
+              </div>
+
+              {/* Connection Status */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50" title="Credential configured; availability is confirmed when a request succeeds">
+                <div className={cn("flex h-2 w-2 rounded-full", activeProvider?.isActive ? "bg-neon-green" : "bg-muted-foreground")} />
+                <span className="text-xs font-medium text-muted-foreground">
+                  {activeProvider?.isActive ? "Configured" : "Not configured"}
+                </span>
+              </div>
+
+              {/* Document Context Toggle */}
+              <Button
+                variant={useDocuments ? "default" : "outline"}
+                size="sm"
+                className="gap-1"
+                onClick={() => setUseDocuments(!useDocuments)}
+                aria-label={useDocuments ? "Disable document context" : "Enable document context"}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span className="text-xs">{useDocuments ? "Documents Active" : "Add Documents"}</span>
+              </Button>
+
+              {/* Right Panel Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                className="h-9 w-9 rounded-lg hover:bg-secondary"
+                aria-label={rightPanelOpen ? "Hide utility panel" : "Show utility panel"}
+              >
+                {rightPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Workspace */}
+        <div className="min-h-0 flex-1 flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 flex flex-col">
+            <TabsList className="border-b border-border/50 bg-background/50">
+              <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Bot className="h-4 w-4" />
+                AI Chat
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Search className="h-4 w-4" />
+                Document Search
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Settings className="h-4 w-4" />
+                Settings
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="chat" className="min-h-0 flex-1 flex flex-col">
+              {selectedConversation ? (
+                <div className="min-h-0 flex-1 flex flex-col">
+                  <RAGChat
+                    key={selectedConversation}
+                    conversationId={selectedConversation}
+                    onConversationCreated={(id) => setSelectedConversation(id)}
+                    useDocuments={useDocuments}
+                    selectedDocumentIds={selectedDocumentIds}
+                    onDocumentSelectionChange={setSelectedDocumentIds}
+                  />
+                </div>
+              ) : (
+                <WelcomeScreen
+                  onNewConversation={() => createConversation.mutate("New Conversation")}
+                  isCreating={createConversation.isPending}
+                  providers={providers}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="documents" className="flex-1 overflow-auto p-4">
+              <DocumentList
+                documents={documentsData?.documents || []}
+                isLoading={docsLoading}
+                showUpload={false}
+              />
+            </TabsContent>
+
+            <TabsContent value="settings" className="flex-1 overflow-auto p-4">
+              <Card className="h-full panel">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    AI Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6 h-[calc(100%-80px)] overflow-auto">
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-foreground">AI Provider Configuration</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Configure your API keys in the Settings page to enable AI features.
+                    </p>
+                    <Button asChild variant="default" className="btn-primary-gradient" onClick={() => router.push("/dashboard/ai-settings")}>
+                      <span>
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Go to AI Settings
+                      </span>
+                    </Button>
+                  </div>
+                  <div className="border-t border-border/50 pt-4 space-y-4">
+                    <h4 className="font-medium text-foreground">RAG Settings</h4>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="default-limit">Default Result Limit</Label>
+                        <Input id="default-limit" type="number" defaultValue="10" className="w-32 input-futuristic" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="similarity-threshold">Similarity Threshold</Label>
+                        <Input
+                          id="similarity-threshold"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="1"
+                          defaultValue="0.7"
+                          className="w-32 input-futuristic"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border-t border-border/50 pt-4 space-y-4">
+                    <h4 className="font-medium text-foreground">Active Provider</h4>
+                    {activeProvider ? (
+                      <div className="panel-elevated p-4 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-primary/10">
+                            <Bot className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">{activeProvider.name}</p>
+                            <p className="text-sm text-muted-foreground">{activeProvider.model}</p>
+                          </div>
+                          <span className="ml-auto px-2 py-1 text-xs font-medium rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
+                            Active
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="panel-elevated p-4 text-center text-muted-foreground">
+                        No active provider configured
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+
+      {/* RIGHT PANEL - Utility Panel */}
+      <AssistantRightPanel
+        isOpen={rightPanelOpen}
+        onToggle={setRightPanelOpen}
+        activeProvider={activeProvider}
+        recentDocuments={documentsData?.documents || []}
+      />
+    </div>
+  )
+}
+
+function NavSection({ title, children, collapsed }: { title: string; children: React.ReactNode; collapsed: boolean }) {
+  if (collapsed) return null
+  return (
+    <div className="space-y-1">
+      <p className="px-3 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1 mt-2">
+        {title}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+function NavLink({ href, icon: Icon, label, badge, isActive, collapsed }: { 
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  badge?: string
+  isActive: boolean
+  collapsed: boolean
+}) {
+  const baseClasses = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200"
+  const activeClasses = "bg-primary/15 border-l-2 border-primary text-primary shadow-[inset_0_0_20px_-5px_rgba(0,212,255,0.15)]"
+  const inactiveClasses = "text-muted-foreground hover:bg-secondary hover:text-foreground hover:border-primary/10"
+
+  return (
+    <a
+      href={href}
+      className={cn(baseClasses, isActive ? activeClasses : inactiveClasses)}
+      title={collapsed ? label : undefined}
+    >
+      <span className="flex-shrink-0">
+        <Icon className={cn("h-5 w-5", isActive && "text-primary")} aria-hidden="true" />
+      </span>
+      {!collapsed && (
+        <>
+          <span className="truncate">{label}</span>
+          {badge && (
+            <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
+              {badge}
+            </span>
+          )}
+        </>
+      )}
+    </a>
+  )
+}
+
+function ConversationItem({ conversation, isActive, onClick, onDelete }: {
+  conversation: Conversation
+  isActive: boolean
+  onClick: () => void
+  onDelete: (e: React.MouseEvent) => void
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      className={cn(
+        "group w-full text-left p-3 rounded-lg transition-all duration-200 flex items-center gap-2 cursor-pointer",
+        isActive
+          ? "bg-primary/15 border border-primary/30 text-foreground"
+          : "text-muted-foreground hover:bg-secondary hover:text-foreground hover:border-border"
+      )}
+    >
+      <MessageSquare className={cn("h-4 w-4 flex-shrink-0", isActive && "text-primary")} />
+      <div className="flex-1 text-left min-w-0">
+        <p className="font-medium truncate">{conversation.title || "New Conversation"}</p>
+        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+          {conversation._count?.messages ?? 0} messages
+          <span>·</span>
+          {formatRelativeTime(conversation.updatedAt)}
+          {conversation.provider && <><span>·</span><span className="px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary">{conversation.provider}</span></>}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0 opacity-60 hover:opacity-100"
+        onClick={onDelete}
+        aria-label={`Delete ${conversation.title || "conversation"}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+function QuickActionButton({ icon: Icon, label, description, onClick, primary }: { 
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  description: string
+  onClick: () => void
+  primary?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full p-3 rounded-lg transition-all duration-200 flex items-center gap-3 text-left",
+        primary
+          ? "bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-[0_0_20px_-5px_rgba(0,212,255,0.4)]"
+          : "bg-secondary hover:bg-surface-hover border border-border/50 hover:border-primary/20"
+      )}
+    >
+      <div className={cn("p-2 rounded-lg flex-shrink-0", primary ? "bg-primary-foreground/20" : "bg-primary/10")}>
+        <Icon className={cn("h-5 w-5", primary ? "text-primary-foreground" : "text-primary")} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm truncate">{label}</p>
+        <p className="text-xs truncate">{primary ? description : <span className="text-muted-foreground">{description}</span>}</p>
+      </div>
+    </button>
+  )
+}
+
+function QuickLink({ icon: Icon, label, href }: { icon: React.ComponentType<{ className?: string }>; label: string; href: string }) {
+  return (
+    <a href={href} className="flex items-center gap-3 p-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-200">
+      <Icon className="h-4 w-4 flex-shrink-0" />
+      <span className="truncate">{label}</span>
+    </a>
+  )
+}
+
+function WelcomeScreen({ onNewConversation, isCreating, providers }: { onNewConversation: () => void; isCreating: boolean; providers?: AIProvider[] }) {
+  const promptSuggestions = [
+    "Summarize my latest uploaded documents",
+    "Help me create a study plan for finals",
+    "Explain the key concepts from my research papers",
+    "Generate flashcards from my lecture notes",
+    "What are my upcoming assignment deadlines?",
+    "Analyze my attendance patterns",
+  ]
+
+  const activeProvider = providers?.find(p => p.isDefault) || providers?.[0]
+
+  return (
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="flex min-h-full items-start justify-center p-8 py-12">
+        <Card className="chat-welcome-card w-full max-w-2xl panel-hover animate-in">
+          <CardContent className="pt-8 pb-6 px-6 sm:px-8">
+            <div className="text-center">
+              <div className="mx-auto mb-6 relative">
+                <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-primary mx-auto">
+                  <Bot className="h-10 w-10 text-primary-foreground" />
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-primary opacity-30 blur-xl animate-pulse" />
+                </div>
+                <div className="absolute inset-0 -inset-2 rounded-2xl border border-primary/20 animate-spin-slow" />
+              </div>
+
+              <h3 className="text-2xl font-bold text-foreground mb-2">Welcome to ALEX</h3>
+              <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
+                Your AI-powered academic assistant with document-grounded RAG, multi-provider support, and real-time citations.
+              </p>
+
+              {/* Provider Status */}
+              <div className="flex items-center justify-center gap-4 mb-6 p-4 rounded-xl bg-secondary border border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className={cn("flex h-2 w-2 rounded-full", activeProvider ? "bg-neon-green" : "bg-muted-foreground")} />
+                  <span className="text-sm font-medium text-foreground">{activeProvider ? "Provider configured" : "Setup required"}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Brain className="h-4 w-4" />
+                  <span className="text-sm">RAG Active</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Zap className="h-4 w-4" />
+                  <span className="text-sm">Multi-Provider</span>
+                </div>
+              </div>
+
+              {activeProvider && (
+                <div className="mb-6 p-4 rounded-xl bg-secondary border border-border/50 text-left">
+                  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-2">Active Provider</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{activeProvider.name}</p>
+                      <p className="text-xs text-muted-foreground">{activeProvider.model}</p>
+                    </div>
+                    <span className="ml-auto px-2 py-1 text-xs font-medium rounded-full bg-secondary text-muted-foreground border border-border/50">
+                      Configured · not yet tested
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3 mb-6">
+                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">Try asking:</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {promptSuggestions.map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => onNewConversation()}
+                      className="p-3 rounded-lg bg-secondary border border-border/50 hover:border-primary/30 hover:bg-surface-hover transition-all duration-200 text-left group"
+                    >
+                      <span className="text-sm text-foreground group-hover:text-primary transition-colors">{suggestion}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <Button
+                  onClick={onNewConversation}
+                  disabled={isCreating}
+                  className="w-full btn-primary-gradient"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    {isCreating ? "Starting..." : "Start New Conversation"}
+                  </span>
+                </Button>
+              </div>
+
+              {/* Footer info */}
+              <div className="border-t border-border/50 pt-4 text-center">
+                <p className="text-xs text-muted-foreground/60">
+                  Conversations are saved automatically. Your data stays private.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </ScrollArea>
+  )
+}
