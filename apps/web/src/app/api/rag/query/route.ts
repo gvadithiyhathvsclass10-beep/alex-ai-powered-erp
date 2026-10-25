@@ -5,6 +5,10 @@ import { hybridSearch, type SearchResult, type SearchContext } from '@/lib/rag/v
 import { getUserChatProvider, type AIProviderType } from '@/lib/rag/generation'
 import { canAccessDocument } from '@/lib/document-processing/access'
 import { formatAIServiceErrorResponse } from '@/lib/ai/service'
+import { extractContent, validateUploadedFile, resolveDocumentType } from '@/lib/document-processing/extractors'
+import { chunkBySemanticUnits } from '@/lib/document-processing/chunker'
+import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
+import { encodeEmbeddingToBytes } from '@/lib/document-processing/pipeline'
 
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'this', 'that', 'from', 'what', 'how', 'why',
@@ -34,11 +38,49 @@ function computeChunkTermOverlap(terms: string[], results: SearchResult[]): numb
   return maxMatched / terms.length
 }
 
+// Helper to parse request body - handles both JSON and FormData
+async function parseRequestBody(request: Request) {
+  const contentType = request.headers.get('content-type') || ''
+  
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await request.formData()
+    const body: Record<string, any> = {}
+    
+    for (const [key, value] of formData.entries()) {
+      if (key === 'attachments') continue // Handle files separately if needed
+      if (key === 'documentIds' || key === 'sourceIds') {
+        try {
+          body[key] = JSON.parse(value as string)
+        } catch {
+          body[key] = []
+        }
+      } else if (key === 'useDocuments') {
+        body[key] = value === 'true'
+      } else {
+        body[key] = value
+      }
+    }
+    
+    // Handle file attachments
+    const attachments: File[] = []
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('attachments[') && value instanceof File) {
+        body.attachments = body.attachments || []
+        body.attachments.push(value)
+      }
+    }
+    
+    return body
+  }
+  
+  return request.json()
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
 
-    const body = await request.json()
+    const body = await parseRequestBody(request)
     const {
       query,
       subjectId,
@@ -207,7 +249,7 @@ export async function POST(request: Request) {
     }
 
     // Determine if we should perform document retrieval
-    const shouldRetrieveDocuments = notebookId || (useDocuments && effectiveDocumentIds && effectiveDocumentIds.length > 0)
+    const shouldRetrieveDocuments = notebookId || (useDocuments && effectiveDocumentIds && effectiveDocumentIds.length > 0) || (body.attachments && body.attachments.length > 0)
 
     // Build retrieval query incorporating recent user turn context for follow-up questions
     const priorUserMessages = conversationHistory
@@ -339,6 +381,86 @@ Guidelines:
 
     const effectiveContextForGeneration = hasRelevantSourceEvidence ? searchResults : []
 
+    // Process file attachments if any
+    let attachmentContext: SearchResult[] = []
+    if (body.attachments && body.attachments.length > 0) {
+      try {
+        const attachmentResults = await Promise.all(
+          body.attachments.map(async (file: File) => {
+            // Validate file type
+            const { documentType, normalizedMimeType } = validateUploadedFile(
+              file.name,
+              file.type,
+              Buffer.from(await file.arrayBuffer())
+            )
+
+            // Extract content
+            const extracted = await extractContent(
+              Buffer.from(await file.arrayBuffer()),
+              documentType,
+              normalizedMimeType
+            )
+
+            const normalizedText = (extracted.text || '').trim()
+            if (!normalizedText) {
+              return null
+            }
+
+            // Chunk the content
+            const chunks = chunkBySemanticUnits(normalizedText, extracted.pages)
+            if (chunks.length === 0) {
+              return null
+            }
+
+            // Generate embeddings for the chunks
+            const embeddingResult = await getUserEmbeddingProvider(user.id)
+            if (!embeddingResult) {
+              return null
+            }
+
+            const { embeddings } = await embeddingResult.provider.generateEmbeddings(
+              chunks.map(c => c.content)
+            )
+
+            // Create search results for each chunk
+            const searchResults: SearchResult[] = chunks.map((chunk, index) => ({
+              id: `attachment-${file.name}-${index}`,
+              documentId: `attachment-${file.name}`,
+              content: chunk.content,
+              chunkIndex: index,
+              pageNumber: chunk.pageNumber,
+              sectionTitle: chunk.sectionTitle,
+              similarity: 1.0, // Attachments get maximum similarity since they're explicitly attached
+              metadata: {
+                attachmentName: file.name,
+                attachmentType: file.type,
+                chunkIndex: index,
+              } as Record<string, unknown>,
+              document: {
+                id: `attachment-${file.name}`,
+                title: file.name,
+                fileName: file.name,
+                documentType: documentType,
+                ownerId: user.id,
+              },
+            }))
+
+            return searchResults
+          })
+        )
+
+        // Flatten and filter out null results
+        attachmentContext = attachmentResults.flat().filter(Boolean) as SearchResult[]
+      } catch (error) {
+        console.warn('[RAG Query] Failed to process attachments:', error)
+      }
+    }
+
+    // Combine search results with attachment context
+    const combinedContext = [...attachmentContext, ...effectiveContextForGeneration]
+
+    const effectiveContextForGenerationFinal = hasRelevantSourceEvidence ? combinedContext : []
+
     if (stream && 'generateStream' in chatProvider && typeof chatProvider.generateStream === 'function') {
       const encoder = new TextEncoder()
       const readable = new ReadableStream({
@@ -346,7 +468,7 @@ Guidelines:
           try {
             for await (const chunk of chatProvider.generateStream({
               query,
-              context: effectiveContextForGeneration,
+              context: effectiveContextForGenerationFinal,
               systemPrompt: fullSystemPrompt,
             })) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', content: chunk })}\n\n`))
@@ -372,7 +494,7 @@ Guidelines:
 
     const response = await chatProvider.generate({
       query,
-      context: effectiveContextForGeneration,
+      context: effectiveContextForGenerationFinal,
       systemPrompt: fullSystemPrompt,
     })
 
@@ -383,13 +505,13 @@ Guidelines:
       )
 
     const isSourceSupported = Boolean(
-      hasRelevantSourceEvidence && !answerIndicatesUnsupported && effectiveContextForGeneration.length > 0
+      hasRelevantSourceEvidence && !answerIndicatesUnsupported && effectiveContextForGenerationFinal.length > 0
     )
 
     // Ensure grounded responses carry accurate citations with source title, page, and section
     let finalCitations = isSourceSupported ? response.citations : []
-    if (isSourceSupported && finalCitations.length === 0 && effectiveContextForGeneration.length > 0) {
-      const topSource = effectiveContextForGeneration[0]
+    if (isSourceSupported && finalCitations.length === 0 && effectiveContextForGenerationFinal.length > 0) {
+      const topSource = effectiveContextForGenerationFinal[0]
       finalCitations = [
         {
           id: topSource.id,
@@ -442,7 +564,7 @@ Guidelines:
       targetConversationId = createdConv.id
     }
 
-    const serializedSources = (isSourceSupported ? effectiveContextForGeneration : []).map(r => ({
+    const serializedSources = (isSourceSupported ? effectiveContextForGenerationFinal : []).map(r => ({
       id: r.id,
       documentId: r.documentId,
       documentTitle: r.document.title,
