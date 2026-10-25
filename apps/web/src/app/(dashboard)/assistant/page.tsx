@@ -525,7 +525,7 @@ export default function AssistantPage() {
         </div>
 
         {/* Chat Workspace */}
-        <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 flex flex-col">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 flex flex-col">
             <TabsList className="border-b border-border/50 bg-background/50">
               <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary">
@@ -542,7 +542,7 @@ export default function AssistantPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="chat" className="min-h-0 flex-1 flex flex-col overflow-hidden">
+            <TabsContent value="chat" className="min-h-0 flex-1 flex flex-col">
               {selectedConversation ? (
                 <div className="min-h-0 flex-1 flex flex-col">
                   <RAGChat
