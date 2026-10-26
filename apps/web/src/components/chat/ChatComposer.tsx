@@ -14,7 +14,9 @@ import {
   X, 
   FileText, 
   Image, 
-  Download 
+  Download,
+  AlertCircle,
+  RotateCcw,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -57,17 +59,43 @@ interface SpeechRecognition extends EventTarget {
   continuous: boolean
   interimResults: boolean
   lang: string
+  maxAlternatives: number
+  serviceURI: string
+  grammars: SpeechGrammarList
   start(): void
   stop(): void
+  abort(): void
   onstart: ((this: SpeechRecognition, ev: Event) => any) | null
   onend: ((this: SpeechRecognition, ev: Event) => any) | null
   onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null
   onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null
+  onnomatch: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null
+  onaudiostart: ((this: SpeechRecognition, ev: Event) => any) | null
+  onaudioend: ((this: SpeechRecognition, ev: Event) => any) | null
+  onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null
+  onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null
+  onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null
+  onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null
+}
+
+interface SpeechGrammarList {
+  length: number
+  item(index: number): SpeechGrammar
+  [index: number]: SpeechGrammar
+  addFromURI(src: string, weight?: number): void
+  addFromString(string: string, weight?: number): void
+}
+
+interface SpeechGrammar {
+  src: string
+  weight: number
 }
 
 interface WindowWithSpeechRecognition extends Window {
   SpeechRecognition?: { new(): SpeechRecognition }
   webkitSpeechRecognition?: { new(): SpeechRecognition }
+  SpeechGrammarList?: { new(): SpeechGrammarList }
+  webkitSpeechGrammarList?: { new(): SpeechGrammarList }
 }
 
 interface AttachedFile {
@@ -134,82 +162,255 @@ export function ChatComposer({
     }
   }, [attachments])
 
-  // Voice recognition
+  // Voice recognition state
   const [recognition, setRecognition] = React.useState<SpeechRecognition | null>(null)
   const [interimTranscript, setInterimTranscript] = React.useState("")
+  const [isSupported, setIsSupported] = React.useState(false)
+  const [permissionState, setPermissionState] = React.useState<"prompt" | "granted" | "denied" | "unknown">("unknown")
+  const [recognitionError, setRecognitionError] = React.useState<string | null>(null)
+  const [audioLevel, setAudioLevel] = React.useState(0)
+  const audioContextRef = React.useRef<AudioContext | null>(null)
+  const analyserRef = React.useRef<AnalyserNode | null>(null)
+  const audioStreamRef = React.useRef<MediaStream | null>(null)
+  const animationFrameRef = React.useRef<number | null>(null)
+  const cleanupRef = React.useRef(false)
 
+  // Check browser support and initialize recognition
   React.useEffect(() => {
+    cleanupRef.current = false
     const win = window as Window & {
       SpeechRecognition?: { new(): SpeechRecognition }
       webkitSpeechRecognition?: { new(): SpeechRecognition }
+      SpeechGrammarList?: { new(): SpeechGrammarList }
+      webkitSpeechGrammarList?: { new(): SpeechGrammarList }
     }
-    if ("webkitSpeechRecognition" in win || "SpeechRecognition" in win) {
-      const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition()
-        recognition.continuous = true
-        recognition.interimResults = true
-        recognition.lang = "en-US"
-        setRecognition(recognition)
+    
+    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
+    if (SpeechRecognition) {
+      setIsSupported(true)
+      const recognition = new SpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "en-US"
+      recognition.maxAlternatives = 1
+      
+      // Add grammar if available
+      const SpeechGrammarList = win.SpeechGrammarList || win.webkitSpeechGrammarList
+      if (SpeechGrammarList) {
+        const grammar = new SpeechGrammarList()
+        grammar.addFromString('#JSGF V1.0; grammar punctuation; public <punc> = . | ? | ! | , | ; | : ;', 1)
+        recognition.grammars = grammar
+      }
+      
+      setRecognition(recognition)
+    } else {
+      setIsSupported(false)
+    }
+
+    // Check permission state
+    navigator.permissions?.query({ name: "microphone" as PermissionName }).then((status) => {
+      setPermissionState(status.state)
+      status.onchange = () => setPermissionState(status.state)
+    }).catch(() => {
+      // Permission query not supported
+    })
+
+    return () => {
+      cleanupRef.current = true
+      stopListening()
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+      }
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop())
       }
     }
   }, [])
 
-  const startListening = () => {
-    if (!recognition || isRecording) return
+  const updateAudioLevel = () => {
+    if (!analyserRef.current || cleanupRef.current) return
     
-    recognition.onstart = () => setIsRecording(true)
-    recognition.onend = () => setIsRecording(false)
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
+    analyserRef.current.getByteFrequencyData(dataArray)
     
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = ""
-      let final = ""
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          final += result[0].transcript
-        } else {
-          interim += result[0].transcript
+    // Calculate average volume
+    const sum = dataArray.reduce((a, b) => a + b, 0)
+    const average = sum / dataArray.length
+    const normalized = Math.min(average / 128, 1) // Normalize to 0-1
+    
+    setAudioLevel(normalized)
+    
+    if (!cleanupRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
+    }
+  }
+
+  const startListening = async () => {
+    if (!recognition || isRecording || !isSupported) return
+    
+    setRecognitionError(null)
+    setRecognitionError(null)
+    
+    try {
+      // Request microphone access first for visual feedback
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      })
+      
+      audioStreamRef.current = stream
+      const audioContext = new AudioContext()
+      audioContextRef.current = audioContext
+      const source = audioContext.createMediaStreamSource(stream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
+      source.connect(analyser)
+      analyserRef.current = analyser
+      
+      // Start audio level visualization
+      updateAudioLevel()
+      
+      // Set up recognition handlers
+      recognition.onstart = () => {
+        setIsRecording(true)
+        setPermissionState("granted")
+        setRecognitionError(null)
+      }
+      
+      recognition.onend = () => {
+        setIsRecording(false)
+        // Stop audio visualization
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(track => track.stop())
+          audioStreamRef.current = null
+        }
+        if (audioContextRef.current) {
+          audioContextRef.current.close()
+          audioContextRef.current = null
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+          animationFrameRef.current = null
+        }
+        setAudioLevel(0)
+      }
+      
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = ""
+        let final = ""
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            final += result[0].transcript
+          } else {
+            interim += result[0].transcript
+          }
+        }
+        setInterimTranscript(interim)
+        if (final) {
+          setTranscript(prev => prev + " " + final)
+          setInput(prev => prev + " " + final)
         }
       }
-      setInterimTranscript(interim)
-      if (final) {
-        setTranscript(prev => prev + " " + final)
-        setInput(prev => prev + " " + final)
+      
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("Speech recognition error:", event.error)
+        setIsRecording(false)
+        
+        const messages: Record<string, string> = {
+          'not-allowed': 'Microphone permission was denied. Please allow microphone access in your browser settings and try again.',
+          'service-not-allowed': 'Speech recognition service is not available in this browser.',
+          'no-speech': 'No speech was detected. Please try speaking closer to the microphone.',
+          'audio-capture': 'No microphone found or microphone access failed. Please check your microphone.',
+          'network': 'Network error occurred during speech recognition. Please check your connection.',
+          'aborted': 'Voice input was cancelled.',
+          'language-not-supported': 'The selected language is not supported for speech recognition.',
+        }
+        
+        const errorMessage = messages[event.error] || `Speech recognition failed: ${event.error}`
+        setRecognitionError(errorMessage)
+        setPermissionState(event.error === 'not-allowed' ? 'denied' : 'granted')
+        
+        toast({
+          title: "Voice input error",
+          description: errorMessage,
+          variant: "destructive",
+        })
       }
-    }
-    
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error("Speech recognition error:", event.error)
-      setIsRecording(false)
-      const messages: Record<string, string> = {
-        'not-allowed': 'Microphone permission was denied. Please allow microphone access in your browser settings.',
-        'service-not-allowed': 'Speech recognition service is not available.',
-        'no-speech': 'No speech was detected. Please try again.',
-        'audio-capture': 'No microphone found. Please check your microphone.',
-        'network': 'Network error occurred during speech recognition.',
+      
+      recognition.onnomatch = () => {
+        setRecognitionError("No speech matched. Please try again.")
+        toast({
+          title: "No match",
+          description: "Could not recognize speech. Please try again.",
+          variant: "destructive",
+        })
       }
-      toast({
-        title: "Voice input error",
-        description: messages[event.error] || `Speech recognition failed: ${event.error}`,
-        variant: "destructive",
-      })
-    }
-
-    try {
+      
       recognition.start()
       setTranscript("")
       setInterimTranscript("")
-    } catch (e) {
-      console.error("Failed to start recognition:", e)
+    } catch (error) {
+      console.error("Failed to start recognition:", error)
+      
+      let errorMessage = "Failed to start voice recognition."
+      if (error instanceof Error) {
+        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings."
+          setPermissionState("denied")
+        } else if (error.name === "NotFoundError") {
+          errorMessage = "No microphone found. Please connect a microphone and try again."
+        } else if (error.name === "NotReadableError") {
+          errorMessage = "Microphone is in use by another application."
+        }
+      }
+      
+      setRecognitionError(errorMessage)
+      toast({
+        title: "Voice input error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
   }
 
   const stopListening = () => {
     if (recognition && isRecording) {
       recognition.stop()
-      setIsRecording(false)
+    } else if (recognition && !isRecording) {
+      // If recognition was started but not yet recording (permission pending)
+      recognition.abort()
     }
+    
+    // Cleanup audio resources
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop())
+      audioStreamRef.current = null
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    setAudioLevel(0)
+    setIsRecording(false)
+  }
+
+  const retryListening = () => {
+    setRecognitionError(null)
+    stopListening()
+    // Small delay to ensure clean state
+    setTimeout(() => startListening(), 100)
   }
 
   const handleFileSelect = async (files: FileList) => {
@@ -397,6 +598,17 @@ export function ChatComposer({
                 <span>{transcript}</span>
               </div>
             )}
+            {recognitionError && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 p-2 bg-red-50/50 border border-red-200/50 rounded-lg text-xs text-red-800 dark:text-red-900 flex items-center justify-between gap-2">
+                <span>
+                  <AlertCircle className="h-3 w-3 inline mr-1" />
+                  {recognitionError}
+                </span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={retryListening} aria-label="Retry voice input">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Voice Input Button */}
@@ -406,24 +618,50 @@ export function ChatComposer({
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant={isRecording ? "default" : "outline"}
+                    variant={isRecording ? "default" : isSupported ? "outline" : "outline"}
                     size="icon"
                     className={cn(
                       "h-10 w-10 rounded-xl transition-all",
-                      isRecording ? "bg-red-500 text-white animate-pulse" : "hover:bg-primary/10"
+                      isRecording ? "bg-red-500 text-white animate-pulse" : "hover:bg-primary/10",
+                      !isSupported && "opacity-50 cursor-not-allowed"
                     )}
-                    onClick={isRecording ? stopListening : startListening}
-                    disabled={disabled || isLoading}
-                    aria-label={isRecording ? "Stop listening" : "Start voice input"}
+                    onClick={isRecording ? stopListening : isSupported ? startListening : undefined}
+                    disabled={disabled || isLoading || (!isSupported && !isRecording)}
+                    aria-label={isRecording ? "Stop listening" : isSupported ? "Start voice input" : "Speech recognition not supported"}
                   >
-                    {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    {isRecording ? (
+                      <MicOff className="h-5 w-5" />
+                    ) : isSupported ? (
+                      <Mic className="h-5 w-5" />
+                    ) : (
+                      <MicOff className="h-5 w-5 opacity-50" />
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">
-                  {isRecording ? "Stop listening" : "Voice input"}
+                <TooltipContent side="top" align="center">
+                  {isRecording ? "Stop listening" : isSupported ? "Voice input" : "Speech recognition not supported in this browser"}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            
+            {/* Audio level indicator when recording */}
+            {isRecording && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-lg shadow-lg">
+                <span className="text-xs text-muted-foreground font-mono">Level:</span>
+                <div className="flex items-end gap-1 h-8">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="w-1.5 rounded-t bg-primary/20 transition-all duration-75"
+                      style={{
+                        height: audioLevel > (i - 1) * 0.2 ? `${Math.max(8, audioLevel * 32)}px` : "8px",
+                        backgroundColor: audioLevel > i * 0.18 ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.2)"
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Send Button */}
