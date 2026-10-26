@@ -154,6 +154,7 @@ export function RAGChat({
     if (docIds.length > 0 && !useDocuments) {
       setUseDocuments(true)
     }
+    onDocumentSelectionChange?.(docIds)
   }
 
   const handleToggleDocumentSelector = () => {
@@ -364,6 +365,7 @@ export function RAGChat({
             {!notebookId && (
               <div className="relative flex items-center gap-2">
                 <Button
+                  type="button"
                   variant={useDocuments ? "default" : "outline"}
                   size="sm"
                   className="gap-1"
@@ -602,15 +604,17 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
     setIsLoading(true)
     try {
       const res = await fetch("/api/documents")
-      if (res.ok) {
-        const data = await res.json()
-        const allDocs = (data.documents || []) as DocumentWithStatus[]
-        // Filter to only show READY documents for RAG if showOnlyReady is true
-        const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
-        setDocuments(filteredDocs)
+      if (!res.ok) {
+        throw new Error(`Failed to fetch documents: ${res.status} ${res.statusText}`)
       }
+      const data = await res.json()
+      const allDocs = (data.documents || []) as DocumentWithStatus[]
+      // Filter to only show READY documents for RAG if showOnlyReady is true
+      const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
+      setDocuments(filteredDocs)
     } catch (e) {
       console.error("Failed to fetch documents:", e)
+      toast({ title: "Failed to load documents", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
@@ -661,6 +665,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
         <span className="text-sm font-medium">Select Documents</span>
         <div className="flex items-center gap-1">
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-7 w-7"
@@ -670,7 +675,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
           >
             <RotateCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -689,6 +694,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
               const isReady = doc.status === 'READY'
               return (
                 <button
+                  type="button"
                   key={doc.id}
                   onClick={() => handleToggle(doc.id)}
                   disabled={!isReady}
