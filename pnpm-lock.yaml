@@ -11,6 +11,9 @@ importers:
       '@babel/preset-env':
         specifier: ^8.0.7
         version: 8.0.7(@babel/core@8.0.9)
+      '@babel/preset-typescript':
+        specifier: ^8.0.7
+        version: 8.0.7(@babel/core@8.0.9)
       concurrently:
         specifier: ^9.0.0
         version: 9.2.5
@@ -225,6 +228,9 @@ importers:
       prisma:
         specifier: ^5.22.0
         version: 5.22.0
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -582,6 +588,12 @@ packages:
     peerDependencies:
       '@babel/core': ^8.0.0
 
+  '@babel/plugin-syntax-typescript@8.0.3':
+    resolution: {integrity: sha512-jmTPwps7oSQSZaV1SxkQ3C12UWyufGysGc5OzDpZzvPAIX4mO7dJT3hoqkWVrSImvkcMiknir1iLN1SNV/CZzg==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+    peerDependencies:
+      '@babel/core': ^8.0.0
+
   '@babel/plugin-transform-arrow-functions@8.0.1':
     resolution: {integrity: sha512-o/gr7kRlq3PKLLuYth4udOsrC7geBerti+QtwPeyxMOsEQO1d8kDHqk9r2PtMx2y9i8FG7tzyTerfv1yMLSMsQ==}
     engines: {node: ^22.18.0 || >=24.11.0}
@@ -864,6 +876,12 @@ packages:
     peerDependencies:
       '@babel/core': ^8.0.0
 
+  '@babel/plugin-transform-typescript@8.0.6':
+    resolution: {integrity: sha512-WF3yRlQtClzScvQbWct00ix63+w3DPiyU0WmCBU4YqK539n3VvJFElElpevoD8wfu6953CbiNoUZBi2B7/5jXw==}
+    engines: {node: ^22.18.0 || >=24.11.0}
+    peerDependencies:
+      '@babel/core': ^8.0.0
+
   '@babel/plugin-transform-unicode-escapes@8.0.1':
     resolution: {integrity: sha512-TAXJepIJ6vZphytTwcf+LuXi2M2ZWI43VCqNw+1ZZLPP/38Z1A8j4Mahvg8kqDgMOSM/cakk+hedTJCiw3jQuQ==}
     engines: {node: ^22.18.0 || >=24.11.0}
@@ -896,6 +914,12 @@ packages:
 
   '@babel/preset-modules@0.2.0':
     resolution: {integrity: sha512-yz0RBN2fx4fjCeFcTWsWgL7PxSRltvTa0Qg14HkWCU3qS8MO7ZSJlBVbGceynd5C9NsJwwUHNQD3dc6tYO+jqQ==}
+    peerDependencies:
+      '@babel/core': ^8.0.0
+
+  '@babel/preset-typescript@8.0.7':
+    resolution: {integrity: sha512-sUFLFphAG6YNjCnJpSKpyoNxkfyeM2KNuUjJJN0R6dZusMcK2V3Fg11MVHPFvb37AZeDNocc+xM748vdh9z82Q==}
+    engines: {node: ^22.18.0 || >=24.11.0}
     peerDependencies:
       '@babel/core': ^8.0.0
 
@@ -4615,6 +4639,9 @@ packages:
     resolution: {integrity: sha512-hpb6XnMCGN/A+79Uf8V7/iTGkyyyazNn5X0CoCAp7Uy9vT3RT8jZ9GLcnxGoVjg3P8AArbe4ZVHq6C8oT2a0kA==}
     engines: {node: '>=10'}
 
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
+
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
     engines: {node: '>= 0.4'}
@@ -5549,6 +5576,11 @@ snapshots:
       '@babel/core': 8.0.9
       '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.0.9)
 
+  '@babel/plugin-syntax-typescript@8.0.3(@babel/core@8.0.9)':
+    dependencies:
+      '@babel/core': 8.0.9
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.0.9)
+
   '@babel/plugin-transform-arrow-functions@8.0.1(@babel/core@8.0.9)':
     dependencies:
       '@babel/core': 8.0.9
@@ -5816,6 +5848,15 @@ snapshots:
       '@babel/core': 8.0.9
       '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.0.9)
 
+  '@babel/plugin-transform-typescript@8.0.6(@babel/core@8.0.9)':
+    dependencies:
+      '@babel/core': 8.0.9
+      '@babel/helper-annotate-as-pure': 8.0.0
+      '@babel/helper-create-class-features-plugin': 8.0.7(@babel/core@8.0.9)
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.0.9)
+      '@babel/helper-skip-transparent-expression-wrappers': 8.0.0
+      '@babel/plugin-syntax-typescript': 8.0.3(@babel/core@8.0.9)
+
   '@babel/plugin-transform-unicode-escapes@8.0.1(@babel/core@8.0.9)':
     dependencies:
       '@babel/core': 8.0.9
@@ -5916,6 +5957,14 @@ snapshots:
       '@babel/plugin-transform-unicode-property-regex': 8.0.1(@babel/core@8.0.9)
       '@babel/types': 8.0.8
       esutils: 2.0.3
+
+  '@babel/preset-typescript@8.0.7(@babel/core@8.0.9)':
+    dependencies:
+      '@babel/core': 8.0.9
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.0.9)
+      '@babel/helper-validator-option': 8.0.0
+      '@babel/plugin-transform-modules-commonjs': 8.0.1(@babel/core@8.0.9)
+      '@babel/plugin-transform-typescript': 8.0.6(@babel/core@8.0.9)
 
   '@babel/template@7.29.7':
     dependencies:
@@ -9726,6 +9775,8 @@ snapshots:
       seroval: 1.6.11
 
   seroval@1.6.11: {}
+
+  server-only@0.0.1: {}
 
   set-function-length@1.2.2:
     dependencies:

@@ -212,14 +212,15 @@ RULES:
     solutionData.tables = Array.isArray(solutionData.tables) ? solutionData.tables : []
     solutionData.diagrams = Array.isArray(solutionData.diagrams) ? solutionData.diagrams : []
 
-    solutionData.citations = (response.citations.length > 0 ? response.citations : allResults.slice(0, 3)).map(
+    const citations = Array.isArray(response.citations) ? response.citations : []
+    solutionData.citations = (citations.length > 0 ? citations : allResults.slice(0, 3)).filter(Boolean).map(
       (c: any, i: number) => ({
-        id: c.id || allResults[i]?.id || `cite-${i}`,
-        documentTitle: c.documentTitle || c.document?.title || allResults[i]?.document?.title || 'Document',
-        pageNumber: c.pageNumber ?? allResults[i]?.pageNumber ?? null,
+        id: c?.id || allResults[i]?.id || `cite-${i}`,
+        documentTitle: c?.documentTitle || c?.document?.title || allResults[i]?.document?.title || 'Document',
+        pageNumber: c?.pageNumber ?? allResults[i]?.pageNumber ?? null,
         excerpt:
-          c.excerpt ||
-          c.text ||
+          c?.excerpt ||
+          c?.text ||
           (allResults[i]?.content
             ? allResults[i].content.slice(0, 150) + (allResults[i].content.length > 150 ? '...' : '')
             : ''),

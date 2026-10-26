@@ -8,15 +8,13 @@ const zlib = require('node:zlib')
 const Module = require('node:module')
 
 process.env.NODE_PATH = [
-  '/usr/share/nodejs',
-  '/usr/lib/node_modules',
   process.env.NODE_PATH || '',
 ]
   .filter(Boolean)
   .join(path.delimiter)
 Module._initPaths()
 
-const babel = require('@babel/core')
+const ts = require('typescript')
 
 const webRoot = path.resolve(__dirname, '..')
 const srcRoot = path.join(webRoot, 'src')
@@ -539,6 +537,7 @@ class CustomNextResponse {
 }
 
 const mockModules = {
+  'server-only': {},
   '@prisma/client': {
     PrismaClient: function PrismaClient() {
       return mockPrisma
@@ -639,14 +638,17 @@ Module._load = function (request, parent, isMain) {
 
 function compileTsExtension(module, filename) {
   const source = fs.readFileSync(filename, 'utf8')
-  const transformed = babel.transformSync(source, {
-    filename,
-    presets: [
-      ['/usr/share/nodejs/@babel/preset-env', { targets: { node: 'current' }, modules: 'commonjs' }],
-      ['/usr/share/nodejs/@babel/preset-typescript', { isTSX: filename.endsWith('.tsx'), allExtensions: true }],
-    ],
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: filename.endsWith('.tsx') ? ts.JsxEmit.ReactJSX : ts.JsxEmit.Preserve,
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
+    },
+    fileName: filename,
   })
-  module._compile(transformed.code, filename)
+  module._compile(outputText, filename)
 }
 
 require.extensions['.ts'] = compileTsExtension

@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@babel/preset-env": "^8.0.7",
+    "@babel/preset-typescript": "^8.0.7",
     "concurrently": "^9.0.0",
     "eslint": "^9"
   },

@@ -7,15 +7,13 @@ const Module = require('node:module')
 const { deflateRawSync } = require('node:zlib')
 
 process.env.NODE_PATH = [
-  '/usr/share/nodejs',
-  '/usr/lib/node_modules',
   process.env.NODE_PATH || '',
 ]
   .filter(Boolean)
   .join(path.delimiter)
 Module._initPaths()
 
-const babel = require('@babel/core')
+const ts = require('typescript')
 
 const webRoot = path.resolve(__dirname, '..')
 const srcRoot = path.join(webRoot, 'src')
@@ -687,6 +685,7 @@ const mockPrisma = {
 let activeSessionToken = ''
 
 const mockModules = {
+  'server-only': {},
   '@prisma/client': {
     PrismaClient: function PrismaClient() {
       return mockPrisma
@@ -824,14 +823,17 @@ Module._load = function (request, parent, isMain) {
 
 function compileTsExtension(module, filename) {
   const source = fs.readFileSync(filename, 'utf8')
-  const transformed = babel.transformSync(source, {
-    filename,
-    presets: [
-      ['/usr/share/nodejs/@babel/preset-env', { targets: { node: 'current' }, modules: 'commonjs' }],
-      ['/usr/share/nodejs/@babel/preset-typescript', { isTSX: filename.endsWith('.tsx'), allExtensions: true }],
-    ],
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: filename.endsWith('.tsx') ? ts.JsxEmit.ReactJSX : ts.JsxEmit.Preserve,
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
+    },
+    fileName: filename,
   })
-  module._compile(transformed.code, filename)
+  module._compile(outputText, filename)
 }
 
 require.extensions['.ts'] = compileTsExtension
@@ -1251,13 +1253,16 @@ test('10. Frontend pages & components compilation and contract verification', ()
   for (const relPath of pagesToCompile) {
     const fullPath = path.join(srcRoot, relPath)
     const source = fs.readFileSync(fullPath, 'utf8')
-    const result = babel.transformSync(source, {
-      filename: fullPath,
-      presets: [
-        ['/usr/share/nodejs/@babel/preset-env', { targets: { node: 'current' }, modules: 'commonjs' }],
-        ['/usr/share/nodejs/@babel/preset-typescript', { isTSX: true, allExtensions: true }],
-      ],
+    const result = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+      fileName: fullPath,
     })
-    assert.ok(result && result.code && result.code.length > 0, `Failed to compile ${relPath}`)
+    assert.ok(result && result.outputText && result.outputText.length > 0, `Failed to compile ${relPath}`)
   }
 })

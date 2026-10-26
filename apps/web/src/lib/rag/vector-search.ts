@@ -282,7 +282,9 @@ export async function keywordSearch(options: SearchOptions): Promise<SearchResul
   }
 }
 
-export async function hybridSearch(options: SearchOptions): Promise<{ results: SearchResult[]; context: SearchContext }> {
+export async function hybridSearch(
+  options: SearchOptions
+): Promise<SearchResult[] & { results: SearchResult[]; context: SearchContext }> {
   const [vectorResult, keywordResults] = await Promise.all([
     vectorSearch(options),
     keywordSearch(options),
@@ -307,16 +309,17 @@ export async function hybridSearch(options: SearchOptions): Promise<{ results: S
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, options.limit || 10)
 
-  // Determine the effective search mode
   const hasSemanticResults = vectorResult.results.length > 0
   const effectiveSearchMode = hasSemanticResults ? 'hybrid' : 'keyword-only'
 
-  return {
-    results,
-    context: {
-      searchMode: effectiveSearchMode,
-      embeddingModel: vectorResult.context.embeddingModel,
-      hasVectors: hasSemanticResults,
-    },
+  const context: SearchContext = {
+    searchMode: effectiveSearchMode,
+    embeddingModel: vectorResult.context.embeddingModel,
+    hasVectors: hasSemanticResults,
   }
+
+  return Object.assign(results, {
+    results,
+    context,
+  }) as SearchResult[] & { results: SearchResult[]; context: SearchContext }
 }

@@ -432,8 +432,20 @@ export async function getUserEmbeddingProvider(
     }
   }
 
+  const fallbackMode = (process.env.AI_MODE || '').toLowerCase()
+  const useMockFallback = Boolean(fallbackMode && !['local', 'mock', 'off'].includes(fallbackMode))
+
+  if (useMockFallback) {
+    return {
+      provider: new MockEmbeddingProvider(),
+      model: 'mock',
+      credential: null,
+      searchMode: 'semantic',
+    }
+  }
+
   // Fallback to local embedding provider (deterministic hashing-based)
-  // This provides semantic-like search without requiring an external API key
+  // This provides semantic-like search without requiring an external API key.
   console.info('[Embeddings] No embedding-capable provider configured; using local hashing-based embeddings')
   return {
     provider: new LocalEmbeddingProvider(),

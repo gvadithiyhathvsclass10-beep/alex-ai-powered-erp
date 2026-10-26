@@ -712,6 +712,46 @@ function parseDocxXmlToPages(xml: string): { text: string; pages: PageContent[];
   })
 
   const fullText = pages.map(p => p.text).join('\n\n')
+
+  const allParagraphs = [...xml.matchAll(/<w:p\b[\s\S]*?<\/w:p>/g)]
+    .map(match => {
+      const pXml = match[0]
+        .replace(/<w:tab\s*\/?>/g, '\t')
+        .replace(/<w:br(?:\s+[^>]*)?\/>/g, '\n')
+      const runs = [...pXml.matchAll(/<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(m => decodeXmlEntities(m[1]))
+      return runs.join('').trim()
+    })
+    .filter(Boolean)
+
+  if (pages.length === 1 && allParagraphs.length >= 3 && fullText.length > 1500) {
+    const splitPages: PageContent[] = []
+    const pageTargetLength = Math.max(350, Math.ceil(fullText.length / 2))
+    let current: string[] = []
+    let currentLength = 0
+
+    for (const paragraph of allParagraphs) {
+      if (currentLength > 0 && currentLength + paragraph.length > pageTargetLength && current.length > 0) {
+        const text = current.join('\n').trim()
+        if (text) splitPages.push({ pageNumber: splitPages.length + 1, text })
+        current = []
+        currentLength = 0
+      }
+      current.push(paragraph)
+      currentLength += paragraph.length
+    }
+
+    const leftover = current.join('\n').trim()
+    if (leftover) splitPages.push({ pageNumber: splitPages.length + 1, text: leftover })
+
+    if (splitPages.length > 1) {
+      return {
+        text: splitPages.map(p => p.text).join('\n\n'),
+        pages: splitPages,
+        tables,
+      }
+    }
+  }
+
   return {
     text: fullText,
     pages: pages.length > 0 ? pages : [{ pageNumber: 1, text: fullText, tables }],

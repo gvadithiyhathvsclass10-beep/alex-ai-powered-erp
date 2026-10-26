@@ -94,6 +94,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "prisma": "^5.22.0",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"

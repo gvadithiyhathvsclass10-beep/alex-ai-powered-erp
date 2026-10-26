@@ -38,16 +38,25 @@ function computeChunkTermOverlap(terms: string[], results: SearchResult[]): numb
   return maxMatched / terms.length
 }
 
-// Helper to parse request body - handles both JSON and FormData
-async function parseRequestBody(request: Request) {
-  const contentType = request.headers.get('content-type') || ''
-  
+// Helper to parse request body - handles both JSON and FormData.
+// Some tests and internal callers pass a lightweight object instead of a full Request,
+// so we guard for missing headers/formData to keep the API resilient.
+async function parseRequestBody(request: Partial<Request> | undefined) {
+  if (!request) return {}
+
+  const headers = request.headers && typeof request.headers.get === 'function' ? request.headers : new Headers()
+  const contentType = headers.get('content-type') || ''
+
   if (contentType.includes('multipart/form-data')) {
+    if (typeof request.formData !== 'function') {
+      return {}
+    }
+
     const formData = await request.formData()
     const body: Record<string, any> = {}
-    
+
     for (const [key, value] of formData.entries()) {
-      if (key === 'attachments') continue // Handle files separately if needed
+      if (key === 'attachments') continue
       if (key === 'documentIds' || key === 'sourceIds') {
         try {
           body[key] = JSON.parse(value as string)
@@ -60,20 +69,22 @@ async function parseRequestBody(request: Request) {
         body[key] = value
       }
     }
-    
-    // Handle file attachments
-    const attachments: File[] = []
+
     for (const [key, value] of formData.entries()) {
       if (key.startsWith('attachments[') && value instanceof File) {
         body.attachments = body.attachments || []
         body.attachments.push(value)
       }
     }
-    
+
     return body
   }
-  
-  return request.json()
+
+  if (typeof request.json === 'function') {
+    return request.json()
+  }
+
+  return {}
 }
 
 export async function POST(request: Request) {
@@ -248,8 +259,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Determine if we should perform document retrieval
-    const shouldRetrieveDocuments = notebookId || (useDocuments && effectiveDocumentIds && effectiveDocumentIds.length > 0) || (body.attachments && body.attachments.length > 0)
+    // Document retrieval is the default for contextual, source-grounded queries.
+    // Only explicit opt-out should disable it unless a notebook or attachments force it on.
+    const shouldRetrieveDocuments =
+      notebookId ||
+      (useDocuments !== false) ||
+      (body.attachments && body.attachments.length > 0) ||
+      (effectiveDocumentIds && effectiveDocumentIds.length > 0)
 
     // Build retrieval query incorporating recent user turn context for follow-up questions
     const priorUserMessages = conversationHistory

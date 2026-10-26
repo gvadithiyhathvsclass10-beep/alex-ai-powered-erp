@@ -6,15 +6,13 @@ const path = require('node:path')
 const Module = require('node:module')
 
 process.env.NODE_PATH = [
-  '/usr/share/nodejs',
-  '/usr/lib/node_modules',
   process.env.NODE_PATH || '',
 ]
   .filter(Boolean)
   .join(path.delimiter)
 Module._initPaths()
 
-const babel = require('@babel/core')
+const ts = require('typescript')
 
 const webRoot = path.resolve(__dirname, '..')
 const srcRoot = path.join(webRoot, 'src')
@@ -173,6 +171,16 @@ const mockPrisma = {
           (where?.isDefault === undefined || m.isDefault === where.isDefault) &&
           (!where?.provider || m.provider === where.provider)
       ) || null,
+    create: async ({ data }) => {
+      const config = {
+        id: `mcfg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...data,
+      }
+      store.modelConfigs.push(config)
+      return config
+    },
     updateMany: async ({ where, data }) => {
       for (const m of store.modelConfigs) {
         if (m.userId === where.userId && m.taskType === where.taskType) {
@@ -301,6 +309,7 @@ const mockPrisma = {
 let activeSessionToken = ''
 
 const mockModules = {
+  'server-only': {},
   '@prisma/client': {
     PrismaClient: function PrismaClient() {
       return mockPrisma
@@ -390,14 +399,17 @@ Module._load = function (request, parent, isMain) {
 
 function compileTsExtension(module, filename) {
   const source = fs.readFileSync(filename, 'utf8')
-  const transformed = babel.transformSync(source, {
-    filename,
-    presets: [
-      ['/usr/share/nodejs/@babel/preset-env', { targets: { node: 'current' }, modules: 'commonjs' }],
-      ['/usr/share/nodejs/@babel/preset-typescript', { isTSX: filename.endsWith('.tsx'), allExtensions: true }],
-    ],
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: filename.endsWith('.tsx') ? ts.JsxEmit.ReactJSX : ts.JsxEmit.Preserve,
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
+    },
+    fileName: filename,
   })
-  module._compile(transformed.code, filename)
+  module._compile(outputText, filename)
 }
 
 require.extensions['.ts'] = compileTsExtension

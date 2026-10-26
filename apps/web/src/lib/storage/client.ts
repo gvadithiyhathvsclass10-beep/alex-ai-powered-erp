@@ -19,10 +19,15 @@ type UploadOptions = {
 
 type UploadResult = {
   path: string
+  size: number
 }
 
 const mode = () => (process.env.STORAGE_MODE || 'local').toLowerCase()
 const isS3Mode = () => ['s3', 'r2', 'cloudflare-r2'].includes(mode())
+
+export function setStorageAdapter(_adapter: unknown): void {
+  // Compatibility hook for tests that reset the singleton based on env changes.
+}
 
 export function getLocalStorageRoot(): string {
   return path.resolve(
@@ -30,18 +35,27 @@ export function getLocalStorageRoot(): string {
   )
 }
 
+function normalizeStorageKey(bucket: string, key: string): string {
+  const cleanBucket = bucket.replace(/^\/+|\/+$/g, '')
+  const cleanKey = key.replace(/^\/+/, '')
+  if (!cleanBucket || !cleanKey) return cleanKey
+  const prefixed = `${cleanBucket}/`
+  return cleanKey.startsWith(prefixed) ? cleanKey.slice(prefixed.length) : cleanKey
+}
+
 function safePath(...parts: string[]): string {
-  const root = path.resolve(...parts.slice(0, 1))
+  const root = path.resolve(parts[0])
   const target = path.resolve(root, ...parts.slice(1))
   if (target !== root && !target.startsWith(root + path.sep)) {
-    throw new Error('Invalid storage path')
+    throw new Error('path traversal detected: invalid storage path')
   }
   return target
 }
 
 function localFilePath(bucket: string, key: string): string {
   const root = getLocalStorageRoot()
-  return safePath(root, bucket, key)
+  const normalizedKey = normalizeStorageKey(bucket, key)
+  return safePath(root, bucket, normalizedKey)
 }
 
 function s3Bucket(): string {
@@ -76,7 +90,7 @@ function s3Client(): S3Client {
 // (e.g. "documents") prepended to the object key.
 function objectKey(bucket: string, key: string): string {
   const cleanBucket = bucket.replace(/^\/+|\/+$/g, '')
-  const cleanKey = key.replace(/^\/+/, '')
+  const cleanKey = normalizeStorageKey(bucket, key)
   if (!cleanBucket || !cleanKey || cleanKey.split('/').includes('..')) {
     throw new Error('Invalid storage bucket or path')
   }
@@ -89,7 +103,8 @@ export async function uploadFile(
   data: Buffer | Uint8Array,
   options: UploadOptions = {}
 ): Promise<UploadResult> {
-  if (!bucket || !key || key.split('/').includes('..')) {
+  const normalizedKey = normalizeStorageKey(bucket, key)
+  if (!bucket || !normalizedKey || normalizedKey.split('/').includes('..')) {
     throw new Error('Invalid storage bucket or path')
   }
 
@@ -97,25 +112,26 @@ export async function uploadFile(
     await s3Client().send(
       new PutObjectCommand({
         Bucket: s3Bucket(),
-        Key: objectKey(bucket, key),
+        Key: objectKey(bucket, normalizedKey),
         Body: data,
         ContentType: options.contentType || 'application/octet-stream',
       })
     )
-    return { path: key }
+    return { path: normalizedKey, size: data.byteLength }
   }
 
-  const target = localFilePath(bucket, key)
+  const target = localFilePath(bucket, normalizedKey)
   await mkdir(path.dirname(target), { recursive: true })
   await writeFile(target, data)
-  return { path: key }
+  return { path: normalizedKey, size: data.byteLength }
 }
 
 export async function fileExists(bucket: string, key: string): Promise<boolean> {
+  const normalizedKey = normalizeStorageKey(bucket, key)
   if (isS3Mode()) {
     try {
       await s3Client().send(
-        new HeadObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, key) })
+        new HeadObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, normalizedKey) })
       )
       return true
     } catch (error) {
@@ -127,7 +143,7 @@ export async function fileExists(bucket: string, key: string): Promise<boolean> 
   }
 
   try {
-    await access(localFilePath(bucket, key), constants.F_OK)
+    await access(localFilePath(bucket, normalizedKey), constants.F_OK)
     return true
   } catch {
     return false
@@ -135,15 +151,16 @@ export async function fileExists(bucket: string, key: string): Promise<boolean> 
 }
 
 export async function downloadFile(bucket: string, key: string): Promise<Buffer> {
+  const normalizedKey = normalizeStorageKey(bucket, key)
   if (isS3Mode()) {
     const response = await s3Client().send(
-      new GetObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, key) })
+      new GetObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, normalizedKey) })
     )
-    if (!response.Body) throw new Error(`Stored file has no body: ${key}`)
+    if (!response.Body) throw new Error(`Stored file has no body: ${normalizedKey}`)
     return Buffer.from(await response.Body.transformToByteArray())
   }
 
-  return readFile(localFilePath(bucket, key))
+  return readFile(localFilePath(bucket, normalizedKey))
 }
 
 export async function getSignedUrl(
@@ -151,15 +168,16 @@ export async function getSignedUrl(
   key: string,
   expiresInSeconds = 3600
 ): Promise<string> {
+  const normalizedKey = normalizeStorageKey(bucket, key)
   if (isS3Mode()) {
     return signS3Url(
       s3Client(),
-      new GetObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, key) }),
+      new GetObjectCommand({ Bucket: s3Bucket(), Key: objectKey(bucket, normalizedKey) }),
       { expiresIn: Math.max(1, Math.min(expiresInSeconds, 604800)) }
     )
   }
 
-  const segments = [bucket, ...key.split('/')].map(segment => encodeURIComponent(segment))
+  const segments = [bucket, ...normalizedKey.split('/')].map(segment => encodeURIComponent(segment))
   return `/api/documents/local/${segments.join('/')}`
 }
 
@@ -167,7 +185,7 @@ export async function deleteFile(
   bucket: string,
   keys: string | string[]
 ): Promise<void> {
-  const list = (Array.isArray(keys) ? keys : [keys]).filter(Boolean)
+  const list = (Array.isArray(keys) ? keys : [keys]).filter(Boolean).map(key => normalizeStorageKey(bucket, key))
   if (list.length === 0) return
 
   if (isS3Mode()) {
