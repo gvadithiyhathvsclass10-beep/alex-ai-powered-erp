@@ -146,6 +146,21 @@ export function RAGChat({
     onDocumentSelectionChange?.(localSelectedDocIds)
   }, [localSelectedDocIds])
 
+  // Fetch selected documents for display in composer
+  const {
+    data: selectedDocumentsData,
+  } = useQuery({
+    queryKey: ["selected-documents", localSelectedDocIds],
+    queryFn: async () => {
+      if (localSelectedDocIds.length === 0) return []
+      const res = await fetch("/api/documents", { credentials: "include" })
+      if (!res.ok) return []
+      const data = await res.json()
+      return (data.documents || []).filter((d: any) => localSelectedDocIds.includes(d.id))
+    },
+    enabled: localSelectedDocIds.length > 0,
+  })
+
   const effectiveDocumentIds = localSelectedDocIds.length > 0 ? localSelectedDocIds : undefined
 
   const handleDocumentSelectionChange = (docIds: string[]) => {
@@ -441,9 +456,8 @@ export function RAGChat({
         {/* Selected Documents from Library */}
         {useDocuments && localSelectedDocIds.length > 0 && (
           <div className="flex flex-wrap gap-2 pb-2 border-b border-border/50">
-            {documents
-              .filter((d) => localSelectedDocIds.includes(d.id))
-              .map((doc) => (
+            {(selectedDocumentsData || []).filter((d: any) => localSelectedDocIds.includes(d.id))
+              .map((doc: any) => (
                 <div
                   key={doc.id}
                   className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg border border-primary/30"
@@ -599,28 +613,55 @@ interface DocumentWithStatus {
 function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true }: DocumentSelectorProps) {
   const [documents, setDocuments] = React.useState<DocumentWithStatus[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
 
   const fetchDocuments = React.useCallback(async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const res = await fetch("/api/documents", { credentials: "include" })
       if (!res.ok) {
-        throw new Error(`Failed to fetch documents: ${res.status} ${res.statusText}`)
+        // Handle HTTP errors (401, 403, 500, etc.)
+        let errorMessage = "Failed to load documents"
+        try {
+          const errorData = await res.json()
+          if (errorData?.error) {
+            errorMessage = errorData.error
+          }
+        } catch {
+          // Ignore JSON parse errors on error responses
+        }
+        throw new Error(errorMessage)
       }
       const data = await res.json()
-      const allDocs = (data.documents || []) as DocumentWithStatus[]
+      // Validate that documents is an array
+      const docs = Array.isArray(data.documents) ? data.documents : []
+      // Validate each document has required fields
+      const validDocs = docs.filter(
+        (doc: unknown): doc is DocumentWithStatus =>
+          typeof doc === "object" &&
+          doc !== null &&
+          typeof (doc as Record<string, unknown>).id === "string" &&
+          typeof (doc as Record<string, unknown>).title === "string" &&
+          typeof (doc as Record<string, unknown>).fileName === "string" &&
+          typeof (doc as Record<string, unknown>).status === "string" &&
+          typeof (doc as Record<string, unknown>).chunksCount === "number" &&
+          typeof (doc as Record<string, unknown>).documentType === "string"
+      )
       // Filter to only show READY documents for RAG if showOnlyReady is true
-      const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
+      const filteredDocs = showOnlyReady ? validDocs.filter(d => d.status === 'READY') : validDocs
       setDocuments(filteredDocs)
     } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to fetch documents"
+      setError(message)
       console.error("Failed to fetch documents:", e)
-      toast({ title: "Failed to load documents", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
   }, [showOnlyReady])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDocuments()
   }, [fetchDocuments])
 
@@ -657,7 +698,22 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
     )
   }
 
-  const filteredDocuments = showOnlyReady ? documents.filter(d => d.status === 'READY') : documents
+  if (error) {
+    return (
+      <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg p-2 z-50">
+        <div className="flex flex-col items-center gap-2 py-4 text-center text-sm">
+          <AlertCircle className="h-5 w-5 text-destructive" />
+          <p className="text-destructive">{error}</p>
+          <Button size="sm" variant="outline" onClick={fetchDocuments}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Filter documents for display (showOnlyReady filtering done in fetchDocuments)
+  const filteredDocuments = documents
 
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
