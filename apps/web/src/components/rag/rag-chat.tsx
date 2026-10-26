@@ -11,6 +11,16 @@ import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { ChatComposer } from "@/components/chat/ChatComposer"
 import { MessageBubble } from "@/components/chat/ChatMessage"
+import {
+  Bot,
+  Sparkles,
+  FileText,
+  Zap,
+  Loader2,
+  AlertCircle,
+  X,
+  Check,
+} from "lucide-react"
 
 interface AttachedFile {
   id: string
