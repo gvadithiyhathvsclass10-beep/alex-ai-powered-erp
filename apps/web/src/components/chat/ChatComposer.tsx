@@ -151,33 +151,22 @@ export function ChatComposer({
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false)
   const [isRecording, setIsRecording] = React.useState(false)
   const [transcript, setTranscript] = React.useState("")
+  const [interimTranscript, setInterimTranscript] = React.useState("")
+  const [isSupported, setIsSupported] = React.useState(false)
+  const [recognitionError, setRecognitionError] = React.useState<string | null>(null)
+  const [audioLevel, setAudioLevel] = React.useState(0)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  React.useEffect(() => {
-    return () => {
-      attachments.forEach((attachment) => {
-        if (attachment.preview) URL.revokeObjectURL(attachment.preview)
-      })
-    }
-  }, [attachments])
-
-  // Voice recognition state
-  const [recognition, setRecognition] = React.useState<SpeechRecognition | null>(null)
-  const [interimTranscript, setInterimTranscript] = React.useState("")
-  const [isSupported, setIsSupported] = React.useState(false)
-  const [permissionState, setPermissionState] = React.useState<"prompt" | "granted" | "denied" | "unknown">("unknown")
-  const [recognitionError, setRecognitionError] = React.useState<string | null>(null)
-  const [audioLevel, setAudioLevel] = React.useState(0)
+  // Refs for voice recognition (not state, to avoid re-renders during recognition)
   const audioContextRef = React.useRef<AudioContext | null>(null)
   const analyserRef = React.useRef<AnalyserNode | null>(null)
   const audioStreamRef = React.useRef<MediaStream | null>(null)
   const animationFrameRef = React.useRef<number | null>(null)
   const cleanupRef = React.useRef(false)
 
-  // Check browser support and initialize recognition
+  // Check browser support on mount
   React.useEffect(() => {
-    cleanupRef.current = false
     const win = window as Window & {
       SpeechRecognition?: { new(): SpeechRecognition }
       webkitSpeechRecognition?: { new(): SpeechRecognition }
@@ -186,38 +175,13 @@ export function ChatComposer({
     }
     
     const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
-    if (SpeechRecognition) {
-      setIsSupported(true)
-      const recognition = new SpeechRecognition()
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = "en-US"
-      recognition.maxAlternatives = 1
-      
-      // Add grammar if available
-      const SpeechGrammarList = win.SpeechGrammarList || win.webkitSpeechGrammarList
-      if (SpeechGrammarList) {
-        const grammar = new SpeechGrammarList()
-        grammar.addFromString('#JSGF V1.0; grammar punctuation; public <punc> = . | ? | ! | , | ; | : ;', 1)
-        recognition.grammars = grammar
-      }
-      
-      setRecognition(recognition)
-    } else {
-      setIsSupported(false)
-    }
+    setIsSupported(!!SpeechRecognition)
+  }, [])
 
-    // Check permission state
-    navigator.permissions?.query({ name: "microphone" as PermissionName }).then((status) => {
-      setPermissionState(status.state)
-      status.onchange = () => setPermissionState(status.state)
-    }).catch(() => {
-      // Permission query not supported
-    })
-
+  // Cleanup on unmount
+  React.useEffect(() => {
     return () => {
       cleanupRef.current = true
-      stopListening()
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
@@ -248,14 +212,42 @@ export function ChatComposer({
     }
   }
 
-  const startListening = async () => {
-    if (!recognition || isRecording || !isSupported) return
+  // Create a fresh SpeechRecognition instance for each session
+  const createRecognition = (): SpeechRecognition | null => {
+    const win = window as Window & {
+      SpeechRecognition?: { new(): SpeechRecognition }
+      webkitSpeechRecognition?: { new(): SpeechRecognition }
+      SpeechGrammarList?: { new(): SpeechGrammarList }
+      webkitSpeechGrammarList?: { new(): SpeechGrammarList }
+    }
     
-    setRecognitionError(null)
+    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
+    if (!SpeechRecognition) return null
+    
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = "en-US"
+    recognition.maxAlternatives = 1
+    
+    // Add grammar if available
+    const SpeechGrammarList = win.SpeechGrammarList || win.webkitSpeechGrammarList
+    if (SpeechGrammarList) {
+      const grammar = new SpeechGrammarList()
+      grammar.addFromString('#JSGF V1.0; grammar punctuation; public <punc> = . | ? | ! | , | ; | : ;', 1)
+      recognition.grammars = grammar
+    }
+    
+    return recognition
+  }
+
+  const startListening = async () => {
+    if (isRecording || !isSupported) return
+    
     setRecognitionError(null)
     
     try {
-      // Request microphone access first for visual feedback
+      // Request microphone access first
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -274,13 +266,18 @@ export function ChatComposer({
       source.connect(analyser)
       analyserRef.current = analyser
       
+      // Create a fresh recognition instance for this session
+      const recognition = createRecognition()
+      if (!recognition) {
+        throw new Error("Speech recognition not supported")
+      }
+      
       // Start audio level visualization
       updateAudioLevel()
       
       // Set up recognition handlers
       recognition.onstart = () => {
         setIsRecording(true)
-        setPermissionState("granted")
         setRecognitionError(null)
       }
       
@@ -336,7 +333,6 @@ export function ChatComposer({
         
         const errorMessage = messages[event.error] || `Speech recognition failed: ${event.error}`
         setRecognitionError(errorMessage)
-        setPermissionState(event.error === 'not-allowed' ? 'denied' : 'granted')
         
         toast({
           title: "Voice input error",
@@ -354,6 +350,9 @@ export function ChatComposer({
         })
       }
       
+      // Store recognition instance in a ref for cleanup
+      recognitionRef.current = recognition
+      
       recognition.start()
       setTranscript("")
       setInterimTranscript("")
@@ -364,7 +363,6 @@ export function ChatComposer({
       if (error instanceof Error) {
         if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
           errorMessage = "Microphone permission denied. Please allow microphone access in browser settings."
-          setPermissionState("denied")
         } else if (error.name === "NotFoundError") {
           errorMessage = "No microphone found. Please connect a microphone and try again."
         } else if (error.name === "NotReadableError") {
@@ -381,12 +379,18 @@ export function ChatComposer({
     }
   }
 
+  // Ref to hold the current recognition instance
+  const recognitionRef = React.useRef<SpeechRecognition | null>(null)
+
   const stopListening = () => {
-    if (recognition && isRecording) {
-      recognition.stop()
-    } else if (recognition && !isRecording) {
-      // If recognition was started but not yet recording (permission pending)
-      recognition.abort()
+    // Stop recognition
+    if (recognitionRef.current) {
+      if (isRecording) {
+        recognitionRef.current.stop()
+      } else {
+        recognitionRef.current.abort()
+      }
+      recognitionRef.current = null
     }
     
     // Cleanup audio resources

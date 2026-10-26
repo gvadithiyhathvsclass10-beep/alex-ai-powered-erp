@@ -535,10 +535,21 @@ interface DocumentSelectorProps {
   selectedIds: string[]
   onChange: (ids: string[]) => void
   onClose: () => void
+  showOnlyReady?: boolean
 }
 
-function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorProps) {
-  const [documents, setDocuments] = React.useState<Array<{ id: string; title: string; fileName: string }>>([])
+interface DocumentWithStatus {
+  id: string
+  title: string
+  fileName: string
+  status: string
+  pageCount: number | null
+  chunksCount: number
+  documentType: string
+}
+
+function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true }: DocumentSelectorProps) {
+  const [documents, setDocuments] = React.useState<DocumentWithStatus[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -547,7 +558,10 @@ function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorPr
         const res = await fetch("/api/documents")
         if (res.ok) {
           const data = await res.json()
-          setDocuments(data.documents || [])
+          const allDocs = (data.documents || []) as DocumentWithStatus[]
+          // Filter to only show READY documents for RAG if showOnlyReady is true
+          const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
+          setDocuments(filteredDocs)
         }
       } catch (e) {
         console.error("Failed to fetch documents:", e)
@@ -556,13 +570,28 @@ function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorPr
       }
     }
     fetchDocuments()
-  }, [])
+  }, [showOnlyReady])
 
   const handleToggle = (docId: string) => {
     const newIds = selectedIds.includes(docId)
       ? selectedIds.filter(id => id !== docId)
       : [...selectedIds, docId]
     onChange(newIds)
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      UPLOADED: { label: "Uploaded", color: "bg-gray-100 text-gray-800" },
+      QUEUED: { label: "Queued", color: "bg-blue-100 text-blue-800" },
+      EXTRACTING: { label: "Extracting", color: "bg-yellow-100 text-yellow-800" },
+      CHUNKING: { label: "Chunking", color: "bg-yellow-100 text-yellow-800" },
+      EMBEDDING: { label: "Embedding", color: "bg-yellow-100 text-yellow-800" },
+      INDEXING: { label: "Indexing", color: "bg-yellow-100 text-yellow-800" },
+      READY: { label: "Ready", color: "bg-green-100 text-green-800" },
+      FAILED: { label: "Failed", color: "bg-red-100 text-red-800" },
+    }
+    const config = statusConfig[status] || { label: status, color: "bg-gray-100 text-gray-800" }
+    return <Badge variant="outline" className={`text-xs ${config.color}`}>{config.label}</Badge>
   }
 
   if (isLoading) {
@@ -576,6 +605,8 @@ function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorPr
     )
   }
 
+  const filteredDocuments = showOnlyReady ? documents.filter(d => d.status === 'READY') : documents
+
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
       <div className="flex items-center justify-between p-2 border-b border-border">
@@ -585,31 +616,50 @@ function DocumentSelector({ selectedIds, onChange, onClose }: DocumentSelectorPr
         </Button>
       </div>
       <div className="max-h-64 overflow-y-auto">
-        {documents.length === 0 ? (
+        {filteredDocuments.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
-            No documents available. Upload documents first.
+            {showOnlyReady 
+              ? "No processed documents available for RAG. Upload and wait for processing to complete."
+              : "No documents available. Upload documents first."
+            }
           </div>
         ) : (
           <div className="p-1 space-y-1">
-            {documents.map((doc) => (
-              <button
-                key={doc.id}
-                onClick={() => handleToggle(doc.id)}
-                className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition ${
-                  selectedIds.includes(doc.id)
-                    ? "bg-primary/10 border border-primary/30 text-primary"
-                    : "hover:bg-secondary"
-                }`}
-              >
-                <Check
-                  className={`h-4 w-4 shrink-0 ${selectedIds.includes(doc.id) ? "text-primary" : "text-muted-foreground/30"}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{doc.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
-                </div>
-              </button>
-            ))}
+            {filteredDocuments.map((doc) => {
+              const isReady = doc.status === 'READY'
+              return (
+                <button
+                  key={doc.id}
+                  onClick={() => handleToggle(doc.id)}
+                  disabled={!isReady}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition ${
+                    selectedIds.includes(doc.id)
+                      ? "bg-primary/10 border border-primary/30 text-primary"
+                      : isReady
+                      ? "hover:bg-secondary"
+                      : "opacity-50 cursor-not-allowed"
+                  }`}
+                >
+                  <Check
+                    className={`h-4 w-4 shrink-0 ${selectedIds.includes(doc.id) ? "text-primary" : "text-muted-foreground/30"}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{doc.title}</p>
+                      {getStatusBadge(doc.status)}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <p className="truncate">{doc.fileName}</p>
+                      {doc.pageCount && <span>· {doc.pageCount} pages</span>}
+                      {doc.chunksCount > 0 && <span>· {doc.chunksCount} chunks</span>}
+                    </div>
+                  </div>
+                  {!isReady && (
+                    <span className="text-xs text-muted-foreground ml-auto">Not ready for RAG</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

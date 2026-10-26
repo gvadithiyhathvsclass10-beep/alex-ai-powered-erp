@@ -220,12 +220,21 @@ export async function POST(request: Request) {
     if (!notebookId && effectiveDocumentIds && effectiveDocumentIds.length > 0) {
       const requestedDocs = await prisma.document.findMany({
         where: { id: { in: effectiveDocumentIds } },
-        select: { id: true, ownerId: true, subjectId: true, projectId: true, notebookId: true },
+        select: { id: true, ownerId: true, subjectId: true, projectId: true, notebookId: true, status: true },
       })
       if (requestedDocs.length === 0) {
         return NextResponse.json({ error: 'Requested documents not found' }, { status: 404 })
       }
+      // Filter to only READY documents for RAG
+      const readyDocIds = requestedDocs.filter(d => d.status === 'READY').map(d => d.id)
+      if (readyDocIds.length === 0) {
+        return NextResponse.json({ 
+          error: 'No requested documents are ready for RAG. Please wait for processing to complete.' 
+        }, { status: 400 })
+      }
+      effectiveDocumentIds = readyDocIds
       for (const doc of requestedDocs) {
+        if (doc.status !== 'READY') continue
         const allowed = await canAccessDocument(user, doc)
         if (!allowed) {
           return NextResponse.json(

@@ -75,6 +75,7 @@ function buildAccessibleDocumentWhere(options: SearchOptions): Prisma.DocumentWh
   return {
     AND: [
       accessClause,
+      { status: 'READY' }, // Only include READY documents for RAG
       ...(subjectId ? [{ subjectId }] : []),
       ...(projectId ? [{ projectId }] : []),
       ...(notebookId ? [{ notebookId }] : []),
