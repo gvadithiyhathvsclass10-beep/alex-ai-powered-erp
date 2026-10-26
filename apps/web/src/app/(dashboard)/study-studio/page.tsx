@@ -116,12 +116,13 @@ export default function StudyStudioPage() {
   })
 
   // Fetch existing mind maps
-  const { data: mindMaps, isError: mindMapsError } = useQuery({
+  const { data: mindMapsData, isError: mindMapsError } = useQuery({
     queryKey: ['mindmaps'],
     queryFn: async () => {
       const res = await fetch('/api/mindmaps/generate')
-      if (!res.ok) return []
-      return res.json()
+      if (!res.ok) return { mindMaps: [] }
+      const data = await res.json()
+      return data.mindMaps || []
     },
     retry: 1,
   })
@@ -132,18 +133,20 @@ export default function StudyStudioPage() {
     queryFn: async () => {
       const res = await fetch('/api/diagrams/generate')
       if (!res.ok) return []
+      // API returns array directly
       return res.json()
     },
     retry: 1,
   })
 
   // Fetch existing quizzes
-  const { data: quizzes, isError: quizzesError } = useQuery({
+  const { data: quizzesData, isError: quizzesError } = useQuery({
     queryKey: ['quizzes'],
     queryFn: async () => {
       const res = await fetch('/api/quizzes/generate')
-      if (!res.ok) return []
-      return res.json()
+      if (!res.ok) return { quizzes: [] }
+      const data = await res.json()
+      return data.quizzes || []
     },
     retry: 1,
   })
@@ -184,7 +187,7 @@ export default function StudyStudioPage() {
   })
 
   // Check if any critical queries failed
-  const hasCriticalError = documentsError || notesError || decksError
+  const hasCriticalError = documentsError || notesError || decksError || mindMapsError || quizzesError
 
   // Generate study notes
   const generateNotes = useMutation({
@@ -720,14 +723,14 @@ export default function StudyStudioPage() {
           </Card>
 
           {/* Existing mind maps list */}
-          {(mindMaps?.length > 0 || (mindMaps as any)?.mindMaps?.length > 0) && (
+          {(mindMapsData?.length > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle>Saved Mind Maps</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {(mindMaps as any)?.mindMaps?.map?.((mindMap: MindMapData) => (
+                  {mindMapsData.map((mindMap: MindMapData) => (
                     <Card key={mindMap.id} className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
                       <CardHeader>
                         <CardTitle className="truncate">{mindMap.title}</CardTitle>
@@ -936,14 +939,14 @@ export default function StudyStudioPage() {
           </Card>
 
           {/* Existing quizzes list */}
-          {(quizzes?.length > 0) && (
+          {(quizzesData?.length > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle>Saved Quizzes</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {quizzes.map((quiz: QuizData) => (
+                  {quizzesData.map((quiz: QuizData) => (
                     <Card key={quiz.id} className="hover:shadow-md transition-shadow">
                       <CardHeader>
                         <CardTitle className="truncate">{quiz.title}</CardTitle>

@@ -7,6 +7,23 @@ import {
   formatAIServiceErrorResponse,
 } from '@/lib/ai/service'
 
+export async function GET() {
+  try {
+    const user = await requireAuth()
+
+    const quizzes = await prisma.quiz.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+
+    return NextResponse.json({ quizzes })
+  } catch (error) {
+    console.error('Get quizzes error:', error)
+    return NextResponse.json({ error: 'Failed to get quizzes' }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()

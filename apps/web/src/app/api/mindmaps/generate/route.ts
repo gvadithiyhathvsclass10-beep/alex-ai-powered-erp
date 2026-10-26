@@ -7,6 +7,23 @@ import {
   formatAIServiceErrorResponse,
 } from '@/lib/ai/service'
 
+export async function GET() {
+  try {
+    const user = await requireAuth()
+
+    const mindMaps = await prisma.mindMap.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+
+    return NextResponse.json({ mindMaps })
+  } catch (error) {
+    console.error('Get mind maps error:', error)
+    return NextResponse.json({ error: 'Failed to get mind maps' }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
