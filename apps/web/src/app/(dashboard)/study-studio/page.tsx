@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
@@ -105,67 +105,73 @@ export default function StudyStudioPage() {
   const [generatingQuiz, setGeneratingQuiz] = React.useState(false)
   
   // Fetch user documents
-  const { data: documents } = useQuery({
+  const { data: documents, isError: documentsError } = useQuery({
     queryKey: ['documents'],
     queryFn: async () => {
       const res = await fetch('/api/documents')
       if (!res.ok) throw new Error('Failed to fetch documents')
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch existing mind maps
-  const { data: mindMaps } = useQuery({
+  const { data: mindMaps, isError: mindMapsError } = useQuery({
     queryKey: ['mindmaps'],
     queryFn: async () => {
       const res = await fetch('/api/mindmaps/generate')
       if (!res.ok) return []
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch existing diagrams
-  const { data: diagrams } = useQuery({
+  const { data: diagrams, isError: diagramsError } = useQuery({
     queryKey: ['diagrams'],
     queryFn: async () => {
       const res = await fetch('/api/diagrams/generate')
       if (!res.ok) return []
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch existing quizzes
-  const { data: quizzes } = useQuery({
+  const { data: quizzes, isError: quizzesError } = useQuery({
     queryKey: ['quizzes'],
     queryFn: async () => {
       const res = await fetch('/api/quizzes/generate')
       if (!res.ok) return []
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch study notes
-  const { data: notes } = useQuery({
+  const { data: notes, isError: notesError } = useQuery({
     queryKey: ['study-materials'],
     queryFn: async () => {
       const res = await fetch('/api/study-materials')
       if (!res.ok) throw new Error('Failed to fetch')
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch flashcard decks
-  const { data: decks } = useQuery({
+  const { data: decks, isError: decksError } = useQuery({
     queryKey: ['flashcard-decks'],
     queryFn: async () => {
       const res = await fetch('/api/flashcards/decks')
       if (!res.ok) throw new Error('Failed to fetch')
       return res.json()
     },
+    retry: 1,
   })
 
   // Fetch deck cards
-  const { data: deckCards } = useQuery({
+  const { data: deckCards, isError: deckCardsError } = useQuery({
     queryKey: ['flashcards', selectedDeck],
     queryFn: async () => {
       if (!selectedDeck) return { cards: [] }
@@ -174,7 +180,11 @@ export default function StudyStudioPage() {
       return res.json()
     },
     enabled: !!selectedDeck,
+    retry: 1,
   })
+
+  // Check if any critical queries failed
+  const hasCriticalError = documentsError || notesError || decksError
 
   // Generate study notes
   const generateNotes = useMutation({
@@ -335,6 +345,39 @@ export default function StudyStudioPage() {
 
   const documentsList = Array.isArray(documents) ? documents : (documents?.documents || [])
   const filteredDocuments = documentsList.filter((d: any) => d.status === "READY")
+
+  // Show error state if critical queries failed
+  if (hasCriticalError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Study Studio</h1>
+          <p className="text-muted-foreground mt-1">Generate and manage your study materials</p>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4 p-4">
+              <AlertCircle className="h-8 w-8 text-destructive flex-shrink-0" />
+              <div>
+                <h3 className="font-semibold text-lg">Failed to load Study Studio data</h3>
+                <p className="text-muted-foreground mt-1">
+                  Could not fetch documents or study materials. This may be due to a temporary server issue.
+                </p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4" 
+                  onClick={() => window.location.reload()}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reload Page
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -212,17 +212,6 @@ export function ChatComposer({
     }
   }
 
-  // Check microphone permission status
-  const checkMicPermission = async (): Promise<'granted' | 'denied' | 'prompt'> => {
-    try {
-      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-      return permission.state
-    } catch {
-      // Fallback for browsers that don't support permissions API
-      return 'prompt'
-    }
-  }
-
   // Create a fresh SpeechRecognition instance for each session
   const createRecognition = (): SpeechRecognition | null => {
     const win = window as Window & {
@@ -258,21 +247,8 @@ export function ChatComposer({
     setRecognitionError(null)
     
     try {
-      // Check permission status first
-      const permState = await checkMicPermission()
-      if (permState === 'denied') {
-        const errorMessage = "Microphone access is blocked. Please enable it in your browser settings:\n• Chrome: Click the lock icon 🔒 in address bar → Microphone → Allow\n• Firefox: Click the shield icon → Permissions → Allow\n• Safari: Settings → Websites → Microphone → Allow"
-        setRecognitionError(errorMessage)
-        toast({
-          title: "Microphone blocked",
-          description: errorMessage,
-          variant: "destructive",
-          duration: 10000,
-        })
-        return
-      }
-      
-      // Request microphone access (this triggers browser permission prompt on user gesture)
+      // Request microphone access directly - most reliable approach
+      // navigator.permissions.query is unreliable in many browsers
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -347,7 +323,7 @@ export function ChatComposer({
         setIsRecording(false)
         
         const messages: Record<string, string> = {
-          'not-allowed': 'Microphone permission was denied. Please allow microphone access in your browser settings and try again.',
+          'not-allowed': 'Microphone permission was denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar).',
           'service-not-allowed': 'Speech recognition service is not available in this browser.',
           'no-speech': 'No speech was detected. Please try speaking closer to the microphone.',
           'audio-capture': 'No microphone found or microphone access failed. Please check your microphone.',
@@ -387,11 +363,11 @@ export function ChatComposer({
       let errorMessage = "Failed to start voice recognition."
       if (error instanceof Error) {
         if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings (click 🔒 icon in address bar)."
+          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar)."
         } else if (error.name === "NotFoundError") {
           errorMessage = "No microphone found. Please connect a microphone and try again."
         } else if (error.name === "NotReadableError") {
-          errorMessage = "Microphone is in use by another application. Close other apps using the microphone."
+          errorMessage = "Microphone is in use by another application."
         } else if (error.name === "SecurityError") {
           errorMessage = "Security error: This page must be served over HTTPS (or localhost) for microphone access."
         }

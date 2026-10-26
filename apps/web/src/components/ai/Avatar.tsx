@@ -307,29 +307,36 @@ export function AIAvatar({
     if (!SpeechRecognition) return
 
     try {
-      // Check permission status first
-      let permState: 'granted' | 'denied' | 'prompt' = 'prompt'
+      // Request microphone permission directly - this is the most reliable approach
+      // navigator.permissions.query is unreliable in many browsers
+      let stream: MediaStream
       try {
-        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-        permState = permission.state
-      } catch {
-        // Fallback if permissions API not supported
-      }
-      
-      if (permState === 'denied') {
-        const message = "Microphone access is blocked. Please enable it in your browser settings:\n• Chrome: Click 🔒 lock icon → Microphone → Allow\n• Firefox: Click shield icon → Permissions → Allow\n• Safari: Settings → Websites → Microphone → Allow"
-        toast({ title: "Microphone blocked", description: message, variant: "destructive", duration: 10000 })
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        })
+      } catch (mediaError) {
+        // Handle specific getUserMedia errors
+        let message = 'Could not access microphone.'
+        if (mediaError instanceof Error) {
+          if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
+            message = 'Microphone permission denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar → Microphone → Allow).'
+          } else if (mediaError.name === 'NotFoundError') {
+            message = 'No microphone found. Please connect a microphone and try again.'
+          } else if (mediaError.name === 'NotReadableError') {
+            message = 'Microphone is in use by another application. Close other apps using the microphone.'
+          } else if (mediaError.name === 'SecurityError') {
+            message = 'Security error: This page must be served over HTTPS (or localhost) for microphone access.'
+          } else {
+            message = mediaError.message
+          }
+        }
+        toast({ title: "Microphone error", description: message, variant: "destructive", duration: 10000 })
         return
       }
-
-      // Request microphone permission explicitly (triggers browser prompt on user gesture)
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      })
       // Stop the stream tracks immediately - we just needed permission grant
       stream.getTracks().forEach(track => track.stop())
 
@@ -371,10 +378,10 @@ export function AIAvatar({
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         setIsListening(false)
         const messages: Record<string, string> = {
-          'not-allowed': 'Microphone permission was denied. Allow microphone access in your browser settings and try again.',
+          'not-allowed': 'Microphone permission was denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar).',
           'service-not-allowed': 'The browser speech service is blocked. Check browser permissions or try a supported browser.',
-          'audio-capture': 'No usable microphone was found. Check your microphone connection and system permissions.',
-          network: 'Speech recognition could not reach the browser speech service. Check your connection and try again.',
+          'audio-capture': 'No usable microphone was found. Check your microphone connection.',
+          network: 'Speech recognition could not reach the browser speech service. Check your connection.',
           'no-speech': 'No speech was detected. Try speaking closer to the microphone.',
           'aborted': 'Voice input was cancelled.',
         }
@@ -390,7 +397,7 @@ export function AIAvatar({
       let message = 'Could not start speech recognition. Check microphone permissions and ensure this page uses HTTPS.'
       if (error instanceof Error) {
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          message = 'Microphone permission denied. Please allow microphone access in browser settings (click 🔒 icon in address bar).'
+          message = 'Microphone permission denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar).'
         } else if (error.name === 'NotFoundError') {
           message = 'No microphone found. Please connect a microphone and try again.'
         } else if (error.name === 'NotReadableError') {
