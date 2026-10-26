@@ -1,3 +1,26 @@
 name = "alex-ai-powered-erp"
 main = "worker.js"
 compatibility_date = "2026-10-21"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables (set in Cloudflare dashboard or via wrangler secret put)
+[vars]
+# Render backend URL - UPDATE THIS TO YOUR RENDER SERVICE URL
+RENDER_API_URL = "https://alex-web.onrender.com"
+
+# Optional: Custom domain for the worker
+# route = "api.yourdomain.com/*"
+
+# Optional: KV namespace for caching (if needed)
+# kv_namespaces = [
+#   { binding = "CACHE", id = "your-kv-namespace-id" }
+# ]
+
+# Optional: Durable Objects (if needed for WebSockets)
+# durable_objects = { bindings = [] }
+
+[observability]
+enabled = true
+
+# [triggers]
+# crons = ["0 * * * *"]

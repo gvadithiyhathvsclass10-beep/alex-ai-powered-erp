@@ -69,7 +69,12 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl && addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
+RUN apk add --no-cache \
+    openssl \
+    tesseract-ocr \
+    poppler-utils \
+    && addgroup -g 1001 -S nodejs \
+    && adduser -S nextjs -u 1001 -G nodejs
 
 # Copy standalone output
 COPY --from=build-web --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
@@ -87,10 +92,12 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Synchronize the Prisma schema before starting the API.
-# DATABASE_URL must be configured in Render.
-# Avoid --accept-data-loss for production data.
-CMD ["sh", "-c", "node node_modules/.pnpm/prisma@5.22.0/node_modules/prisma/build/index.js db push --schema=apps/web/prisma/schema.prisma --skip-generate && node apps/web/server.js"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget -q --spider http://localhost:3000/api/health || exit 1
+
+# Start the Next.js standalone server
+CMD ["node", "apps/web/server.js"]
 
 # -----------------------------------------------------------------------------
 # Production runtime: Background worker
@@ -101,7 +108,12 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl tesseract-ocr && addgroup -g 1001 -S nodejs && adduser -S worker -u 1001 -G nodejs
+RUN apk add --no-cache \
+    openssl \
+    tesseract-ocr \
+    poppler-utils \
+    && addgroup -g 1001 -S nodejs \
+    && adduser -S worker -u 1001 -G nodejs
 
 # Copy built application
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./

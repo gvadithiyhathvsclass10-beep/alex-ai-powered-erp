@@ -760,23 +760,7 @@ function parseDocxXmlToPages(xml: string): { text: string; pages: PageContent[];
 }
 
 export async function extractTextFromDocx(buffer: Buffer): Promise<ExtractedContent> {
-  // 1. Try mammoth if installed
-  try {
-    const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({ buffer })
-    if (result?.value?.trim()) {
-      const text = result.value.trim()
-      return {
-        text,
-        pages: [{ pageNumber: 1, text }],
-        metadata: { messages: result.messages, pageCount: 1, extractor: 'mammoth' },
-      }
-    }
-  } catch {
-    // Fall through to native OOXML ZIP parser
-  }
-
-  // 2. Native OOXML ZIP parser for word/document.xml, headers, footers, footnotes
+  // 1. Native OOXML ZIP parser for word/document.xml, headers, footers, footnotes (handles page breaks)
   const zipEntries = readZipEntries(buffer)
   const docXmlBuf = zipEntries.get('word/document.xml')
   if (docXmlBuf) {
@@ -798,6 +782,22 @@ export async function extractTextFromDocx(buffer: Buffer): Promise<ExtractedCont
         },
       }
     }
+  }
+
+  // 2. Try mammoth if installed (fallback for text quality, but single page)
+  try {
+    const mammoth = await import('mammoth')
+    const result = await mammoth.extractRawText({ buffer })
+    if (result?.value?.trim()) {
+      const text = result.value.trim()
+      return {
+        text,
+        pages: [{ pageNumber: 1, text }],
+        metadata: { messages: result.messages, pageCount: 1, extractor: 'mammoth' },
+      }
+    }
+  } catch {
+    // Fall through
   }
 
   // 3. Fallback if buffer is XML or plain text with .docx extension
@@ -1359,6 +1359,7 @@ export async function extractTextFromImage(buffer: Buffer, mimeType: string): Pr
     os.tmpdir(),
     `alex-img-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   )
+  let tesseractCliFailed = false
   try {
     await writeFile(tmpImgPath, buffer)
     const { stdout } = await execFileAsync('tesseract', [tmpImgPath, 'stdout', '-l', 'eng', '--psm', '3'], {
@@ -1368,20 +1369,31 @@ export async function extractTextFromImage(buffer: Buffer, mimeType: string): Pr
       parts.push(stdout.trim())
     }
   } catch {
-    // 2. Fallback: try tesseract.js npm module if installed
-    try {
-      const Tesseract = (await import('tesseract.js')).default
-      const {
-        data: { text },
-      } = await Tesseract.recognize(buffer, 'eng')
-      if (text && text.trim()) {
-        parts.push(text.trim())
-      }
-    } catch {
-      // Neither tesseract CLI nor tesseract.js succeeded
-    }
+    tesseractCliFailed = true
   } finally {
     await unlink(tmpImgPath).catch(() => undefined)
+  }
+
+  // 2. Fallback: try tesseract.js npm module if installed and CLI failed
+  if (tesseractCliFailed) {
+    try {
+      const TesseractModule = await import('tesseract.js')
+      const Tesseract = TesseractModule.default || TesseractModule
+      // Create a worker explicitly to handle errors
+      const worker = await Tesseract.createWorker('eng')
+      try {
+        const {
+          data: { text },
+        } = await worker.recognize(buffer)
+        if (text && text.trim()) {
+          parts.push(text.trim())
+        }
+      } finally {
+        await worker.terminate().catch(() => undefined)
+      }
+    } catch {
+      // Neither tesseract CLI nor tesseract.js succeeded - use embedded text only
+    }
   }
 
   const combinedText =
