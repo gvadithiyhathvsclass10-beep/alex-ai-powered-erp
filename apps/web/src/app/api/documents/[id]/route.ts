@@ -43,6 +43,9 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // Combine all chunks into extracted text
+    const extractedText = doc.chunks.map(c => c.content).join('\n\n')
+
     return NextResponse.json({
       document: serializeBigInt({
         id: doc.id,
@@ -60,6 +63,7 @@ export async function GET(
         notebook: doc.notebook,
         chunks: doc.chunks,
         chunksCount: doc._count.chunks,
+        extractedText,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
         processedAt: doc.processedAt,
