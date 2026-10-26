@@ -20,6 +20,7 @@ import {
   AlertCircle,
   X,
   Check,
+  RotateCcw,
 } from "lucide-react"
 
 interface AttachedFile {
@@ -347,7 +348,7 @@ export function RAGChat({
             
             {/* Document Context Toggle & Selector */}
             {!notebookId && (
-              <div className="flex items-center gap-2">
+              <div className="relative flex items-center gap-2">
                 <Button
                   variant={useDocuments ? "default" : "outline"}
                   size="sm"
@@ -552,25 +553,27 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
   const [documents, setDocuments] = React.useState<DocumentWithStatus[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
-  React.useEffect(() => {
-    const fetchDocuments = async () => {
-      try {
-        const res = await fetch("/api/documents")
-        if (res.ok) {
-          const data = await res.json()
-          const allDocs = (data.documents || []) as DocumentWithStatus[]
-          // Filter to only show READY documents for RAG if showOnlyReady is true
-          const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
-          setDocuments(filteredDocs)
-        }
-      } catch (e) {
-        console.error("Failed to fetch documents:", e)
-      } finally {
-        setIsLoading(false)
+  const fetchDocuments = React.useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const res = await fetch("/api/documents")
+      if (res.ok) {
+        const data = await res.json()
+        const allDocs = (data.documents || []) as DocumentWithStatus[]
+        // Filter to only show READY documents for RAG if showOnlyReady is true
+        const filteredDocs = showOnlyReady ? allDocs.filter(d => d.status === 'READY') : allDocs
+        setDocuments(filteredDocs)
       }
+    } catch (e) {
+      console.error("Failed to fetch documents:", e)
+    } finally {
+      setIsLoading(false)
     }
-    fetchDocuments()
   }, [showOnlyReady])
+
+  React.useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
 
   const handleToggle = (docId: string) => {
     const newIds = selectedIds.includes(docId)
@@ -611,9 +614,21 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
     <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
       <div className="flex items-center justify-between p-2 border-b border-border">
         <span className="text-sm font-medium">Select Documents</span>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={fetchDocuments}
+            disabled={isLoading}
+            aria-label="Refresh document list"
+          >
+            <RotateCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <div className="max-h-64 overflow-y-auto">
         {filteredDocuments.length === 0 ? (
