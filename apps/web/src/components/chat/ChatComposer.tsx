@@ -178,18 +178,6 @@ export function ChatComposer({
     setIsSupported(!!SpeechRecognition)
   }, [])
 
-  // Pre-request microphone permission on mount to avoid delay on first use
-  React.useEffect(() => {
-    if (isSupported) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => stream.getTracks().forEach(track => track.stop()))
-        .catch(() => {
-          // Permission not granted yet, will request when user clicks mic button
-        })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSupported])
-
   // Cleanup on unmount
   React.useEffect(() => {
     return () => {
@@ -221,6 +209,17 @@ export function ChatComposer({
     
     if (!cleanupRef.current) {
       animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
+    }
+  }
+
+  // Check microphone permission status
+  const checkMicPermission = async (): Promise<'granted' | 'denied' | 'prompt'> => {
+    try {
+      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+      return permission.state
+    } catch {
+      // Fallback for browsers that don't support permissions API
+      return 'prompt'
     }
   }
 
@@ -259,7 +258,21 @@ export function ChatComposer({
     setRecognitionError(null)
     
     try {
-      // Request microphone access first
+      // Check permission status first
+      const permState = await checkMicPermission()
+      if (permState === 'denied') {
+        const errorMessage = "Microphone access is blocked. Please enable it in your browser settings:\n• Chrome: Click the lock icon 🔒 in address bar → Microphone → Allow\n• Firefox: Click the shield icon → Permissions → Allow\n• Safari: Settings → Websites → Microphone → Allow"
+        setRecognitionError(errorMessage)
+        toast({
+          title: "Microphone blocked",
+          description: errorMessage,
+          variant: "destructive",
+          duration: 10000,
+        })
+        return
+      }
+      
+      // Request microphone access (this triggers browser permission prompt on user gesture)
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -374,11 +387,13 @@ export function ChatComposer({
       let errorMessage = "Failed to start voice recognition."
       if (error instanceof Error) {
         if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings."
+          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings (click 🔒 icon in address bar)."
         } else if (error.name === "NotFoundError") {
           errorMessage = "No microphone found. Please connect a microphone and try again."
         } else if (error.name === "NotReadableError") {
-          errorMessage = "Microphone is in use by another application."
+          errorMessage = "Microphone is in use by another application. Close other apps using the microphone."
+        } else if (error.name === "SecurityError") {
+          errorMessage = "Security error: This page must be served over HTTPS (or localhost) for microphone access."
         }
       }
       

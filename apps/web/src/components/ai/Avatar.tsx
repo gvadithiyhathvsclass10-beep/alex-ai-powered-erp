@@ -307,7 +307,22 @@ export function AIAvatar({
     if (!SpeechRecognition) return
 
     try {
-      // Request microphone permission explicitly before starting recognition
+      // Check permission status first
+      let permState: 'granted' | 'denied' | 'prompt' = 'prompt'
+      try {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+        permState = permission.state
+      } catch {
+        // Fallback if permissions API not supported
+      }
+      
+      if (permState === 'denied') {
+        const message = "Microphone access is blocked. Please enable it in your browser settings:\n• Chrome: Click 🔒 lock icon → Microphone → Allow\n• Firefox: Click shield icon → Permissions → Allow\n• Safari: Settings → Websites → Microphone → Allow"
+        toast({ title: "Microphone blocked", description: message, variant: "destructive", duration: 10000 })
+        return
+      }
+
+      // Request microphone permission explicitly (triggers browser prompt on user gesture)
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -375,11 +390,13 @@ export function AIAvatar({
       let message = 'Could not start speech recognition. Check microphone permissions and ensure this page uses HTTPS.'
       if (error instanceof Error) {
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          message = 'Microphone permission was denied. Allow microphone access in browser settings and try again.'
+          message = 'Microphone permission denied. Please allow microphone access in browser settings (click 🔒 icon in address bar).'
         } else if (error.name === 'NotFoundError') {
           message = 'No microphone found. Please connect a microphone and try again.'
         } else if (error.name === 'NotReadableError') {
           message = 'Microphone is in use by another application.'
+        } else if (error.name === 'SecurityError') {
+          message = 'Security error: This page must be served over HTTPS (or localhost) for microphone access.'
         }
       }
       toast({ title: "Voice error", description: message, variant: "destructive" })
