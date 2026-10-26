@@ -422,6 +422,37 @@ export function RAGChat({
           </div>
         </ScrollArea>
         
+        {/* Selected Documents from Library */}
+        {useDocuments && localSelectedDocIds.length > 0 && (
+          <div className="flex flex-wrap gap-2 pb-2 border-b border-border/50">
+            {documents
+              .filter((d) => localSelectedDocIds.includes(d.id))
+              .map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg border border-primary/30"
+                >
+                  <FileText className="h-4 w-4 text-primary" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-xs font-medium truncate">{doc.title}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {doc.pageCount ? `${doc.pageCount} pages · ` : ''}{doc.chunksCount} chunks
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-primary hover:text-destructive"
+                    onClick={() => handleDocumentSelectionChange(localSelectedDocIds.filter(id => id !== doc.id))}
+                    aria-label={`Remove ${doc.title}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+          </div>
+        )}
+        
         <Separator className="border-border/50" />
         <ChatComposer
           onSendMessage={handleSubmit}
