@@ -603,7 +603,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
   const fetchDocuments = React.useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch("/api/documents")
+      const res = await fetch("/api/documents", { credentials: "include" })
       if (!res.ok) {
         throw new Error(`Failed to fetch documents: ${res.status} ${res.statusText}`)
       }
