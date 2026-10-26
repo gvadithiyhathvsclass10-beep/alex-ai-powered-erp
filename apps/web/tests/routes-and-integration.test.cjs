@@ -1266,3 +1266,233 @@ test('10. Frontend pages & components compilation and contract verification', ()
     assert.ok(result && result.outputText && result.outputText.length > 0, `Failed to compile ${relPath}`)
   }
 })
+
+// ============================================================================
+// Dropbox OAuth Callback Redirect Tests
+// ============================================================================
+
+test('11. Dropbox callback redirect uses public origin, not internal request.url', async () => {
+  // Add dropboxConnection to global mockPrisma (used by @/lib/prisma via @prisma/client mock)
+  mockPrisma.dropboxConnection = {
+    upsert: async () => ({ id: 'conn_1', userId: 'user_student_1' }),
+  }
+  
+  // Mock fetch globally to intercept Dropbox API calls
+  const origFetch = global.fetch
+  global.fetch = async (url, options) => {
+    if (typeof url === 'string' && url.includes('dropboxapi.com/oauth2/token')) {
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'test-access-token',
+          refresh_token: 'test-refresh-token',
+          expires_in: 14400,
+        }),
+      }
+    }
+    if (typeof url === 'string' && url.includes('dropboxapi.com/2/users/get_current_account')) {
+      return {
+        ok: true,
+        json: async () => ({
+          email: 'user@example.com',
+          name: { display_name: 'Test User' },
+        }),
+      }
+    }
+    return origFetch(url, options)
+  }
+  
+  // Mock NextResponse.redirect to capture the redirect URL
+  let capturedRedirectUrl = ''
+  const origNextServer = mockModules['next/server']
+  mockModules['next/server'] = {
+    NextResponse: {
+      json: (body, init = {}) => ({ status: init.status || 200, body }),
+      redirect: (url, status = 307) => {
+        capturedRedirectUrl = typeof url === 'string' ? url : url.toString()
+        return { 
+          status, 
+          headers: new Map([['Location', capturedRedirectUrl]]),
+          cookies: {
+            set: () => {},
+            get: () => undefined,
+            delete: () => {},
+          },
+        }
+      },
+    },
+  }
+  
+  try {
+    // Set production-like environment BEFORE requiring the route
+    process.env.NEXT_PUBLIC_APP_URL = 'https://alex-ai-powered-erp.onrender.com'
+    process.env.NEXTAUTH_URL = 'https://alex-ai-powered-erp.onrender.com'
+    process.env.NODE_ENV = 'production'
+    process.env.DROPBOX_APP_KEY = 'test-key'
+    process.env.DROPBOX_APP_SECRET = 'test-secret'
+    process.env.ENCRYPTION_KEY = 'test-encryption-key-32-characters-long-12345'
+    
+    // Clear require cache for the route
+    const routePath = path.join(srcRoot, 'app/api/storage/dropbox/callback/route.ts')
+    delete require.cache[require.resolve(routePath)]
+    
+    // Now require the route
+    const dropboxCallbackRoute = require(routePath)
+    
+    // Simulate request with internal Render URL (0.0.0.0:10000)
+    const request = {
+      url: 'http://0.0.0.0:10000/api/storage/dropbox/callback?code=test-code&state=user_student_1.abc123',
+      cookies: {
+        get: (name) => name === 'dropbox_oauth_state' ? { value: 'user_student_1.abc123' } : undefined,
+        delete: () => {},
+      },
+    }
+    
+    await dropboxCallbackRoute.GET(request)
+    
+    // Verify redirect uses public origin, not internal request.url
+    assert.ok(capturedRedirectUrl.startsWith('https://alex-ai-powered-erp.onrender.com/'), 
+      `Redirect should use public origin, got: ${capturedRedirectUrl}`)
+    assert.ok(!capturedRedirectUrl.includes('0.0.0.0:10000'), 
+      `Redirect should not contain internal hostname, got: ${capturedRedirectUrl}`)
+    assert.ok(capturedRedirectUrl.includes('/dashboard/drive?dropbox=connected'), 
+      `Redirect should point to dashboard/drive, got: ${capturedRedirectUrl}`)
+  } finally {
+    global.fetch = origFetch
+    mockModules['next/server'] = origNextServer
+    delete mockPrisma.dropboxConnection
+    delete process.env.NEXT_PUBLIC_APP_URL
+    delete process.env.NEXTAUTH_URL
+    delete process.env.NODE_ENV
+    delete process.env.DROPBOX_APP_KEY
+    delete process.env.DROPBOX_APP_SECRET
+  }
+})
+
+test('12. Dropbox callback handles invalid OAuth state safely', async () => {
+  // Clear require cache for the route to pick up real modules
+  const routePath = path.join(srcRoot, 'app/api/storage/dropbox/callback/route.ts')
+  delete require.cache[require.resolve(routePath)]
+  
+  const dropboxCallbackRoute = require(routePath)
+  
+  const request = {
+    url: 'https://alex-ai-powered-erp.onrender.com/api/storage/dropbox/callback?code=test-code&state=invalid_state',
+    cookies: {
+      get: (name) => name === 'dropbox_oauth_state' ? { value: 'different_state' } : undefined,
+    },
+  }
+  
+  const response = await dropboxCallbackRoute.GET(request)
+  assert.equal(response.status, 400)
+  assert.equal(response.body.error, 'Invalid Dropbox authorization state')
+})
+
+test('13. Dropbox callback handles missing code parameter', async () => {
+  const routePath = path.join(srcRoot, 'app/api/storage/dropbox/callback/route.ts')
+  delete require.cache[require.resolve(routePath)]
+  
+  const dropboxCallbackRoute = require(routePath)
+  
+  const request = {
+    url: 'https://alex-ai-powered-erp.onrender.com/api/storage/dropbox/callback?state=user_student_1.abc123',
+    cookies: {
+      get: (name) => name === 'dropbox_oauth_state' ? { value: 'user_student_1.abc123' } : undefined,
+    },
+  }
+  
+  const response = await dropboxCallbackRoute.GET(request)
+  assert.equal(response.status, 400)
+  assert.equal(response.body.error, 'Invalid Dropbox authorization state')
+})
+
+test('14. Dropbox callback error redirect uses public origin and sanitizes error message', async () => {
+  // Add dropboxConnection to global mockPrisma
+  mockPrisma.dropboxConnection = {
+    upsert: async () => { throw new Error('Database connection failed') },
+  }
+  
+  // Mock fetch globally to simulate Dropbox API error
+  const origFetch = global.fetch
+  global.fetch = async (url, options) => {
+    if (typeof url === 'string' && url.includes('dropboxapi.com/oauth2/token')) {
+      return {
+        ok: false,
+        status: 400,
+        text: async () => '{"error": "invalid_grant", "error_description": "Invalid authorization code"}',
+      }
+    }
+    return origFetch(url, options)
+  }
+  
+  let capturedRedirectUrl = ''
+  const origNextServer = mockModules['next/server']
+  mockModules['next/server'] = {
+    NextResponse: {
+      json: (body, init = {}) => ({ status: init.status || 200, body }),
+      redirect: (url, status = 307) => {
+        capturedRedirectUrl = typeof url === 'string' ? url : url.toString()
+        return { 
+          status, 
+          headers: new Map([['Location', capturedRedirectUrl]]),
+          cookies: {
+            set: () => {},
+            get: () => undefined,
+            delete: () => {},
+          },
+        }
+      },
+    },
+  }
+  
+  try {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://alex-ai-powered-erp.onrender.com'
+    process.env.NEXTAUTH_URL = 'https://alex-ai-powered-erp.onrender.com'
+    process.env.NODE_ENV = 'production'
+    process.env.DROPBOX_APP_KEY = 'test-key'
+    process.env.DROPBOX_APP_SECRET = 'test-secret'
+    process.env.ENCRYPTION_KEY = 'test-encryption-key-32-characters-long-12345'
+    
+    // Clear require cache
+    const routePath = path.join(srcRoot, 'app/api/storage/dropbox/callback/route.ts')
+    delete require.cache[require.resolve(routePath)]
+    
+    // Now require the route
+    const dropboxCallbackRoute = require(routePath)
+    
+    const request = {
+      url: 'http://0.0.0.0:10000/api/storage/dropbox/callback?code=bad-code&state=user_student_1.abc123',
+      cookies: {
+        get: (name) => name === 'dropbox_oauth_state' ? { value: 'user_student_1.abc123' } : undefined,
+        delete: () => {},
+      },
+    }
+    
+    await dropboxCallbackRoute.GET(request)
+    
+    // Verify redirect uses public origin
+    assert.ok(capturedRedirectUrl.startsWith('https://alex-ai-powered-erp.onrender.com/'), 
+      `Error redirect should use public origin, got: ${capturedRedirectUrl}`)
+    assert.ok(!capturedRedirectUrl.includes('0.0.0.0:10000'), 
+      `Error redirect should not contain internal hostname`)
+    // Verify error message is sanitized (no internal error details exposed)
+    assert.ok(capturedRedirectUrl.includes('dropbox=error'), 
+      `Error redirect should have dropbox=error parameter`)
+    assert.ok(capturedRedirectUrl.includes('message='), 
+      `Error redirect should have message parameter`)
+    // The message should be generic, not the raw error
+    assert.ok(!capturedRedirectUrl.includes('invalid_grant'), 
+      `Error redirect should not expose Dropbox error details`)
+    assert.ok(!capturedRedirectUrl.includes('Invalid authorization code'), 
+      `Error redirect should not expose internal error details`)
+  } finally {
+    global.fetch = origFetch
+    mockModules['next/server'] = origNextServer
+    delete mockPrisma.dropboxConnection
+    delete process.env.NEXT_PUBLIC_APP_URL
+    delete process.env.NEXTAUTH_URL
+    delete process.env.NODE_ENV
+    delete process.env.DROPBOX_APP_KEY
+    delete process.env.DROPBOX_APP_SECRET
+  }
+})

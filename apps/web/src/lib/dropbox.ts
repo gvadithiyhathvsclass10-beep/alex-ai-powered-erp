@@ -3,7 +3,7 @@
 const API = 'https://api.dropboxapi.com/2'
 const CONTENT = 'https://content.dropboxapi.com/2'
 
-const DROPBOX_SCOPES = 'files.content.read files.metadata.read'
+const DROPBOX_SCOPES = 'files.content.read files.metadata.read account_info.read'
 
 function resolveRedirectUri() {
   const explicit = process.env.DROPBOX_REDIRECT_URI?.trim()
