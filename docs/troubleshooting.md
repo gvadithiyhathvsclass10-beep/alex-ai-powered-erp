@@ -60,7 +60,7 @@ pnpm install
 # For workspace: include packages/*/src/**/*.{ts,tsx}
 
 # Rebuild CSS
-pnpm --filter apps/web run build
+pnpm --filter @alex/web run build
 ```
 
 ### Authentication Issues
@@ -190,11 +190,11 @@ DATABASE_URL=postgresql://user:pass@host:5432/db?pgbouncer=true
 #### Prisma: "Column does not exist" after schema change
 ```bash
 # Generate client and migrate
-pnpm --filter apps/web run db:generate
-pnpm --filter apps/web run db:migrate dev
+pnpm --filter @alex/web run db:generate
+pnpm --filter @alex/web run db:migrate dev
 
 # For production:
-pnpm --filter apps/web run db:migrate deploy
+pnpm --filter @alex/web run db:migrate deploy
 ```
 
 #### Firestore: "The query requires an index"
@@ -339,7 +339,7 @@ firebase hosting:channel:deploy production
 ```bash
 # Check:
 # 1. Network tab for slow resources
-# 2. Bundle size: pnpm --filter apps/web run build && npx @next/bundle-analyzer
+# 2. Bundle size: pnpm --filter @alex/web run build && npx @next/bundle-analyzer
 # 3. Database query performance (Firestore indexes)
 # 4. Function cold starts (set minInstances)
 ```
@@ -393,7 +393,7 @@ cd functions && npm install
 #### Hot reload not working
 ```bash
 # For Next.js: uses Turbopack by default
-pnpm --filter apps/web run dev
+pnpm --filter @alex/web run dev
 
 # For Functions: use serve script
 cd functions && npm run serve
@@ -482,7 +482,7 @@ Paste relevant logs here
 
 ```bash
 # Reset development database
-pnpm --filter apps/web run db:reset
+pnpm --filter @alex/web run db:reset
 
 # Clear all caches
 pnpm store prune
@@ -495,7 +495,7 @@ pnpm update --latest
 pnpm audit
 
 # Generate Prisma client after schema changes
-pnpm --filter apps/web run db:generate
+pnpm --filter @alex/web run db:generate
 
 # View Firebase projects
 firebase projects:list

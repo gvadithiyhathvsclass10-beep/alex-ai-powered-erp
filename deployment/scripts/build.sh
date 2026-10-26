@@ -12,9 +12,8 @@ pnpm --filter @alex/shared-utils run build
 pnpm --filter @alex/validation-schemas run build
 
 echo "🌐 Building web application..."
-pnpm --filter apps/web run build
+pnpm --filter @alex/web run build
 
-echo "⚡ Building Firebase Functions..."
-pnpm --filter functions run build
+echo "⚡ No Firebase Functions package is configured in this workspace; skipping the functions build step."
 
 echo "✅ Build completed successfully!"

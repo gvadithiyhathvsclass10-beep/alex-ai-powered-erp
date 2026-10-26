@@ -38,7 +38,7 @@ FROM deps AS prisma
 
 COPY apps/web/prisma ./apps/web/prisma
 
-RUN pnpm --filter apps/web run db:generate
+RUN pnpm --filter @alex/web run db:generate
 
 # -----------------------------------------------------------------------------
 # Build shared packages
@@ -58,7 +58,7 @@ COPY apps/web ./apps/web
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN pnpm --filter apps/web run build
+RUN pnpm --filter @alex/web run build
 
 # -----------------------------------------------------------------------------
 # Production runtime: Next.js API + SSR

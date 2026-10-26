@@ -149,13 +149,13 @@ firebase functions:config:set \
 
 ```bash
 # Generate client
-pnpm --filter apps/web run db:generate
+pnpm --filter @alex/web run db:generate
 
 # Deploy migrations (production)
-pnpm --filter apps/web run db:migrate:deploy
+pnpm --filter @alex/web run db:migrate:deploy
 
 # Or push schema directly (development only)
-pnpm --filter apps/web run db:push:postgres
+pnpm --filter @alex/web run db:push:postgres
 ```
 
 ### Firestore

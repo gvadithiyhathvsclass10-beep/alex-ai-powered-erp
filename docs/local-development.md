@@ -43,13 +43,13 @@ docker-compose up -d postgres
 # Create database: CREATE DATABASE alex;
 
 # Generate Prisma client
-pnpm --filter apps/web run db:generate
+pnpm --filter @alex/web run db:generate
 
 # Push schema to database
-pnpm --filter apps/web run db:push
+pnpm --filter @alex/web run db:push
 
 # Seed development data
-pnpm --filter apps/web run db:seed
+pnpm --filter @alex/web run db:seed
 ```
 
 ### 4. Setup Firebase (Optional for Local Dev)
@@ -74,7 +74,7 @@ firebase emulators:start
 firebase emulators:start
 
 # Terminal 2: Start Next.js dev server
-pnpm --filter apps/web run dev
+pnpm --filter @alex/web run dev
 
 # Terminal 3 (optional): Start Functions emulator with hot reload
 pnpm --filter functions run serve
@@ -84,7 +84,7 @@ pnpm --filter functions run serve
 
 ```bash
 # Set AI_MODE=mock in .env.local
-pnpm --filter apps/web run dev
+pnpm --filter @alex/web run dev
 ```
 
 ### Option 3: Backend Only (Functions)
@@ -255,10 +255,10 @@ pg_isready -h localhost -p 5432
 ### Prisma Issues
 ```bash
 # Regenerate client after schema changes
-pnpm --filter apps/web run db:generate
+pnpm --filter @alex/web run db:generate
 
 # Reset database completely
-pnpm --filter apps/web run db:reset
+pnpm --filter @alex/web run db:reset
 ```
 
 ### Firebase Emulator Issues
@@ -293,7 +293,7 @@ firebase setup:emulators:functions
       "name": "Next.js: Debug",
       "type": "node-terminal",
       "request": "launch",
-      "command": "pnpm --filter apps/web run dev"
+      "command": "pnpm --filter @alex/web run dev"
     }
   ]
 }

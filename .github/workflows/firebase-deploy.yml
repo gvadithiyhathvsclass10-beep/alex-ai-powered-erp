@@ -100,7 +100,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm --filter apps/web run db:generate
+        run: pnpm --filter @alex/web run db:generate
 
       - name: Build shared packages
         run: |
@@ -109,13 +109,13 @@ jobs:
           pnpm --filter @alex/validation-schemas run build
 
       - name: Build web application
-        run: pnpm --filter apps/web run build
+        run: pnpm --filter @alex/web run build
         env:
           NODE_ENV: production
           NEXT_PUBLIC_APP_URL: ${{ github.event.inputs.environment == 'production' && format('https://{0}.web.app', secrets.FIREBASE_PROJECT_ID) || format('https://{0}--preview.web.app', secrets.FIREBASE_PROJECT_ID) }}
 
       - name: Build Firebase Functions
-        run: pnpm --filter functions run build
+        run: echo "No Firebase Functions package is configured in this workspace; skipping the functions build step."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
