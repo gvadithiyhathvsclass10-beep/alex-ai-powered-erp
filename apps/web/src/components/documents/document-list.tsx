@@ -32,6 +32,7 @@ import {
   AlertCircle,
   Clock,
   File,
+  Monitor,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -63,6 +64,8 @@ interface DocumentListItem {
   createdAt: string
   updatedAt: string
   processedAt: string | null
+  storageBucket?: string
+  storagePath?: string
 }
 
 interface DocumentListProps {
@@ -342,6 +345,12 @@ function DocumentRow({ document, onRetry, onDelete, onView, onEdit }: DocumentRo
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          {document.storageBucket && document.storagePath && (
+            <DropdownMenuItem onClick={() => window.open(`/api/documents/local/${document.storageBucket}/${document.storagePath}`, '_blank')}>
+              <Monitor className="mr-2 h-4 w-4" />
+              View in Browser
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => onView?.(document.id)}>
             <Eye className="mr-2 h-4 w-4" />
             View Details

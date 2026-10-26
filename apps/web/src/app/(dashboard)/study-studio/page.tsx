@@ -99,6 +99,11 @@ export default function StudyStudioPage() {
   const [generatedDiagram, setGeneratedDiagram] = React.useState<DiagramData | null>(null)
   const [generatedQuiz, setGeneratedQuiz] = React.useState<QuizData | null>(null)
   
+  // Loading states for generation
+  const [generatingMindMap, setGeneratingMindMap] = React.useState(false)
+  const [generatingDiagram, setGeneratingDiagram] = React.useState(false)
+  const [generatingQuiz, setGeneratingQuiz] = React.useState(false)
+  
   // Fetch user documents
   const { data: documents } = useQuery({
     queryKey: ['documents'],
@@ -241,6 +246,7 @@ export default function StudyStudioPage() {
       toast({ title: "Select a document first" }); 
       return 
     }
+    setGeneratingMindMap(true)
     try {
       const res = await fetch('/api/mindmaps/generate', { 
         method: 'POST', 
@@ -256,6 +262,8 @@ export default function StudyStudioPage() {
       toast({ title: 'Mind map generated successfully' })
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to generate mind map', variant: 'destructive' })
+    } finally {
+      setGeneratingMindMap(false)
     }
   }, [selectedSourceDoc])
 
@@ -265,6 +273,7 @@ export default function StudyStudioPage() {
       toast({ title: "Select a document first" }); 
       return 
     }
+    setGeneratingDiagram(true)
     try {
       const res = await fetch('/api/diagrams/generate', { 
         method: 'POST', 
@@ -285,6 +294,8 @@ export default function StudyStudioPage() {
       toast({ title: 'Diagram generated successfully' })
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to generate diagram', variant: 'destructive' })
+    } finally {
+      setGeneratingDiagram(false)
     }
   }, [selectedSourceDoc])
 
@@ -294,6 +305,7 @@ export default function StudyStudioPage() {
       toast({ title: "Select a document first" }); 
       return 
     }
+    setGeneratingQuiz(true)
     try {
       const res = await fetch('/api/quizzes/generate', { 
         method: 'POST', 
@@ -309,6 +321,8 @@ export default function StudyStudioPage() {
       toast({ title: 'Quiz generated successfully' })
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to generate quiz', variant: 'destructive' })
+    } finally {
+      setGeneratingQuiz(false)
     }
   }, [selectedSourceDoc])
 
@@ -339,67 +353,120 @@ export default function StudyStudioPage() {
         </TabsList>
 
         {/* SMART NOTES TAB */}
-        <TabsContent value="notes" className="mt-4 space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
-              { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
-              { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
-              { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
-              { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
-              { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
-            ].map(item => (
-              <Card 
-                key={item.type} 
-                onClick={() => { 
-                  if (selectedSourceDoc) generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }); 
-                  else toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." }) 
-                }} 
-                className="hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 rounded-lg bg-primary/10 text-primary">
-                      <item.icon className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground">{item.desc}</p>
-                    </div>
+        <TabsContent value="notes" className="mt-4 space-y-6">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Generate Study Materials
+                </CardTitle>
+                <CardDescription>
+                  Select a document and choose a material type to generate AI-powered study content
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
+                    { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
+                    { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
+                    { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
+                    { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
+                    { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
+                  ].map(item => (
+                    <Card 
+                      key={item.type} 
+                      onClick={() => { 
+                        if (selectedSourceDoc) generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }); 
+                        else toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." }) 
+                      }} 
+                      className="hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col"
+                    >
+                      <CardContent className="pt-6 flex-1 flex flex-col">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                            <item.icon className="h-6 w-6" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{item.title}</h4>
+                            <p className="text-sm text-muted-foreground">{item.desc}</p>
+                          </div>
+                        </div>
+                        <div className="mt-auto pt-4 border-t">
+                          <Button className="w-full justify-between" variant="outline" size="sm" disabled={generateNotes.isPending || !selectedSourceDoc}>
+                            <span>{generateNotes.isPending ? "Generating..." : "Generate"}</span>
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-4 border-t">
+                  <div className="flex-1 w-full sm:w-80">
+                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+                      <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+                      <SelectContent>
+                        {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Or upload a new document:</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Document Library
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocumentUpload
+                  onSuccess={(doc) => {
+                    setSelectedSourceDoc(doc.id)
+                  }}
+                />
+                <DocumentList documents={documentsList} showUpload={false} />
+              </CardContent>
+            </Card>
+
+            {notes?.materials?.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5" />
+                    Generated Study Materials
+                  </CardTitle>
+                  <CardDescription>{notes.materials.length} materials generated</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {notes.materials.map((material: StudyMaterial) => (
+                      <Card key={material.id} className="overflow-hidden">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="truncate">{material.title}</CardTitle>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">{material.type}</Badge>
+                              {material.topic && <Badge variant="secondary" className="text-xs">{material.topic}</Badge>}
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="prose max-h-96 overflow-y-auto whitespace-pre-wrap">{material.content}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )}
           </div>
-
-          <div className="flex items-center gap-3">
-            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-              <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
-              <SelectContent>
-                {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <DocumentUpload
-            onSuccess={(doc) => {
-              setSelectedSourceDoc(doc.id)
-            }}
-          />
-          <DocumentList documents={documentsList} showUpload={false} />
-
-          {notes?.materials?.map((material: StudyMaterial) => (
-            <Card key={material.id} className="mt-4">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>{material.title}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{material.type} · {material.topic || 'General'}</p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="prose max-h-60 overflow-y-auto whitespace-pre-wrap">{material.content}</div>
-              </CardContent>
-            </Card>
-          ))}
         </TabsContent>
 
         {/* FLASHCARDS TAB */}
@@ -541,7 +608,7 @@ export default function StudyStudioPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <MindMapViewer 
                   data={{ 
                     nodes: generatedMindMap.nodes, 
@@ -549,8 +616,19 @@ export default function StudyStudioPage() {
                   }} 
                   title={generatedMindMap.title}
                   onDownloadPdf={() => window.print()}
-                  className="h-[600px]"
+                  className="h-[600px] w-full"
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {generatingMindMap && (
+            <Card className="animate-in slide-in-from-bottom-2">
+              <CardContent className="flex items-center justify-center py-12">
+                <div className="text-center space-y-3">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Generating mind map...</p>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -567,16 +645,25 @@ export default function StudyStudioPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} style={{ minWidth: 300 }}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
                   <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button onClick={generateMindMap} disabled={!selectedSourceDoc}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Mind Map
+                <Button onClick={generateMindMap} disabled={!selectedSourceDoc || generatingMindMap}>
+                  {generatingMindMap ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Mind Map
+                    </>
+                  )}
                 </Button>
               </div>
               
@@ -598,19 +685,19 @@ export default function StudyStudioPage() {
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {(mindMaps as any)?.mindMaps?.map?.((mindMap: MindMapData) => (
-                    <Card key={mindMap.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                    <Card key={mindMap.id} className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
                       <CardHeader>
-                        <CardTitle>{mindMap.title}</CardTitle>
+                        <CardTitle className="truncate">{mindMap.title}</CardTitle>
                         <CardDescription>{mindMap.nodes.length} nodes · {mindMap.edges.length} connections</CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <MindMapViewer 
                           data={{ 
                             nodes: mindMap.nodes, 
                             edges: mindMap.edges 
                           }} 
                           title={mindMap.title}
-                          className="h-[300px]"
+                          className="h-[350px] w-full"
                         />
                       </CardContent>
                     </Card>
@@ -634,13 +721,24 @@ export default function StudyStudioPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <DiagramViewer 
                   definition={generatedDiagram.definition}
                   title={generatedDiagram.title}
                   onDownloadPdf={() => window.print()}
                   height={600}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {generatingDiagram && (
+            <Card className="animate-in slide-in-from-bottom-2">
+              <CardContent className="flex items-center justify-center py-12">
+                <div className="text-center space-y-3">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Generating diagram...</p>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -657,16 +755,25 @@ export default function StudyStudioPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} style={{ minWidth: 300 }}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
                   <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button onClick={generateDiagram} disabled={!selectedSourceDoc}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Diagram
+                <Button onClick={generateDiagram} disabled={!selectedSourceDoc || generatingDiagram}>
+                  {generatingDiagram ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Diagram
+                    </>
+                  )}
                 </Button>
               </div>
               
@@ -688,16 +795,16 @@ export default function StudyStudioPage() {
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {diagrams.map((diagram: DiagramData) => (
-                    <Card key={diagram.id} className="hover:shadow-md transition-shadow">
+                    <Card key={diagram.id} className="hover:shadow-md transition-shadow overflow-hidden">
                       <CardHeader>
-                        <CardTitle>{diagram.title}</CardTitle>
+                        <CardTitle className="truncate">{diagram.title}</CardTitle>
                         <CardDescription>{diagram.type} diagram</CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <DiagramViewer 
                           definition={diagram.definition}
                           title={diagram.title}
-                          height={300}
+                          height={350}
                         />
                       </CardContent>
                     </Card>
@@ -722,11 +829,22 @@ export default function StudyStudioPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <QuizViewer 
                   quiz={generatedQuiz}
                   onExportPdf={() => window.print()}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {generatingQuiz && (
+            <Card className="animate-in slide-in-from-bottom-2">
+              <CardContent className="flex items-center justify-center py-12">
+                <div className="text-center space-y-3">
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Generating quiz...</p>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -743,16 +861,25 @@ export default function StudyStudioPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} style={{ minWidth: 300 }}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
                   <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button onClick={generateQuiz} disabled={!selectedSourceDoc}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Quiz
+                <Button onClick={generateQuiz} disabled={!selectedSourceDoc || generatingQuiz}>
+                  {generatingQuiz ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Quiz
+                    </>
+                  )}
                 </Button>
               </div>
               
@@ -776,7 +903,7 @@ export default function StudyStudioPage() {
                   {quizzes.map((quiz: QuizData) => (
                     <Card key={quiz.id} className="hover:shadow-md transition-shadow">
                       <CardHeader>
-                        <CardTitle>{quiz.title}</CardTitle>
+                        <CardTitle className="truncate">{quiz.title}</CardTitle>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline">{quiz.difficulty}</Badge>
                           <Badge variant="secondary">{quiz.questions.length} questions</Badge>

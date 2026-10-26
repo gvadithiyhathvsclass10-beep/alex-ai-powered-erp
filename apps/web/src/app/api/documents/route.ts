@@ -260,6 +260,8 @@ export async function GET(request: Request) {
           createdAt: d.createdAt,
           updatedAt: d.updatedAt,
           processedAt: d.processedAt,
+          storageBucket: d.storageBucket,
+          storagePath: d.storagePath,
         })
       ),
       pagination: {
