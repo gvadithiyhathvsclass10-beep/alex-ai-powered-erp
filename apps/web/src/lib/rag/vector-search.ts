@@ -255,27 +255,8 @@ export async function keywordSearch(options: SearchOptions): Promise<SearchResul
       return scored
     }
 
-    // If user asked a general summarization/analysis query over accessible documents, return leading chunks
-    if (rows.length > 0) {
-      return rows.slice(0, limit).map(row => ({
-        id: row.id,
-        documentId: row.documentId,
-        content: row.content,
-        chunkIndex: row.chunkIndex,
-        pageNumber: row.pageNumber,
-        sectionTitle: row.sectionTitle,
-        similarity: 0.35,
-        metadata: (row.metadata || {}) as Record<string, unknown>,
-        document: {
-          id: row.document.id,
-          title: row.document.title,
-          fileName: row.document.fileName,
-          documentType: row.document.documentType,
-          ownerId: row.document.ownerId,
-        },
-      }))
-    }
-
+    // No keyword matches found - return empty array instead of arbitrary chunks
+    // This prevents arbitrary/irrelevant chunks from being returned as search results
     return []
   } catch (error) {
     console.warn('Keyword search failed:', error)

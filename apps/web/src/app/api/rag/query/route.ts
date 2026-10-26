@@ -348,11 +348,20 @@ export async function POST(request: Request) {
       )
     const currentOverlap = computeChunkTermOverlap(currentTerms, searchResults)
     const contextualOverlap = computeChunkTermOverlap(contextualTerms, searchResults)
+    
+    // Consider results relevant if:
+    // 1. We have search results AND
+    // 2. Either it's a broad overview query, OR there's term overlap, OR there's contextual overlap from prior messages
+    // For vector search results, also consider the similarity score
+    const hasVectorResults = searchResults.some(r => r.similarity > 0.7)
+    const hasHighSimilarityResults = searchResults.some(r => r.similarity > 0.5)
     let hasRelevantSourceEvidence =
       searchResults.length > 0 &&
       (isBroadOverviewQuery ||
         currentOverlap > 0 ||
-        (priorUserMessages.length > 0 && contextualOverlap > 0))
+        (priorUserMessages.length > 0 && contextualOverlap > 0) ||
+        hasVectorResults ||
+        hasHighSimilarityResults)
 
     const memoryContext =
       memories.length > 0

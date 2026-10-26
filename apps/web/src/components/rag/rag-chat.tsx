@@ -100,7 +100,7 @@ export function RAGChat({
   documentIds: propDocumentIds,
   sourceIds,
   initialMessages = [],
-  useDocuments = false,
+  useDocuments: useDocumentsProp = false,
   onDocumentSelectionChange,
   selectedDocumentIds = [],
 }: RAGChatProps) {
@@ -114,6 +114,7 @@ export function RAGChat({
   const [showSources, setShowSources] = React.useState<Record<string, boolean>>({})
   const [showDocumentSelector, setShowDocumentSelector] = React.useState(false)
   const [localSelectedDocIds, setLocalSelectedDocIds] = React.useState<string[]>(selectedDocumentIds)
+  const [useDocuments, setUseDocuments] = React.useState(useDocumentsProp)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   // Sync conversationId prop to state
@@ -135,11 +136,24 @@ export function RAGChat({
     setLocalSelectedDocIds(selectedDocumentIds)
   }, [selectedDocumentIds])
 
-  const effectiveDocumentIds = useDocuments && localSelectedDocIds.length > 0 ? localSelectedDocIds : undefined
+  // Sync useDocuments prop to local state
+  React.useEffect(() => {
+    setUseDocuments(useDocumentsProp)
+  }, [useDocumentsProp])
+
+  // Sync local selection to parent when it changes
+  React.useEffect(() => {
+    onDocumentSelectionChange?.(localSelectedDocIds)
+  }, [localSelectedDocIds])
+
+  const effectiveDocumentIds = localSelectedDocIds.length > 0 ? localSelectedDocIds : undefined
 
   const handleDocumentSelectionChange = (docIds: string[]) => {
     setLocalSelectedDocIds(docIds)
-    onDocumentSelectionChange?.(docIds)
+    // Auto-enable document context when documents are selected
+    if (docIds.length > 0 && !useDocuments) {
+      setUseDocuments(true)
+    }
   }
 
   const handleToggleDocumentSelector = () => {
