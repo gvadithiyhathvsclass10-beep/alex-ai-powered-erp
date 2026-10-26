@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     )
 
     // Perform hybrid search on source documents
-    let searchResults = await hybridSearch({
+    let searchResponse = await hybridSearch({
       query: resolvedQuestion,
       userId: user.id,
       userRole: user.role,
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       limit: 15,
       threshold: 0.3,
     })
+    let searchResults = searchResponse.results
 
     if (searchResults.length === 0 && accessibleSourceIds.length > 0) {
       const directChunks = await prisma.documentChunk.findMany({
@@ -114,9 +115,9 @@ export async function POST(request: Request) {
       }))
     }
 
-    let supportingResults: Awaited<ReturnType<typeof hybridSearch>> = []
+    let supportingResults: Awaited<ReturnType<typeof hybridSearch>>['results'] = []
     if (safeSupportingIds.length > 0) {
-      supportingResults = await hybridSearch({
+      const supportingResponse = await hybridSearch({
         query: resolvedQuestion,
         userId: user.id,
         userRole: user.role,
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
         limit: 10,
         threshold: 0.3,
       })
+      supportingResults = supportingResponse.results
     }
 
     const allResults = [...searchResults, ...supportingResults]

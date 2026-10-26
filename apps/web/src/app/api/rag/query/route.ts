@@ -296,7 +296,7 @@ export async function POST(request: Request) {
 
     // Perform hybrid search across user's accessible documents ONLY when documents are explicitly requested
     let searchResults: SearchResult[] = []
-    let searchContext: SearchContext = { searchMode: 'none', hasVectors: false }
+    let searchContext: SearchContext = { searchMode: 'keyword-only', hasVectors: false }
 
     if (shouldRetrieveDocuments) {
       const result = await hybridSearch({

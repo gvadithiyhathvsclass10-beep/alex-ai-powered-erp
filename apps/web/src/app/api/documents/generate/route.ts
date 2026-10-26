@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     let context = ''
 
     if (sourceType === 'rag' || (requestedDocIds && requestedDocIds.length > 0)) {
-      searchResults = await hybridSearch({
+      const searchResponse = await hybridSearch({
         query: prompt,
         userId: user.id,
         userRole: user.role,
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
         limit: 10,
         threshold: 0.3,
       })
+      searchResults = searchResponse.results
       context = searchResults
         .map(
           (c, i) =>

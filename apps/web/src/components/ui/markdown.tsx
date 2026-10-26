@@ -165,7 +165,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     }
 
     // Lists
-    const listMatch = trimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/s)
+    const listMatch = trimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/)
     if (listMatch) {
       const indent = listMatch[1].length
       const marker = listMatch[2]
@@ -195,7 +195,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
       while (j < lines.length) {
         const nextLine = lines[j]
         const nextTrimmed = nextLine.trim()
-        const nextMatch = nextTrimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/s)
+        const nextMatch = nextTrimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/)
         
         if (nextMatch && nextMatch[1].length === indent) {
           const nextItemContent = nextMatch[3]
@@ -221,7 +221,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
               k++
               continue
             }
-            const checkMatch = checkTrimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/s)
+            const checkMatch = checkTrimmed.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/)
             if (checkMatch && checkMatch[1].length === indent) {
               foundNext = true
             }
@@ -313,9 +313,10 @@ function renderBlock(block: MarkdownBlock, copyCodeEnabled: boolean): React.Reac
 }
 
 function renderHeading(block: MarkdownBlock): React.ReactElement {
-  const Tag = `h${block.level}` as keyof JSX.IntrinsicElements
+  const level = Math.min(Math.max(block.level ?? 1, 1), 6)
+  const Tag = `h${level}` as keyof React.JSX.IntrinsicElements
   return (
-    <Tag key={`heading-${block.level}`} className="font-semibold text-foreground mt-4 mb-2">
+    <Tag key={`heading-${level}`} className="font-semibold text-foreground mt-4 mb-2">
       {renderInline(block.content || '')}
     </Tag>
   )

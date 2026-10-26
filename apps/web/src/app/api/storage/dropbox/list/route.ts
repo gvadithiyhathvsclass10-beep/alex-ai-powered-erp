@@ -12,25 +12,25 @@ export async function GET(request: Request) {
 
     const connection = await prisma.dropboxConnection.findUnique({
       where: { userId: user.id },
-      select: { encryptedAccessToken: true, encryptedRefreshToken: true, expiresAt: true },
+      select: { accessToken: true, refreshToken: true, expiresAt: true },
     })
 
     if (!connection) {
       return NextResponse.json({ error: 'Dropbox not connected' }, { status: 404 })
     }
 
-    const { accessToken, refreshed, expiresAt, encryptedAccessToken } = await getDropboxToken(
-      connection.encryptedAccessToken,
-      connection.encryptedRefreshToken,
+    const { accessToken, refreshed, expiresAt, encryptedAccessToken, encryptedRefreshToken } = await getDropboxToken(
+      connection.accessToken,
+      connection.refreshToken,
       connection.expiresAt
     )
 
-    // If token was refreshed, update the database
     if (refreshed) {
       await prisma.dropboxConnection.update({
         where: { userId: user.id },
         data: {
           accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           expiresAt,
         },
       })

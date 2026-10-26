@@ -277,8 +277,8 @@ export function DocumentList({
   )
 }
 
-function SelectWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="relative">{children}</div>
+function SelectWrapper({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("relative", className)}>{children}</div>
 }
 
 interface DocumentRowProps {

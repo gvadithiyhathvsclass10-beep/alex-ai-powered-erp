@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       pageCount: number
       chunksCount: number
       tokenCount: number
-      searchMode?: 'hybrid' | 'keyword-only'
+      searchMode?: 'semantic' | 'local' | 'hybrid' | 'keyword-only'
     }
     try {
       processingStats = await processDocument({
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         notebook: updatedDoc?.notebook ?? null,
         processedAt: updatedDoc?.processedAt ?? new Date(),
         createdAt: updatedDoc?.createdAt || document.createdAt,
-        searchMode: processingStats.searchMode || 'hybrid',
+        searchMode: processingStats.searchMode || 'keyword-only',
       }),
     })
   } catch (error) {

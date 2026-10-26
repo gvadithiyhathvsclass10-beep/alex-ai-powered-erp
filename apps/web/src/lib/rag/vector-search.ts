@@ -34,8 +34,10 @@ export interface SearchResult {
   }
 }
 
+export type SearchMode = 'semantic' | 'local' | 'keyword-only' | 'hybrid'
+
 export interface SearchContext {
-  searchMode: 'semantic' | 'local' | 'keyword-only' | 'hybrid'
+  searchMode: SearchMode
   embeddingModel?: string
   hasVectors: boolean
 }

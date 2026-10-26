@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
 import { SUPPORTED_AI_PROVIDERS } from '@/lib/ai/service'
 
-type AIProviderType = PrismaAIProviderType | 'MOCK'
+type AIProviderType = PrismaAIProviderType | 'MOCK' | 'local'
 
 const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
   'OPENAI',
