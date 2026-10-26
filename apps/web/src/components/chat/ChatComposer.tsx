@@ -178,6 +178,18 @@ export function ChatComposer({
     setIsSupported(!!SpeechRecognition)
   }, [])
 
+  // Pre-request microphone permission on mount to avoid delay on first use
+  React.useEffect(() => {
+    if (isSupported) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => stream.getTracks().forEach(track => track.stop()))
+        .catch(() => {
+          // Permission not granted yet, will request when user clicks mic button
+        })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupported])
+
   // Cleanup on unmount
   React.useEffect(() => {
     return () => {

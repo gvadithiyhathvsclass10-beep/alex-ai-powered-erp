@@ -293,7 +293,7 @@ export function AIAvatar({
     setIsSpeaking(false)
   }
 
-  const startListening = () => {
+  const startListening = async () => {
     const win = window as Window & {
       SpeechRecognition?: { new(): SpeechRecognition };
       webkitSpeechRecognition?: { new(): SpeechRecognition };
@@ -305,44 +305,83 @@ export function AIAvatar({
 
     const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
     if (!SpeechRecognition) return
-    const recognition = new SpeechRecognition()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognition.lang = "en-US"
-
-    recognition.onstart = () => setIsListening(true)
-    recognition.onend = () => setIsListening(false)
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((result: SpeechRecognitionResult) => result[0].transcript)
-        .join("")
-
-      const lastResult = event.results[event.results.length - 1]
-      if (lastResult?.isFinal && transcript.trim()) {
-        handleSendMessage(transcript.trim())
-      }
-    }
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setIsListening(false)
-      const messages: Record<string, string> = {
-        'not-allowed': 'Microphone permission was denied. Allow microphone access in your browser settings and try again.',
-        'service-not-allowed': 'The browser speech service is blocked. Check browser permissions or try a supported browser.',
-        'audio-capture': 'No usable microphone was found. Check your microphone connection and system permissions.',
-        network: 'Speech recognition could not reach the browser speech service. Check your connection and try again.',
-        'no-speech': 'No speech was detected. Try speaking closer to the microphone.',
-      }
-      toast({ title: "Voice error", description: messages[event.error] || `Speech recognition failed (${event.error}).`, variant: "destructive" })
-    }
 
     try {
+      // Request microphone permission explicitly before starting recognition
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      })
+      // Stop the stream tracks immediately - we just needed permission grant
+      stream.getTracks().forEach(track => track.stop())
+
+      const recognition = new SpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "en-US"
+
+      let finalTranscript = ""
+
+      recognition.onstart = () => setIsListening(true)
+      recognition.onend = () => setIsListening(false)
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = ""
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript
+          } else {
+            interim += result[0].transcript
+          }
+        }
+        
+        // Update input with interim results for visual feedback
+        if (interim) {
+          setInput(finalTranscript + interim)
+        }
+        
+        // Send final transcript when speech ends
+        const lastResult = event.results[event.results.length - 1]
+        if (lastResult?.isFinal && finalTranscript.trim()) {
+          handleSendMessage(finalTranscript.trim())
+          finalTranscript = ""
+          setInput("")
+        }
+      }
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        setIsListening(false)
+        const messages: Record<string, string> = {
+          'not-allowed': 'Microphone permission was denied. Allow microphone access in your browser settings and try again.',
+          'service-not-allowed': 'The browser speech service is blocked. Check browser permissions or try a supported browser.',
+          'audio-capture': 'No usable microphone was found. Check your microphone connection and system permissions.',
+          network: 'Speech recognition could not reach the browser speech service. Check your connection and try again.',
+          'no-speech': 'No speech was detected. Try speaking closer to the microphone.',
+          'aborted': 'Voice input was cancelled.',
+        }
+        // Don't show toast for 'no-speech' as it's common when user stops talking
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          toast({ title: "Voice error", description: messages[event.error] || `Speech recognition failed (${event.error}).`, variant: "destructive" })
+        }
+      }
+
       recognition.start()
     } catch (error) {
       setIsListening(false)
-      const message = error instanceof Error && error.name === 'NotAllowedError'
-        ? 'Microphone permission was denied. Allow microphone access and try again.'
-        : 'Could not start speech recognition. Check microphone permissions and ensure this page uses HTTPS.'
+      let message = 'Could not start speech recognition. Check microphone permissions and ensure this page uses HTTPS.'
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          message = 'Microphone permission was denied. Allow microphone access in browser settings and try again.'
+        } else if (error.name === 'NotFoundError') {
+          message = 'No microphone found. Please connect a microphone and try again.'
+        } else if (error.name === 'NotReadableError') {
+          message = 'Microphone is in use by another application.'
+        }
+      }
       toast({ title: "Voice error", description: message, variant: "destructive" })
     }
   }
