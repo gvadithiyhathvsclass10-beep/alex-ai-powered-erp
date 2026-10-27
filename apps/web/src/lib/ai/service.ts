@@ -414,9 +414,26 @@ export function validateProviderModel(
   )
 }
 
+/**
+ * Returns the configured per-attempt timeout for AI requests.
+ * Can be overridden by AI_REQUEST_TIMEOUT_MS environment variable.
+ * Default: 20000ms (20 seconds) - fits within Render's 30s web request timeout
+ * with headroom for Next.js framework overhead.
+ */
 export function getAIRequestTimeoutMs(): number {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30000
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20000
+}
+
+/**
+ * Returns the total deadline budget for an AI operation including retries.
+ * Can be overridden by AI_TOTAL_TIMEOUT_MS environment variable.
+ * Default: 25000ms (25 seconds) - must be less than Render's 30s timeout.
+ * If set to 0 or negative, no total deadline is enforced (uses per-attempt only).
+ */
+export function getAITotalTimeoutMs(): number {
+  const parsed = Number(process.env.AI_TOTAL_TIMEOUT_MS)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 25000
 }
 
 export async function fetchWithAISafeTimeout(
@@ -424,17 +441,30 @@ export async function fetchWithAISafeTimeout(
   init: RequestInit,
   provider: string,
   model: string,
-  timeoutMs = getAIRequestTimeoutMs()
+  timeoutMs = getAIRequestTimeoutMs(),
+  deadlineMs?: number
 ): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  
+  // If a total deadline is provided, use the minimum of per-attempt timeout and remaining deadline
+  const effectiveTimeoutMs = deadlineMs ? Math.min(timeoutMs, Math.max(0, deadlineMs - Date.now())) : timeoutMs
+  
+  if (effectiveTimeoutMs <= 0) {
+    throw new AITimeoutError(
+      `Total deadline exceeded for ${provider} (${model})`,
+      provider,
+      model
+    )
+  }
+  
+  const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs)
   try {
     return await fetch(url, { ...init, signal: controller.signal })
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`[AIService] Request timed out after ${timeoutMs}ms (${provider} / ${model})`)
+      console.error(`[AIService] Request timed out after ${effectiveTimeoutMs}ms (${provider} / ${model})`)
       throw new AITimeoutError(
-        `Request to ${provider} (${model}) timed out after ${timeoutMs}ms`,
+        `Request to ${provider} (${model}) timed out after ${effectiveTimeoutMs}ms`,
         provider,
         model
       )
@@ -454,6 +484,7 @@ export async function fetchWithAISafeTimeout(
 /**
  * Retries only transient provider overload/rate-limit responses. The request body
  * is reused unchanged and each attempt gets its own timeout controller.
+ * Respects a total deadline budget to prevent exceeding web request timeouts.
  */
 export async function fetchWithAIRetry(
   url: string,
@@ -464,8 +495,11 @@ export async function fetchWithAIRetry(
   maxRetries = 4
 ): Promise<Response> {
   const retries = Math.max(0, Math.min(4, Math.floor(maxRetries)))
+  const totalDeadlineMs = getAITotalTimeoutMs()
+  const deadline = totalDeadlineMs > 0 ? Date.now() + totalDeadlineMs : undefined
+  
   for (let attempt = 0; ; attempt++) {
-    const response = await fetchWithAISafeTimeout(url, init, provider, model, timeoutMs)
+    const response = await fetchWithAISafeTimeout(url, init, provider, model, timeoutMs, deadline)
     if (![429, 503].includes(response.status) || attempt >= retries) {
       return response
     }
@@ -486,6 +520,17 @@ export async function fetchWithAIRetry(
       // Some providers return non-JSON overload responses; status is sufficient.
     }
 
+    // Check total deadline before retrying
+    if (deadline && Date.now() >= deadline) {
+      console.warn('[AIService] Total deadline exceeded, stopping retries', {
+        provider,
+        model,
+        attempt: attempt + 1,
+        maxRetries: retries,
+      })
+      return response
+    }
+
     const retryAfter = response.headers.get('Retry-After')
     let waitMs = Math.min(4000, 200 * (2 ** attempt))
     if (retryAfter) {
@@ -497,6 +542,17 @@ export async function fetchWithAIRetry(
         waitMs = Math.min(30000, Math.max(0, dateMs - Date.now()))
       }
     }
+    
+    // Cap wait time to remaining deadline
+    if (deadline) {
+      const remainingMs = deadline - Date.now()
+      waitMs = Math.min(waitMs, Math.max(0, remainingMs))
+      if (waitMs <= 0) {
+        console.warn('[AIService] No time remaining for retry, stopping', { provider, model })
+        return response
+      }
+    }
+
     console.warn('[AIService] Transient provider response; retrying', {
       provider,
       model,
