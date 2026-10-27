@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
@@ -66,8 +67,8 @@ interface MindMapData {
 interface DiagramData {
   id: string
   title: string
-  type: string
-  definition: { type: string; code: string; title?: string }
+  type: 'mermaid' | 'graphviz' | 'plantuml'
+  definition: { type: 'mermaid' | 'graphviz' | 'plantuml'; code: string; title?: string }
   createdAt: string
 }
 
@@ -120,7 +121,7 @@ export default function StudyStudioPage() {
     queryKey: ['mindmaps'],
     queryFn: async () => {
       const res = await fetch('/api/mindmaps/generate')
-      if (!res.ok) return { mindMaps: [] }
+      if (!res.ok) throw new Error('Failed to fetch mind maps')
       const data = await res.json()
       return data.mindMaps || []
     },
@@ -132,7 +133,7 @@ export default function StudyStudioPage() {
     queryKey: ['diagrams'],
     queryFn: async () => {
       const res = await fetch('/api/diagrams/generate')
-      if (!res.ok) return []
+      if (!res.ok) throw new Error('Failed to fetch diagrams')
       // API returns array directly
       return res.json()
     },
@@ -144,7 +145,7 @@ export default function StudyStudioPage() {
     queryKey: ['quizzes'],
     queryFn: async () => {
       const res = await fetch('/api/quizzes/generate')
-      if (!res.ok) return { quizzes: [] }
+      if (!res.ok) throw new Error('Failed to fetch quizzes')
       const data = await res.json()
       return data.quizzes || []
     },
@@ -292,9 +293,6 @@ export default function StudyStudioPage() {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
-          customType: 'mermaid', 
-          customCode: 'flowchart TD\n  A[Source document] --> B[Key concepts]', 
-          title: 'Document overview', 
           sourceDocId: selectedSourceDoc 
         }) 
       })
@@ -692,8 +690,8 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
-                  <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>
@@ -802,8 +800,8 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
-                  <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>
@@ -908,8 +906,8 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} className="w-full sm:w-80">
-                  <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
                   <SelectContent>
                     {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
                   </SelectContent>

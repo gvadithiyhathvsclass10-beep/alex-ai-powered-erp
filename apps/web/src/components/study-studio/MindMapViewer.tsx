@@ -13,6 +13,7 @@ import {
   Settings,
   PanelLeft,
   PanelRight,
+  X,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -49,6 +50,7 @@ const NODE_BG = "hsl(var(--card))"
 const NODE_BORDER = "hsl(var(--primary))"
 const NODE_TEXT = "hsl(var(--card-foreground))"
 const CENTRAL_NODE_BG = "hsl(var(--primary))"
+const CENTRAL_NODE_BORDER = "hsl(var(--primary))"
 const CENTRAL_NODE_TEXT = "hsl(var(--primary-foreground))"
 
 function getCentralNode(nodes: MindMapNode[], edges: MindMapEdge[]): MindMapNode | null {

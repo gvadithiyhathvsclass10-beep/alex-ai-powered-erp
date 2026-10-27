@@ -284,7 +284,7 @@ export function DiagramViewer({
   editable = false,
   height = 500
 }: DiagramViewerProps) {
-  const [activeTab, setActiveTab] = React.useState<'diagram' | 'code'>('diagram')
+  const [activeTab, setActiveTab] = React.useState<string>('diagram')
   const [copied, setCopied] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
   
