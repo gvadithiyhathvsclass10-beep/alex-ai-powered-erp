@@ -414,9 +414,24 @@ export function validateProviderModel(
   )
 }
 
-export function getAIRequestTimeoutMs(): number {
+export function getAIRequestTimeoutMs(provider?: string, taskType: AITaskType = 'chat'): number {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30000
+  const baseTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 60000
+  
+  // Provider-specific timeout adjustments
+  if (provider) {
+    const providerUpper = provider.toUpperCase()
+    // NVIDIA Nemotron can be slower, give it more time
+    if (providerUpper === 'NVIDIA_NEMOTRON') {
+      return Math.max(baseTimeout, 90000)
+    }
+    // Structured output tasks need more time
+    if (taskType === 'structured') {
+      return Math.max(baseTimeout, 90000)
+    }
+  }
+  
+  return baseTimeout
 }
 
 export async function fetchWithAISafeTimeout(
@@ -424,7 +439,8 @@ export async function fetchWithAISafeTimeout(
   init: RequestInit,
   provider: string,
   model: string,
-  timeoutMs = getAIRequestTimeoutMs()
+  timeoutMs = getAIRequestTimeoutMs(provider),
+  taskType: AITaskType = 'chat'
 ): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -434,7 +450,7 @@ export async function fetchWithAISafeTimeout(
     if (error instanceof Error && error.name === 'AbortError') {
       console.error(`[AIService] Request timed out after ${timeoutMs}ms (${provider} / ${model})`)
       throw new AITimeoutError(
-        `Request to ${provider} (${model}) timed out after ${timeoutMs}ms`,
+        `Request to ${provider} (${model}) timed out after ${Math.round(timeoutMs / 1000)}s. The model may be busy - please try again or select a faster model.`,
         provider,
         model
       )
@@ -460,12 +476,13 @@ export async function fetchWithAIRetry(
   init: RequestInit,
   provider: string,
   model: string,
-  timeoutMs = getAIRequestTimeoutMs(),
-  maxRetries = 4
+  timeoutMs = getAIRequestTimeoutMs(provider),
+  maxRetries = 4,
+  taskType: AITaskType = 'chat'
 ): Promise<Response> {
   const retries = Math.max(0, Math.min(4, Math.floor(maxRetries)))
   for (let attempt = 0; ; attempt++) {
-    const response = await fetchWithAISafeTimeout(url, init, provider, model, timeoutMs)
+    const response = await fetchWithAISafeTimeout(url, init, provider, model, timeoutMs, taskType)
     if (![429, 503].includes(response.status) || attempt >= retries) {
       return response
     }
@@ -889,7 +906,8 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
 
   const temperature = input.temperature ?? 0.3
   const maxTokens = input.maxTokens ?? 2048
-  const timeoutMs = input.timeoutMs ?? getAIRequestTimeoutMs()
+  const taskType = input.taskType || 'chat'
+  const timeoutMs = input.timeoutMs ?? getAIRequestTimeoutMs(config.provider, taskType)
 
   let text = ''
   let tokenUsage: TokenUsage = { prompt: 0, completion: 0, total: 0 }
@@ -926,7 +944,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {
@@ -968,7 +988,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {
@@ -1026,7 +1048,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {

@@ -10,8 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { MarkdownRenderer } from "@/components/ui/markdown"
+import { MindMapViewer } from "@/components/study-studio/mind-map-viewer"
+import { DiagramViewer } from "@/components/diagrams/DiagramViewer"
+import { FlashcardReviewer } from "@/components/study-studio/flashcard-reviewer"
+import { QuizTaker } from "@/components/study-studio/quiz-taker"
 
 interface StudyMaterial {
   id: string
@@ -51,25 +56,69 @@ interface Flashcard {
   lastReviewed: string | null
 }
 
+interface MindMap {
+  id: string
+  title: string
+  sourceDocId: string | null
+  subjectId: string | null
+  nodes: Array<{ id: string; label: string; position: { x: number; y: number } }>
+  edges: Array<{ id: string; source: string; target: string }>
+  viewport?: { x: number; y: number; zoom: number }
+  createdAt: string
+  updatedAt: string
+}
+
+interface Diagram {
+  id: string
+  title: string
+  type: string
+  sourceDocId: string | null
+  subjectId: string | null
+  definition: {
+    type: "mermaid" | "graphviz" | "plantuml" | "svg" | "description"
+    code: string
+    title: string
+    description?: string
+  }
+  renderedUrl: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface Quiz {
+  id: string
+  title: string
+  description: string | null
+  subjectId: string | null
+  sourceDocId: string | null
+  topic: string | null
+  difficulty: string
+  questions: Array<{
+    id: string
+    prompt: string
+    options: string[]
+    answer: number
+    explanation?: string
+  }>
+  timeLimit: number | null
+  isPublished: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export default function StudyStudioPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("notes")
   const [selectedDeck, setSelectedDeck] = React.useState<string | null>(null)
-  const [reviewMode, setReviewMode] = React.useState(false)
-  const [currentCardIndex, setCurrentCardIndex] = React.useState(0)
-  const [showAnswer, setShowAnswer] = React.useState(false)
+  const [selectedMindMap, setSelectedMindMap] = React.useState<string | null>(null)
+  const [selectedDiagram, setSelectedDiagram] = React.useState<string | null>(null)
+  const [selectedQuiz, setSelectedQuiz] = React.useState<string | null>(null)
   const [selectedSourceDoc, setSelectedSourceDoc] = React.useState("")
-  const [generatedOutput, setGeneratedOutput] = React.useState<string | null>(null)
-  const generateStructured = async (kind: 'mindmaps' | 'diagrams' | 'quizzes') => {
-    if (!selectedSourceDoc) { toast({ title: "Select a document first" }); return }
-    const endpoint = kind === 'mindmaps' ? '/api/mindmaps/generate' : kind === 'quizzes' ? '/api/quizzes/generate' : '/api/diagrams/generate'
-    const body = kind === 'diagrams' ? { customType: 'mermaid', customCode: 'flowchart TD\n  A[Source document] --> B[Key concepts]', title: 'Document overview', sourceDocId: selectedSourceDoc } : { sourceDocId: selectedSourceDoc }
-    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const data = await res.json()
-    if (!res.ok) { toast({ title: 'Generation failed', description: data.error, variant: 'destructive' }); return }
-    setGeneratedOutput(JSON.stringify(data, null, 2))
-    toast({ title: `${kind.slice(0, -1)} generated` })
-  }
+  const [generationState, setGenerationState] = React.useState<{
+    type: string | null
+    loading: boolean
+    error: string | null
+  }>({ type: null, loading: false, error: null })
 
   const { data: notes } = useQuery({
     queryKey: ['study-materials'],
@@ -84,6 +133,33 @@ export default function StudyStudioPage() {
     queryKey: ['flashcard-decks'],
     queryFn: async () => {
       const res = await fetch('/api/flashcards/decks')
+      if (!res.ok) throw new Error('Failed to fetch')
+      return res.json()
+    },
+  })
+
+  const { data: mindMaps } = useQuery({
+    queryKey: ['mind-maps'],
+    queryFn: async () => {
+      const res = await fetch('/api/mindmaps')
+      if (!res.ok) throw new Error('Failed to fetch')
+      return res.json()
+    },
+  })
+
+  const { data: diagrams } = useQuery({
+    queryKey: ['diagrams'],
+    queryFn: async () => {
+      const res = await fetch('/api/diagrams')
+      if (!res.ok) throw new Error('Failed to fetch')
+      return res.json()
+    },
+  })
+
+  const { data: quizzes } = useQuery({
+    queryKey: ['quizzes'],
+    queryFn: async () => {
+      const res = await fetch('/api/quizzes')
       if (!res.ok) throw new Error('Failed to fetch')
       return res.json()
     },
@@ -106,7 +182,7 @@ export default function StudyStudioPage() {
       if (!res.ok) throw new Error('Failed to fetch')
       return res.json()
     },
-    enabled: !!selectedDeck,
+    enabled: !!selectedDeck && selectedDeck !== "new",
   })
 
   const generateNotes = useMutation({
@@ -120,11 +196,18 @@ export default function StudyStudioPage() {
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       return data
     },
+    onMutate: () => {
+      setGenerationState({ type: 'notes', loading: true, error: null })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-materials'] })
+      setGenerationState({ type: null, loading: false, error: null })
       toast({ title: "Notes generated successfully" })
     },
-    onError: (err: Error) => toast({ title: "Error", description: err.message || "Failed to generate notes", variant: "destructive" }),
+    onError: (err: Error) => {
+      setGenerationState({ type: null, loading: false, error: err.message })
+      toast({ title: "Error", description: err.message || "Failed to generate notes", variant: "destructive" })
+    },
   })
 
   const generateFlashcards = useMutation({
@@ -138,37 +221,156 @@ export default function StudyStudioPage() {
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       return data
     },
+    onMutate: () => {
+      setGenerationState({ type: 'flashcards', loading: true, error: null })
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
       setSelectedDeck(data.deckId)
       setActiveTab("flashcards")
+      setGenerationState({ type: null, loading: false, error: null })
       toast({ title: "Flashcards generated successfully" })
     },
-    onError: (err: Error) => toast({ title: "Error", description: err.message || "Failed to generate flashcards", variant: "destructive" }),
+    onError: (err: Error) => {
+      setGenerationState({ type: null, loading: false, error: err.message })
+      toast({ title: "Error", description: err.message || "Failed to generate flashcards", variant: "destructive" })
+    },
   })
 
-  const reviewCard = useMutation({
-    mutationFn: async ({ cardId, rating }: { cardId: string; rating: number }) => {
-      const res = await fetch(`/api/flashcards/${cardId}/review`, {
+  const generateMindMap = useMutation({
+    mutationFn: async ({ sourceDocId }: { sourceDocId: string }) => {
+      const res = await fetch('/api/mindmaps/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating }),
+        body: JSON.stringify({ sourceDocId }),
       })
-      if (!res.ok) throw new Error('Review failed')
-      return res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flashcards', selectedDeck] })
-      if (currentCardIndex < (deckCards?.cards?.length || 0) - 1) {
-        setCurrentCardIndex(prev => prev + 1)
-      } else {
-        setReviewMode(false)
-        toast({ title: "Review complete!" })
-      }
-      setShowAnswer(false)
+    onMutate: () => {
+      setGenerationState({ type: 'mindmaps', loading: true, error: null })
     },
-    onError: () => toast({ title: "Error", description: "Failed to submit review", variant: "destructive" }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['mind-maps'] })
+      setSelectedMindMap(data.mindMap.id)
+      setActiveTab("mindmaps")
+      setGenerationState({ type: null, loading: false, error: null })
+      toast({ title: "Mind Map generated successfully" })
+    },
+    onError: (err: Error) => {
+      setGenerationState({ type: null, loading: false, error: err.message })
+      toast({ title: "Error", description: err.message || "Failed to generate mind map", variant: "destructive" })
+    },
   })
+
+  const generateDiagram = useMutation({
+    mutationFn: async ({ sourceDocId }: { sourceDocId: string }) => {
+      const res = await fetch('/api/diagrams/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          sourceDocId,
+          customType: 'mermaid',
+          customCode: 'flowchart TD\n  A[Source document] --> B[Key concepts]',
+          title: 'Document overview'
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      return data
+    },
+    onMutate: () => {
+      setGenerationState({ type: 'diagrams', loading: true, error: null })
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['diagrams'] })
+      setSelectedDiagram(data.id)
+      setActiveTab("diagrams")
+      setGenerationState({ type: null, loading: false, error: null })
+      toast({ title: "Diagram generated successfully" })
+    },
+    onError: (err: Error) => {
+      setGenerationState({ type: null, loading: false, error: err.message })
+      toast({ title: "Error", description: err.message || "Failed to generate diagram", variant: "destructive" })
+    },
+  })
+
+  const generateQuiz = useMutation({
+    mutationFn: async ({ sourceDocId }: { sourceDocId: string }) => {
+      const res = await fetch('/api/quizzes/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceDocId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      return data
+    },
+    onMutate: () => {
+      setGenerationState({ type: 'quizzes', loading: true, error: null })
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['quizzes'] })
+      setSelectedQuiz(data.quiz.id)
+      setActiveTab("quizzes")
+      setGenerationState({ type: null, loading: false, error: null })
+      toast({ title: "Quiz generated successfully" })
+    },
+    onError: (err: Error) => {
+      setGenerationState({ type: null, loading: false, error: err.message })
+      toast({ title: "Error", description: err.message || "Failed to generate quiz", variant: "destructive" })
+    },
+  })
+
+  const noteTypes = [
+    { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
+    { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
+    { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
+    { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
+    { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
+    { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
+  ]
+
+  const handleGenerateNote = (type: string) => {
+    if (!selectedSourceDoc) {
+      toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." })
+      return
+    }
+    generateNotes.mutate({ sourceDocId: selectedSourceDoc, type })
+  }
+
+  const handleGenerateFlashcards = () => {
+    if (!selectedSourceDoc) {
+      toast({ title: "Select a document first" })
+      return
+    }
+    generateFlashcards.mutate({ sourceDocId: selectedSourceDoc, count: 20 })
+  }
+
+  const handleGenerateMindMap = () => {
+    if (!selectedSourceDoc) {
+      toast({ title: "Select a document first" })
+      return
+    }
+    generateMindMap.mutate({ sourceDocId: selectedSourceDoc })
+  }
+
+  const handleGenerateDiagram = () => {
+    if (!selectedSourceDoc) {
+      toast({ title: "Select a document first" })
+      return
+    }
+    generateDiagram.mutate({ sourceDocId: selectedSourceDoc })
+  }
+
+  const handleGenerateQuiz = () => {
+    if (!selectedSourceDoc) {
+      toast({ title: "Select a document first" })
+      return
+    }
+    generateQuiz.mutate({ sourceDocId: selectedSourceDoc })
+  }
 
   return (
     <div className="space-y-6">
@@ -176,6 +378,25 @@ export default function StudyStudioPage() {
         <h1 className="text-3xl font-bold tracking-tight">Study Studio</h1>
         <p className="text-muted-foreground mt-1">Generate and manage your study materials</p>
       </div>
+
+      {/* Generation Status Indicator */}
+      {generationState.loading && (
+        <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm font-medium">Generating {generationState.type}...</span>
+          <span className="text-xs text-muted-foreground">This may take up to 60 seconds for complex materials</span>
+        </div>
+      )}
+
+      {generationState.error && (
+        <div className="flex items-center gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-destructive" />
+          <span className="text-sm font-medium text-destructive">Generation failed: {generationState.error}</span>
+          <Button variant="ghost" size="sm" onClick={() => setGenerationState({ type: null, loading: false, error: null })}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
@@ -186,17 +407,15 @@ export default function StudyStudioPage() {
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
         </TabsList>
 
+        {/* SMART NOTES TAB */}
         <TabsContent value="notes" className="mt-4 space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
-              { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
-              { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
-              { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
-              { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
-              { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
-            ].map(item => (
-              <Card key={item.type} onClick={() => { if (selectedSourceDoc) generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }); else toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." }) }} className="hover:shadow-md transition-shadow cursor-pointer">
+            {noteTypes.map(item => (
+              <Card
+                key={item.type}
+                onClick={() => handleGenerateNote(item.type)}
+                className={`hover:shadow-md transition-shadow cursor-pointer ${generateNotes.isPending ? 'opacity-50 pointer-events-none' : ''}`}
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4">
                     <div className="p-3 rounded-lg bg-primary/10 text-primary">
@@ -213,17 +432,19 @@ export default function StudyStudioPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} disabled={generateNotes.isPending}>
               <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
               <SelectContent>
                 {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
               </SelectContent>
             </Select>
+            {generateNotes.isPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
           </div>
           <DocumentUpload
             onSuccess={(doc) => {
               setSelectedSourceDoc(doc.id)
             }}
+            disabled={generateNotes.isPending}
           />
           <DocumentList documents={documents?.documents || []} showUpload={false} />
 
@@ -236,16 +457,19 @@ export default function StudyStudioPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="prose max-h-60 overflow-y-auto whitespace-pre-wrap">{material.content}</div>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <MarkdownRenderer content={material.content} />
+                </div>
               </CardContent>
             </Card>
           ))}
         </TabsContent>
 
+        {/* FLASHCARDS TAB */}
         <TabsContent value="flashcards" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Flashcard Decks</h2>
-            <Button onClick={() => setSelectedDeck("new")}>
+            <Button onClick={() => setSelectedDeck("new")} disabled={generateFlashcards.isPending}>
               <Plus className="mr-2 h-4 w-4" />
               Create Deck
             </Button>
@@ -260,11 +484,11 @@ export default function StudyStudioPage() {
                 <form onSubmit={e => { e.preventDefault(); }} className="space-y-4">
                   <div>
                     <Label>Deck Title</Label>
-                    <Input placeholder="e.g., Biology Chapter 1" />
+                    <Input placeholder="e.g., Biology Chapter 1" disabled={generateFlashcards.isPending} />
                   </div>
                   <div>
                     <Label>Source Document</Label>
-                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
+                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} disabled={generateFlashcards.isPending}>
                       <SelectTrigger><SelectValue placeholder="Select document" /></SelectTrigger>
                       <SelectContent>
                         {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
@@ -273,81 +497,24 @@ export default function StudyStudioPage() {
                   </div>
                   <div>
                     <Label>Number of Cards</Label>
-                    <Input type="number" defaultValue="20" min="5" max="100" />
+                    <Input type="number" defaultValue="20" min="5" max="100" disabled={generateFlashcards.isPending} />
                   </div>
-                  <Button type="submit" disabled={!selectedSourceDoc} onClick={e => { e.preventDefault(); generateFlashcards.mutate({ sourceDocId: selectedSourceDoc, count: 20 }) }}>
-                    Generate Flashcards
+                  <Button type="submit" disabled={!selectedSourceDoc || generateFlashcards.isPending} onClick={e => { e.preventDefault(); handleGenerateFlashcards() }}>
+                    {generateFlashcards.isPending ? (
+                      <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating... </> 
+                    ) : (
+                      'Generate Flashcards'
+                    )}
                   </Button>
                 </form>
               </CardContent>
             </Card>
           ) : selectedDeck ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Review Mode</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {deckCards?.cards?.length || 0} cards · Card {currentCardIndex + 1} of {deckCards?.cards?.length || 0}
-                  </p>
-                </div>
-                <Button onClick={() => setReviewMode(true)} disabled={reviewMode}>
-                  {reviewMode ? "Reviewing..." : "Start Review"}
-                </Button>
-              </div>
-
-              {reviewMode && deckCards?.cards?.[currentCardIndex] ? (
-                <Card className="max-w-2xl mx-auto">
-                  <CardContent className="pt-6 pb-8">
-                    <div className="text-center">
-                      <div className="mb-4 text-sm text-muted-foreground">
-                        Card {currentCardIndex + 1} of {deckCards.cards.length}
-                      </div>
-                      <div
-                        className="h-64 border rounded-lg p-8 flex items-center justify-center cursor-pointer bg-card"
-                        onClick={() => setShowAnswer(true)}
-                      >
-                        {showAnswer ? (
-                          <div className="text-center">
-                            <p className="text-2xl font-medium mb-4">Answer</p>
-                            <p className="text-lg whitespace-pre-wrap">{deckCards.cards[currentCardIndex].back}</p>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <p className="text-2xl font-medium mb-4">Question</p>
-                            <p className="text-lg whitespace-pre-wrap">{deckCards.cards[currentCardIndex].front}</p>
-                            <p className="mt-4 text-sm text-muted-foreground">Click to reveal answer</p>
-                          </div>
-                        )}
-                      </div>
-                      {showAnswer && (
-                        <div className="mt-6 flex justify-center gap-2">
-                          <Button variant="outline" onClick={() => reviewCard.mutate({ cardId: deckCards.cards[currentCardIndex].id, rating: 1 })}>Again</Button>
-                          <Button variant="outline" onClick={() => reviewCard.mutate({ cardId: deckCards.cards[currentCardIndex].id, rating: 2 })}>Hard</Button>
-                          <Button variant="default" onClick={() => reviewCard.mutate({ cardId: deckCards.cards[currentCardIndex].id, rating: 3 })}>Good</Button>
-                          <Button variant="outline" onClick={() => reviewCard.mutate({ cardId: deckCards.cards[currentCardIndex].id, rating: 4 })}>Easy</Button>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {decks?.decks?.map((deck: FlashcardDeck) => (
-                    <Card key={deck.id} onClick={() => setSelectedDeck(deck.id)} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardHeader>
-                        <CardTitle>{deck.title}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{deck._count.cards} cards · {deck.algorithm}</p>
-                      </CardHeader>
-                      <CardContent>
-                        <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedDeck(deck.id) }}>
-                          Review
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
+            <FlashcardReviewer
+              deckId={selectedDeck}
+              cards={deckCards?.cards || []}
+              onClose={() => setSelectedDeck(null)}
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {decks?.decks?.map((deck: FlashcardDeck) => (
@@ -365,40 +532,164 @@ export default function StudyStudioPage() {
               ))}
             </div>
           )}
-
         </TabsContent>
 
-        <TabsContent value="mindmaps" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Mind Maps</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4"><p className="text-muted-foreground">Generate a saved mind map from the selected processed document.</p><Button onClick={() => generateStructured('mindmaps')}>Generate Mind Map</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
-            </CardContent>
-          </Card>
+        {/* MIND MAPS TAB */}
+        <TabsContent value="mindmaps" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Mind Maps</h2>
+              <p className="text-sm text-muted-foreground">Generate hierarchical concept maps from your documents</p>
+            </div>
+            <Button onClick={handleGenerateMindMap} disabled={!selectedSourceDoc || generateMindMap.isPending}>
+              {generateMindMap.isPending ? (
+                <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating... </> 
+              ) : (
+                <> <Sparkles className="mr-2 h-4 w-4" /> Generate Mind Map </>
+              )}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} disabled={generateMindMap.isPending}>
+              <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+              <SelectContent>
+                {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedMindMap && mindMaps?.mindMaps?.find((m: MindMap) => m.id === selectedMindMap) ? (
+            <MindMapViewer
+              mindMap={mindMaps.mindMaps.find((m: MindMap) => m.id === selectedMindMap)!}
+              onClose={() => setSelectedMindMap(null)}
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {mindMaps?.mindMaps?.map((map: MindMap) => (
+                <Card key={map.id} onClick={() => setSelectedMindMap(map.id)} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle>{map.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{map.nodes?.length || 0} nodes · {map.edges?.length || 0} connections</p>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedMindMap(map.id) }}>
+                      View Mind Map
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="diagrams" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Diagrams</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4"><p className="text-muted-foreground">Generate and save a Mermaid overview diagram.</p><Button onClick={() => generateStructured('diagrams')}>Generate Diagram</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
-            </CardContent>
-          </Card>
+        {/* DIAGRAMS TAB */}
+        <TabsContent value="diagrams" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Diagrams</h2>
+              <p className="text-sm text-muted-foreground">Generate and view Mermaid diagrams from your documents</p>
+            </div>
+            <Button onClick={handleGenerateDiagram} disabled={!selectedSourceDoc || generateDiagram.isPending}>
+              {generateDiagram.isPending ? (
+                <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating... </> 
+              ) : (
+                <> <Zap className="mr-2 h-4 w-4" /> Generate Diagram </>
+              )}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} disabled={generateDiagram.isPending}>
+              <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+              <SelectContent>
+                {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedDiagram && diagrams?.diagrams?.find((d: Diagram) => d.id === selectedDiagram) ? (
+            <DiagramViewer
+              definition={diagrams.diagrams.find((d: Diagram) => d.id === selectedDiagram)!.definition}
+              className="h-[600px]"
+              editable
+              onSave={(code) => {
+                // TODO: Implement diagram save
+                console.log('Save diagram:', code)
+              }}
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {diagrams?.diagrams?.map((diagram: Diagram) => (
+                <Card key={diagram.id} onClick={() => setSelectedDiagram(diagram.id)} className="cursor-pointer hover:shadow-md transition-shadow h-full">
+                  <CardHeader>
+                    <CardTitle className="truncate">{diagram.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground capitalize">{diagram.type}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedDiagram(diagram.id) }}>
+                      View Diagram
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="quizzes" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quizzes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4"><p className="text-muted-foreground">Generate a saved quiz from the selected processed document.</p><Button onClick={() => generateStructured('quizzes')}>Generate Quiz</Button>{generatedOutput && <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">{generatedOutput}</pre>}</div>
-            </CardContent>
-          </Card>
+        {/* QUIZZES TAB */}
+        <TabsContent value="quizzes" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Quizzes</h2>
+              <p className="text-sm text-muted-foreground">Generate and take practice quizzes from your documents</p>
+            </div>
+            <Button onClick={handleGenerateQuiz} disabled={!selectedSourceDoc || generateQuiz.isPending}>
+              {generateQuiz.isPending ? (
+                <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating... </> 
+              ) : (
+                <> <Target className="mr-2 h-4 w-4" /> Generate Quiz </>
+              )}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc} disabled={generateQuiz.isPending}>
+              <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
+              <SelectContent>
+                {(documents?.documents || []).map((doc: { id: string; title: string }) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedQuiz && quizzes?.quizzes?.find((q: Quiz) => q.id === selectedQuiz) ? (
+            <QuizTaker
+              quiz={quizzes.quizzes.find((q: Quiz) => q.id === selectedQuiz)!}
+              onClose={() => setSelectedQuiz(null)}
+              onComplete={() => {
+                setSelectedQuiz(null)
+                queryClient.invalidateQueries({ queryKey: ['quizzes'] })
+              }}
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {quizzes?.quizzes?.map((quiz: Quiz) => (
+                <Card key={quiz.id} onClick={() => setSelectedQuiz(quiz.id)} className="cursor-pointer hover:shadow-md transition-shadow h-full">
+                  <CardHeader>
+                    <CardTitle className="truncate">{quiz.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {quiz.questions?.length || 0} questions · {quiz.difficulty} difficulty
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedQuiz(quiz.id) }}>
+                      Take Quiz
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
