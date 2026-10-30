@@ -196,11 +196,20 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
   }
   
   // Sanitize and display SVG
+  // Ensure SVG is responsive - use viewBox for proper scaling
+  const sanitizedSvg = sanitizeSvg(svg)
+  // If SVG doesn't have viewBox, add one based on its dimensions
+  const hasViewBox = sanitizedSvg.includes('viewBox=')
+  
   return (
     <div 
       className={cn("w-full h-full min-h-[300px] overflow-auto", className)}
       ref={containerRef}
-      dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
+      dangerouslySetInnerHTML={{ 
+        __html: hasViewBox 
+          ? sanitizedSvg 
+          : sanitizedSvg.replace(/<svg([^>]*)>/, '<svg$1 style="width: 100%; height: auto; max-width: 100%;" preserveAspectRatio="xMidYMid meet">')
+      }}
     />
   )
 }
@@ -220,7 +229,7 @@ function buildFallbackSvg(diagramType: string, code: string): string {
     .split(/\r?\n/)
     .map(l => l.trim())
     .filter(l => l && !l.startsWith('%%') && !l.startsWith('@startuml') && !l.startsWith('@enduml') && !l.startsWith('//'))
-  
+
   const nodes: string[] = []
   for (const line of lines) {
     const bracketMatches = [...line.matchAll(/\[([^\]]+)\]|\(([^)]+)\)|"([^"]+)"/g)]
@@ -236,33 +245,43 @@ function buildFallbackSvg(diagramType: string, code: string): string {
       }
     }
   }
+
+  const displayNodes = nodes.length > 0 ? nodes.slice(0, 12) : lines.slice(0, 8)
+  const nodeHeight = 60
+  const nodeSpacing = 20
+  const startY = 50
+  const contentWidth = 600
+  const contentHeight = Math.max(300, displayNodes.length * (nodeHeight + nodeSpacing) + 100)
   
-  const displayNodes = nodes.length > 0 ? nodes.slice(0, 8) : lines.slice(0, 6)
-  const height = Math.max(300, displayNodes.length * 80 + 100)
-  const width = 700
-  
+  // Use viewBox for responsive scaling - no fixed width
+  const viewBoxWidth = contentWidth
+  const viewBoxHeight = contentHeight
+
   const boxes = displayNodes
     .map((label, idx) => {
-      const y = 60 + idx * 75
+      const y = startY + idx * (nodeHeight + nodeSpacing)
       const arrow = idx < displayNodes.length - 1
-        ? `<line x1="350" y1="${y + 50}" x2="350" y2="${y + 75}" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />`
+        ? `<line x1="${viewBoxWidth / 2}" y1="${y + nodeHeight}" x2="${viewBoxWidth / 2}" y2="${y + nodeHeight + nodeSpacing}" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />`
         : ''
+      const rectWidth = viewBoxWidth - 100
+      const rectX = 50
       return `
-        <rect x="100" y="${y}" width="500" height="50" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5" />
-        <text x="350" y="${y + 30}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#1e1b4b">${escapeXml(label.slice(0, 60))}</text>
+        <rect x="${rectX}" y="${y}" width="${rectWidth}" height="${nodeHeight}" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5" />
+        <text x="${viewBoxWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#1e1b4b" dominant-baseline="middle">${escapeXml(label.slice(0, 80))}</text>
         ${arrow}
       `
     })
     .join('\n')
-  
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+
+  // Return responsive SVG with viewBox - no fixed width/height
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-width: 100%;">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#6366f1" />
     </marker>
   </defs>
   <rect width="100%" height="100%" fill="white" rx="12" />
-  <text x="24" y="32" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#64748b">${escapeXml(diagramType.toUpperCase())} DIAGRAM (Fallback)</text>
+  <text x="24" y="28" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#64748b">${escapeXml(diagramType.toUpperCase())} DIAGRAM (Fallback)</text>
   ${boxes}
 </svg>`
 }

@@ -296,6 +296,7 @@ model User {
   diagrams            Diagram[]
   quizzes             Quiz[]
   generatedImages     GeneratedImage[]
+  studyMaterialJobs   StudyMaterialJob[]
   subjectEnrollments  SubjectEnrollment[]      @relation("SubjectEnrollmentUser")
   projectOwned        Project[]                @relation("ProjectOwner")
   projectTasksCreated ProjectTask[]            @relation("ProjectTaskCreator")
@@ -384,6 +385,7 @@ model Subject {
   diagrams           Diagram[]
   quizzes            Quiz[]
   generatedImages    GeneratedImage[]
+  studyMaterialJobs  StudyMaterialJob[]
 
   @@unique([institutionId, semesterId, code])
   @@map("subjects")
@@ -458,6 +460,7 @@ model Document {
   diagrams        Diagram[]               @relation("DiagramSourceDoc")
   quizzes         Quiz[]                  @relation("QuizSourceDoc")
   generatedImages GeneratedImage[]        @relation("GeneratedImageSourceDoc")
+  studyMaterialJobs StudyMaterialJob[]    @relation("StudyMaterialJobSourceDoc")
   researchSources ResearchSource[]
 
   @@index([ownerId])
@@ -521,6 +524,31 @@ model DocumentProcessingJob {
   @@index([documentId])
   @@index([status])
   @@map("document_processing_jobs")
+}
+
+model StudyMaterialJob {
+  id           String         @id @default(cuid())
+  userId       String
+  type         String         // 'notes' | 'flashcards' | 'mindmaps' | 'diagrams' | 'quizzes'
+  status       String         // 'pending' | 'processing' | 'completed' | 'failed'
+  sourceDocId  String?
+  subjectId    String?
+  input        Json           // Generation parameters
+  result       Json?          // Generated content
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDoc      Document? @relation("StudyMaterialJobSourceDoc", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  subject        Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([sourceDocId])
+  @@map("study_material_jobs")
 }
 
 model Conversation {

@@ -16,6 +16,8 @@ import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
 import { QuizViewer } from "@/components/study-studio/QuizViewer"
+import { MarkdownRenderer } from "@/components/ui/markdown"
+import { Progress } from "@/components/ui/progress"
 
 interface StudyMaterial {
   id: string
@@ -187,20 +189,64 @@ export default function StudyStudioPage() {
     retry: 1,
   })
 
+  // Fetch study jobs for polling
+  const { data: studyJobs } = useQuery({
+    queryKey: ['study-jobs'],
+    queryFn: async () => {
+      const res = await fetch('/api/study-jobs')
+      if (!res.ok) throw new Error('Failed to fetch jobs')
+      return res.json()
+    },
+    refetchInterval: 3000, // Poll every 3 seconds
+    retry: 1,
+  })
+
   // Check if any critical queries failed
   const hasCriticalError = documentsError || notesError || decksError || mindMapsError || quizzesError
+
+  // Create study job and poll for completion
+  const createStudyJob = async (type: string, sourceDocId: string, input: Record<string, any> = {}) => {
+    const res = await fetch('/api/study-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, sourceDocId, input }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to create job')
+    return data.job
+  }
+
+  // Poll for job completion
+  const waitForJob = async (jobId: string, onProgress?: (progress: number) => void): Promise<any> => {
+    const maxAttempts = 600 // 30 minutes at 3s intervals
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const res = await fetch(`/api/study-jobs?id=${jobId}`)
+      if (!res.ok) throw new Error('Failed to check job status')
+      const job = await res.json()
+      
+      if (job.status === 'completed') {
+        return job.result
+      }
+      if (job.status === 'failed') {
+        throw new Error(job.errorMessage || 'Job failed')
+      }
+      
+      // Update progress
+      if (onProgress) {
+        onProgress(job.status === 'processing' ? 50 : 10)
+      }
+      
+      // Wait 3 seconds before next poll
+      await new Promise(resolve => setTimeout(resolve, 3000))
+    }
+    throw new Error('Job timed out')
+  }
 
   // Generate study notes
   const generateNotes = useMutation({
     mutationFn: async ({ sourceDocId, type }: { sourceDocId: string; type: string }) => {
-      const res = await fetch('/api/study-materials/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceDocId, type }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
-      return data
+      const job = await createStudyJob('notes', sourceDocId, { type })
+      return waitForJob(job.id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-materials'] })
@@ -212,18 +258,12 @@ export default function StudyStudioPage() {
   // Generate flashcards
   const generateFlashcards = useMutation({
     mutationFn: async ({ sourceDocId, count }: { sourceDocId: string; count: number }) => {
-      const res = await fetch('/api/flashcards/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceDocId, count }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
-      return data
+      const job = await createStudyJob('flashcards', sourceDocId, { count })
+      return waitForJob(job.id)
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
-      setSelectedDeck(data.deckId)
+      setSelectedDeck(data.deckId || data.deck?.id)
       setActiveTab("flashcards")
       toast({ title: "Flashcards generated successfully" })
     },
@@ -262,20 +302,14 @@ export default function StudyStudioPage() {
     }
     setGeneratingMindMap(true)
     try {
-      const res = await fetch('/api/mindmaps/generate', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ sourceDocId: selectedSourceDoc }) 
+      const job = await createStudyJob('mindmaps', selectedSourceDoc)
+      const result = await waitForJob(job.id, (progress) => {
+        // Could update a progress state here
       })
-      const data = await res.json()
-      if (!res.ok) { 
-        toast({ title: 'Generation failed', description: data.error, variant: 'destructive' }); 
-        return 
-      }
-      setGeneratedMindMap(data.mindMap)
+      setGeneratedMindMap(result.mindMap || result)
       toast({ title: 'Mind map generated successfully' })
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to generate mind map', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to generate mind map', variant: 'destructive' })
     } finally {
       setGeneratingMindMap(false)
     }
@@ -289,22 +323,12 @@ export default function StudyStudioPage() {
     }
     setGeneratingDiagram(true)
     try {
-      const res = await fetch('/api/diagrams/generate', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-          sourceDocId: selectedSourceDoc 
-        }) 
-      })
-      const data = await res.json()
-      if (!res.ok) { 
-        toast({ title: 'Generation failed', description: data.error, variant: 'destructive' }); 
-        return 
-      }
-      setGeneratedDiagram(data)
+      const job = await createStudyJob('diagrams', selectedSourceDoc)
+      const result = await waitForJob(job.id)
+      setGeneratedDiagram(result)
       toast({ title: 'Diagram generated successfully' })
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to generate diagram', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to generate diagram', variant: 'destructive' })
     } finally {
       setGeneratingDiagram(false)
     }
@@ -318,20 +342,12 @@ export default function StudyStudioPage() {
     }
     setGeneratingQuiz(true)
     try {
-      const res = await fetch('/api/quizzes/generate', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ sourceDocId: selectedSourceDoc }) 
-      })
-      const data = await res.json()
-      if (!res.ok) { 
-        toast({ title: 'Generation failed', description: data.error, variant: 'destructive' }); 
-        return 
-      }
-      setGeneratedQuiz(data.quiz)
+      const job = await createStudyJob('quizzes', selectedSourceDoc)
+      const result = await waitForJob(job.id)
+      setGeneratedQuiz(result.quiz || result)
       toast({ title: 'Quiz generated successfully' })
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to generate quiz', variant: 'destructive' })
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to generate quiz', variant: 'destructive' })
     } finally {
       setGeneratingQuiz(false)
     }
@@ -502,7 +518,9 @@ export default function StudyStudioPage() {
                           </div>
                         </CardHeader>
                         <CardContent>
-                          <div className="prose max-h-96 overflow-y-auto whitespace-pre-wrap">{material.content}</div>
+                          <div className="prose prose-sm dark:prose-invert max-w-none max-h-[600px] overflow-y-auto">
+                            <MarkdownRenderer content={material.content} />
+                          </div>
                         </CardContent>
                       </Card>
                     ))}

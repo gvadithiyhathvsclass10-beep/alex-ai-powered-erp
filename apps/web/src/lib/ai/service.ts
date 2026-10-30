@@ -417,23 +417,35 @@ export function validateProviderModel(
 /**
  * Returns the configured per-attempt timeout for AI requests.
  * Can be overridden by AI_REQUEST_TIMEOUT_MS environment variable.
- * Default: 20000ms (20 seconds) - fits within Render's 30s web request timeout
- * with headroom for Next.js framework overhead.
+ * Default: 60000ms (60 seconds) - allows time for slow providers like Nemotron.
+ * For structured output tasks, use 90000ms (90 seconds).
  */
-export function getAIRequestTimeoutMs(): number {
+export function getAIRequestTimeoutMs(taskType: AITaskType = 'chat'): number {
   const parsed = Number(process.env.AI_REQUEST_TIMEOUT_MS)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 20000
+  const baseTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 60000
+  
+  // Structured output tasks need more time
+  if (taskType === 'structured') {
+    return Math.max(baseTimeout, 90000)
+  }
+  return baseTimeout
 }
 
 /**
  * Returns the total deadline budget for an AI operation including retries.
  * Can be overridden by AI_TOTAL_TIMEOUT_MS environment variable.
- * Default: 25000ms (25 seconds) - must be less than Render's 30s timeout.
+ * Default: 120000ms (120 seconds) - allows multiple retries for slow providers.
  * If set to 0 or negative, no total deadline is enforced (uses per-attempt only).
  */
-export function getAITotalTimeoutMs(): number {
+export function getAITotalTimeoutMs(taskType: AITaskType = 'chat'): number {
   const parsed = Number(process.env.AI_TOTAL_TIMEOUT_MS)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 25000
+  const baseTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 120000
+  
+  // Structured output tasks need more time
+  if (taskType === 'structured') {
+    return Math.max(baseTimeout, 180000)
+  }
+  return baseTimeout
 }
 
 export async function fetchWithAISafeTimeout(
@@ -492,10 +504,11 @@ export async function fetchWithAIRetry(
   provider: string,
   model: string,
   timeoutMs = getAIRequestTimeoutMs(),
-  maxRetries = 4
+  maxRetries = 4,
+  taskType: AITaskType = 'chat'
 ): Promise<Response> {
   const retries = Math.max(0, Math.min(4, Math.floor(maxRetries)))
-  const totalDeadlineMs = getAITotalTimeoutMs()
+  const totalDeadlineMs = getAITotalTimeoutMs(taskType)
   const deadline = totalDeadlineMs > 0 ? Date.now() + totalDeadlineMs : undefined
   
   for (let attempt = 0; ; attempt++) {
@@ -945,7 +958,8 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
 
   const temperature = input.temperature ?? 0.3
   const maxTokens = input.maxTokens ?? 2048
-  const timeoutMs = input.timeoutMs ?? getAIRequestTimeoutMs()
+  const taskType = input.taskType || 'chat'
+  const timeoutMs = input.timeoutMs ?? getAIRequestTimeoutMs(taskType)
 
   let text = ''
   let tokenUsage: TokenUsage = { prompt: 0, completion: 0, total: 0 }
@@ -982,7 +996,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {
@@ -1024,7 +1040,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {
@@ -1082,7 +1100,9 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       },
       config.provider,
       config.model,
-      timeoutMs
+      timeoutMs,
+      4,
+      taskType
     )
 
     if (!res.ok) {

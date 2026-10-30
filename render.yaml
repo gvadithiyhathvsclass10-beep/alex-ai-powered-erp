@@ -48,6 +48,8 @@ services:
         # MUST match previous effective key to decrypt existing data
       - key: AI_MODE
         value: nemotron
+      - key: AI_REQUEST_TIMEOUT_MS
+        value: "90000"
       # AI Provider keys (configure only the ones you use):
       # - key: NVIDIA_NEMOTRON_API_KEY
       #   sync: false
@@ -149,6 +151,8 @@ services:
         sync: false
       - key: AI_MODE
         value: nemotron
+      - key: AI_REQUEST_TIMEOUT_MS
+        value: "90000"
       # AI Provider keys (same as web service):
       # - key: NVIDIA_NEMOTRON_API_KEY
       #   sync: false
