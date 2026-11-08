@@ -344,65 +344,28 @@ export default function StudyStudioPage() {
     retry: 1,
   })
 
-  // Fetch study jobs for polling
-  const { data: studyJobs } = useQuery({
-    queryKey: ['study-jobs'],
-    queryFn: async () => {
-      const res = await fetch('/api/study-jobs')
-      if (!res.ok) throw new Error('Failed to fetch jobs')
-      return res.json()
-    },
-    refetchInterval: 3000,
-    retry: 1,
-  })
-
   // Check if any critical queries failed
   const hasCriticalError = documentsError || notesError || decksError || mindMapsError || quizzesError
 
   const documentsList = Array.isArray(documents) ? documents : (documents?.documents || [])
   const filteredDocuments = documentsList.filter((d: any) => d.status === "READY")
 
-  // Create study job and poll for completion
-  const createStudyJob = async (type: string, sourceDocId: string, input: Record<string, any> = {}) => {
-    const res = await fetch('/api/study-jobs', {
+  // Generate study material directly (synchronous)
+  const generateStudyMaterial = async (type: string, sourceDocId: string, input: Record<string, any> = {}) => {
+    const res = await fetch('/api/study-studio/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, sourceDocId, input }),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to create job')
-    return data.job
-  }
-
-  // Poll for job completion
-  const waitForJob = async (jobId: string, onProgress?: (progress: number) => void): Promise<any> => {
-    const maxAttempts = 600 // 30 minutes at 3s intervals
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const res = await fetch(`/api/study-jobs?id=${jobId}`)
-      if (!res.ok) throw new Error('Failed to check job status')
-      const job = await res.json()
-      
-      if (job.status === 'completed') {
-        return job.result
-      }
-      if (job.status === 'failed') {
-        throw new Error(job.errorMessage || 'Job failed')
-      }
-      
-      if (onProgress) {
-        onProgress(job.status === 'processing' ? 50 : 10)
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 3000))
-    }
-    throw new Error('Job timed out')
+    if (!res.ok) throw new Error(data.error || 'Failed to generate')
+    return data.result
   }
 
   // Generate study notes
   const generateNotes = useMutation({
     mutationFn: async ({ sourceDocId, type }: { sourceDocId: string; type: string }) => {
-      const job = await createStudyJob('notes', sourceDocId, { type })
-      return waitForJob(job.id)
+      return generateStudyMaterial('notes', sourceDocId, { type })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['study-materials'] })
@@ -414,8 +377,7 @@ export default function StudyStudioPage() {
   // Generate flashcards
   const generateFlashcards = useMutation({
     mutationFn: async ({ sourceDocId, count }: { sourceDocId: string; count: number }) => {
-      const job = await createStudyJob('flashcards', sourceDocId, { count })
-      return waitForJob(job.id)
+      return generateStudyMaterial('flashcards', sourceDocId, { count })
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['flashcard-decks'] })
@@ -458,8 +420,7 @@ export default function StudyStudioPage() {
     }
     setGeneratingMindMap(true)
     try {
-      const job = await createStudyJob('mindmaps', selectedSourceDoc)
-      const result = await waitForJob(job.id)
+      const result = await generateStudyMaterial('mindmaps', selectedSourceDoc)
       setGeneratedMindMap(result.mindMap || result)
       toast({ title: 'Mind map generated successfully' })
     } catch (error) {
@@ -477,8 +438,7 @@ export default function StudyStudioPage() {
     }
     setGeneratingDiagram(true)
     try {
-      const job = await createStudyJob('diagrams', selectedSourceDoc)
-      const result = await waitForJob(job.id)
+      const result = await generateStudyMaterial('diagrams', selectedSourceDoc)
       setGeneratedDiagram(result)
       toast({ title: 'Diagram generated successfully' })
     } catch (error) {
@@ -496,8 +456,7 @@ export default function StudyStudioPage() {
     }
     setGeneratingQuiz(true)
     try {
-      const job = await createStudyJob('quizzes', selectedSourceDoc)
-      const result = await waitForJob(job.id)
+      const result = await generateStudyMaterial('quizzes', selectedSourceDoc)
       setGeneratedQuiz(result.quiz || result)
       toast({ title: 'Quiz generated successfully' })
     } catch (error) {
