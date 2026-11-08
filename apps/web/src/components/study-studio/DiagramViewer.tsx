@@ -23,6 +23,7 @@ import {
   Expand,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { exportDiagramAsSvg, exportDiagramAsPng, exportDiagramAsPdf, DiagramExportData } from "@/lib/study-studio/export"
 
 export interface DiagramDefinition {
   type: 'mermaid' | 'graphviz' | 'plantuml'
@@ -79,7 +80,6 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
     
     const renderMermaid = async (code: string) => {
       try {
-        // Use locally installed mermaid package
         const mermaid = await import('mermaid')
         mermaid.default.initialize({ 
           startOnLoad: false, 
@@ -94,7 +94,6 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
       } catch (mermaidError) {
         console.warn('[DiagramViewer] Mermaid render failed, trying fallback:', mermaidError)
         
-        // Fallback: try global mermaid if available (e.g., from script tag)
         if (typeof window !== 'undefined' && (window as any).mermaid) {
           try {
             const mermaid = (window as any).mermaid
@@ -111,14 +110,12 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
           } catch {}
         }
         
-        // Final fallback
         setSvg(buildFallbackSvg('mermaid', code))
       }
     }
     
     const renderGraphviz = async (code: string) => {
       try {
-        // Try @viz-js/viz
         const vizModule = await import('@viz-js/viz')
         const instance = await vizModule.instance()
         const svg = instance.renderString(code, { format: 'svg', engine: 'dot' })
@@ -128,13 +125,11 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
         }
         throw new Error('Graphviz rendering failed')
       } catch {
-        // Use fallback
         setSvg(buildFallbackSvg('graphviz', code))
       }
     }
     
     const renderPlantUML = async (code: string) => {
-      // PlantUML requires server-side rendering, use fallback
       setSvg(buildFallbackSvg('plantuml', code))
     }
     
@@ -177,10 +172,7 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
     )
   }
   
-  // Sanitize and display SVG
-  // Ensure SVG is responsive - use viewBox for proper scaling
   const sanitizedSvg = sanitizeSvg(svg)
-  // If SVG doesn't have viewBox, add one based on its dimensions
   const hasViewBox = sanitizedSvg.includes('viewBox=')
   
   return (
@@ -197,7 +189,6 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
 }
 
 function sanitizeSvg(svg: string): string {
-  // Remove potentially dangerous content
   return svg
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/on\w+="[^"]*"/gi, '')
@@ -235,7 +226,6 @@ function buildFallbackSvg(diagramType: string, code: string): string {
   const contentWidth = 600
   const contentHeight = Math.max(300, displayNodes.length * (nodeHeight + nodeSpacing) + 100)
   
-  // Use viewBox for responsive scaling - no fixed width
   const viewBoxWidth = contentWidth
   const viewBoxHeight = contentHeight
 
@@ -255,7 +245,6 @@ function buildFallbackSvg(diagramType: string, code: string): string {
     })
     .join('\n')
 
-  // Return responsive SVG with viewBox - no fixed width/height
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-width: 100%;">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -277,17 +266,18 @@ function escapeXml(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
-export function DiagramViewer({ 
+export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps>(({
   definition, 
   title, 
   className, 
   onDownloadPdf,
   editable = false,
   height = 500
-}: DiagramViewerProps) {
+}, ref) => {
   const [activeTab, setActiveTab] = React.useState<string>('diagram')
   const [copied, setCopied] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
+  const containerRef = React.useRef<HTMLDivElement>(null)
   
   const handleCopyCode = async () => {
     await navigator.clipboard.writeText(definition.code)
@@ -295,19 +285,35 @@ export function DiagramViewer({
     setTimeout(() => setCopied(false), 2000)
   }
   
-  const handleDownloadSvg = () => {
+  const handleDownloadSvg = async () => {
     if (activeTab !== 'diagram') return
     const svgElement = document.querySelector('.diagram-viewer svg')
     if (!svgElement) return
     
-    const svgData = new XMLSerializer().serializeToString(svgElement)
-    const blob = new Blob([svgData], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${(title || 'diagram').replace(/\s+/g, '-')}.svg`
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const diagramData: DiagramExportData = {
+        svg: document.querySelector('.diagram-viewer svg')?.outerHTML || '',
+        title: title || definition.title || 'diagram',
+        type: definition.type,
+      }
+      await exportDiagramAsSvg(diagramData, containerRef)
+    } catch (error) {
+      console.error('Failed to download SVG:', error)
+    }
+  }
+  
+  const handleDownloadPng = async () => {
+    if (activeTab !== 'diagram') return
+    try {
+      const diagramData: DiagramExportData = {
+        svg: document.querySelector('.diagram-viewer svg')?.outerHTML || '',
+        title: title || definition.title || 'diagram',
+        type: definition.type,
+      }
+      await exportDiagramAsPng(diagramData, containerRef)
+    } catch (error) {
+      console.error('Failed to download PNG:', error)
+    }
   }
   
   const handleDownloadPdf = async () => {
@@ -320,6 +326,7 @@ export function DiagramViewer({
   
   return (
     <div 
+      ref={ref}
       className={cn("relative rounded-xl border bg-card flex flex-col", className)}
       style={{ height: typeof height === 'number' ? `${height}px` : height }}
     >
@@ -369,22 +376,35 @@ export function DiagramViewer({
               <TooltipContent side="bottom" align="center">Download SVG</TooltipContent>
             </Tooltip>
             
-            {onDownloadPdf && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-lg" 
-                    onClick={handleDownloadPdf} 
-                    aria-label="Download PDF"
-                  >
-                    <FileText className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" align="center">Download PDF</TooltipContent>
-              </Tooltip>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 rounded-lg" 
+                  onClick={handleDownloadPng} 
+                  aria-label="Download PNG"
+                >
+                  <Image className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center">Download PNG</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 rounded-lg" 
+                  onClick={handleDownloadPdf} 
+                  aria-label="Download PDF"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center">Download PDF</TooltipContent>
+            </Tooltip>
             
             <Tooltip>
               <TooltipTrigger asChild>
@@ -420,7 +440,7 @@ export function DiagramViewer({
         </TabsList>
         
         <TabsContent value="diagram" className="flex-1 p-0">
-          <div className="diagram-viewer h-full w-full p-4" style={{ overflow: 'auto' }}>
+          <div className="diagram-viewer h-full w-full p-4" style={{ overflow: 'auto' }} ref={containerRef}>
             <DiagramRenderer definition={definition} />
           </div>
         </TabsContent>
@@ -438,7 +458,7 @@ export function DiagramViewer({
       {fullscreen && (
         <div 
           className="fixed inset-0 z-50 bg-background flex flex-col"
-          onClick={() => setFullscreen(false)}
+          onClick={(e) => { if (e.target === e.currentTarget) setFullscreen(false) }}
         >
           <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
             <h3 className="font-semibold">{title || definition.title || 'Diagram'}</h3>
@@ -453,4 +473,4 @@ export function DiagramViewer({
       )}
     </div>
   )
-}
+})

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import html2canvas from 'html2canvas'
 
 export interface MindMapNode {
   id: string
@@ -40,11 +41,12 @@ interface MindMapViewerProps {
   className?: string
   onDownloadPdf?: () => void
   editable?: boolean
+  ref?: React.Ref<HTMLDivElement>
 }
 
-const NODE_WIDTH = 160
-const NODE_HEIGHT = 50
-const NODE_RADIUS = 8
+const NODE_WIDTH = 180
+const NODE_HEIGHT = 56
+const NODE_RADIUS = 10
 const EDGE_COLOR = "hsl(var(--primary))"
 const NODE_BG = "hsl(var(--card))"
 const NODE_BORDER = "hsl(var(--primary))"
@@ -56,7 +58,6 @@ const CENTRAL_NODE_TEXT = "hsl(var(--primary-foreground))"
 function getCentralNode(nodes: MindMapNode[], edges: MindMapEdge[]): MindMapNode | null {
   if (nodes.length === 0) return null
   
-  // Find node with most connections (highest degree)
   const nodeDegrees = new Map<string, number>()
   edges.forEach(edge => {
     nodeDegrees.set(edge.source, (nodeDegrees.get(edge.source) || 0) + 1)
@@ -81,7 +82,6 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
   const adjacency = new Map<string, string[]>()
   const reverseAdjacency = new Map<string, string[]>()
   
-  // Build adjacency lists
   edges.forEach(edge => {
     if (!adjacency.has(edge.source)) adjacency.set(edge.source, [])
     adjacency.get(edge.source)!.push(edge.target)
@@ -93,12 +93,10 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
   const centralNode = getCentralNode(nodes, edges)
   if (!centralNode) return positions
   
-  // Use improved force-directed layout with collision avoidance
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const centerX = 400
   const centerY = 300
   
-  // First pass: hierarchical layout based on graph distance from central node
   const visited = new Set<string>()
   const levelMap = new Map<string, number>()
   
@@ -110,39 +108,34 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
     const children = adjacency.get(nodeId) || []
     children.forEach(child => assignLevels(child, level + 1))
     
-    // Also traverse reverse edges for a more complete layout
     const parents = reverseAdjacency.get(nodeId) || []
     parents.forEach(parent => assignLevels(parent, level - 1))
   }
   
   assignLevels(centralNode.id, 0)
   
-  // Group nodes by level
   const levels = new Map<number, string[]>()
   levelMap.forEach((level, nodeId) => {
     if (!levels.has(level)) levels.set(level, [])
     levels.get(level)!.push(nodeId)
   })
   
-  // Position nodes with improved radial layout and collision avoidance
   const levelEntries = Array.from(levels.entries()).sort((a, b) => a[0] - b[0])
   
   levelEntries.forEach(([level, levelNodes]) => {
     const radius = Math.max(120, 80 + Math.abs(level) * 160)
     const angleStep = (2 * Math.PI) / Math.max(levelNodes.length, 1)
-    const startAngle = -Math.PI / 2 // Start at top
+    const startAngle = -Math.PI / 2
     
     levelNodes.forEach((nodeId, index) => {
       const angle = startAngle + index * angleStep
       const node = nodeMap.get(nodeId)
       if (!node) return
       
-      // Base position
       let computedX = centerX + radius * Math.cos(angle)
       let computedY = centerY + radius * Math.sin(angle)
       
-      // Collision avoidance: check against already positioned nodes
-      const minDist = 120 // Minimum distance between nodes
+      const minDist = 120
       let attempts = 0
       const maxAttempts = 50
       
@@ -155,7 +148,6 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist < minDist) {
             collision = true
-            // Push away from collision
             const pushAngle = Math.atan2(dy, dx) + Math.PI
             computedX = pos.x + minDist * Math.cos(pushAngle)
             computedY = pos.y + minDist * Math.sin(pushAngle)
@@ -165,7 +157,6 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
         attempts++
       }
       
-      // If existing position is reasonable, prefer it
       const existingX = node.position.x
       const existingY = node.position.y
       const dist = Math.sqrt((existingX - computedX) ** 2 + (existingY - computedY) ** 2)
@@ -177,10 +168,8 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
     })
   })
   
-  // Ensure central node is at center
   positions.set(centralNode.id, { x: centerX, y: centerY })
   
-  // Second pass: force-directed relaxation for better edge lengths
   const iterations = 50
   const springLength = 150
   const springStrength = 0.1
@@ -190,7 +179,6 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
     const forces = new Map<string, { x: number; y: number }>()
     const posArray = Array.from(positions.entries())
     
-    // Repulsion between all nodes
     for (let i = 0; i < posArray.length; i++) {
       const [id1, pos1] = posArray[i]
       if (!forces.has(id1)) forces.set(id1, { x: 0, y: 0 })
@@ -213,7 +201,6 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
       }
     }
     
-    // Spring forces along edges
     edges.forEach(edge => {
       const pos1 = positions.get(edge.source)
       const pos2 = positions.get(edge.target)
@@ -235,8 +222,7 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
       forces.get(edge.target)!.y -= fy
     })
     
-    // Apply forces (with damping)
-    const damping = 0.5 - iter / iterations * 0.3
+    const damping = 0.5 - iter / iterations * 0.3;
     forces.forEach((force, nodeId) => {
       const pos = positions.get(nodeId)
       if (pos && nodeId !== centralNode.id) {
@@ -244,9 +230,8 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
         pos.y += force.y * damping
       }
     })
-  }
+    }
   
-  // Ensure central node stays at center
   positions.set(centralNode.id, { x: centerX, y: centerY })
   
   return positions
@@ -271,7 +256,6 @@ function MindMapCanvas({
   const positions = buildTreeLayout(nodes, edges)
   const centralNode = getCentralNode(nodes, edges)
   
-  // Calculate bounds for centering
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   positions.forEach(pos => {
     minX = Math.min(minX, pos.x)
@@ -315,19 +299,16 @@ function MindMapCanvas({
           </filter>
         </defs>
         
-        {/* Edges */}
         <g className="mindmap-edges">
           {edges.map(edge => {
             const sourcePos = positions.get(edge.source)
             const targetPos = positions.get(edge.target)
             if (!sourcePos || !targetPos) return null
             
-            // Calculate curved path
             const dx = targetPos.x - sourcePos.x
             const dy = targetPos.y - sourcePos.y
             const distance = Math.sqrt(dx * dx + dy * dy)
             
-            // Create curved bezier path
             const midX = (sourcePos.x + targetPos.x) / 2
             const midY = (sourcePos.y + targetPos.y) / 2
             const perpX = -dy / distance * Math.min(distance * 0.15, 60)
@@ -350,7 +331,6 @@ function MindMapCanvas({
           })}
         </g>
         
-        {/* Nodes */}
         <g className="mindmap-nodes">
           {nodes.map(node => {
             const pos = positions.get(node.id)
@@ -366,7 +346,6 @@ function MindMapCanvas({
                 onClick={() => onNodeClick?.(node)}
                 style={{ cursor: onNodeClick ? "pointer" : "default" }}
               >
-                {/* Node background */}
                 <rect
                   x={-NODE_WIDTH / 2}
                   y={-NODE_HEIGHT / 2}
@@ -381,7 +360,6 @@ function MindMapCanvas({
                   className="transition-all duration-200"
                 />
                 
-                {/* Node label */}
                 <text
                   x="0"
                   y={showLabels ? 5 : 0}
@@ -393,10 +371,9 @@ function MindMapCanvas({
                   fontFamily="system-ui, sans-serif"
                   className="select-none"
                 >
-                  {node.label.length > 22 ? node.label.slice(0, 20) + "…" : node.label}
+                  {node.label.length > 28 ? node.label.slice(0, 26) + "…" : node.label}
                 </text>
                 
-                {/* Selection indicator */}
                 {isSelected && (
                   <circle
                     cx="0"
@@ -417,13 +394,13 @@ function MindMapCanvas({
   )
 }
 
-export function MindMapViewer({ 
+export const MindMapViewer = React.forwardRef<HTMLDivElement, MindMapViewerProps>(({
   data, 
   title, 
   className, 
   onDownloadPdf,
   editable = false
-}: MindMapViewerProps) {
+}, ref) => {
   const [scale, setScale] = React.useState(1)
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = React.useState(false)
@@ -479,12 +456,42 @@ export function MindMapViewer({
     if (onDownloadPdf) {
       onDownloadPdf()
     } else {
-      // Default: print to PDF
       window.print()
     }
   }
   
-  // Handle keyboard shortcuts
+  const handleDownloadSvg = () => {
+    const svgElement = containerRef.current?.querySelector('svg')
+    if (!svgElement) return
+    
+    const svgData = new XMLSerializer().serializeToString(svgElement)
+    const blob = new Blob([svgData], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(title || 'mindmap').replace(/\s+/g, '-')}.svg`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  
+  const handleDownloadPng = async () => {
+    const svgElement = containerRef.current?.querySelector('svg')
+    if (!svgElement) return
+    
+    const canvas = await html2canvas(svgElement as unknown as HTMLElement, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+    })
+    
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob!), 'image/png'))
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(title || 'mindmap').replace(/\s+/g, '-')}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -521,7 +528,7 @@ export function MindMapViewer({
   
   return (
     <div 
-      ref={containerRef}
+      ref={ref}
       className={cn("relative rounded-xl border bg-card", className)}
       style={{ minHeight: "500px", height: "100%" }}
       onWheel={handleWheel}
@@ -531,7 +538,6 @@ export function MindMapViewer({
       onMouseLeave={handleMouseLeave}
       onContextMenu={e => e.preventDefault()}
     >
-      {/* Mind Map Canvas */}
       <div className="absolute inset-0" style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
         <MindMapCanvas 
           data={data} 
@@ -542,7 +548,6 @@ export function MindMapViewer({
         />
       </div>
       
-      {/* Controls Overlay */}
       {showControls && (
         <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
           <TooltipProvider>
@@ -586,6 +591,15 @@ export function MindMapViewer({
             
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm" onClick={handleDownloadSvg} aria-label="Download SVG">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Download SVG</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-background/80 backdrop-blur-sm" onClick={() => setShowControls(false)} aria-label="Hide controls">
                   <Minimize className="h-4 w-4" />
                 </Button>
@@ -596,7 +610,6 @@ export function MindMapViewer({
         </div>
       )}
       
-      {/* Show controls button when hidden */}
       {!showControls && (
         <div className="absolute top-3 right-3 z-10">
           <TooltipProvider>
@@ -612,7 +625,6 @@ export function MindMapViewer({
         </div>
       )}
       
-      {/* Selected node info panel */}
       {selectedNode && (
         <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-72 z-10">
           <div className="bg-card border rounded-lg p-3 shadow-lg animate-in slide-in-from-bottom-2">
@@ -628,7 +640,6 @@ export function MindMapViewer({
         </div>
       )}
       
-      {/* Title */}
       {title && (
         <div className="absolute top-3 left-3 z-10">
           <h3 className="text-lg font-semibold text-foreground bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm">
@@ -638,4 +649,4 @@ export function MindMapViewer({
       )}
     </div>
   )
-}
+})

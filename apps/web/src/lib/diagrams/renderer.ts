@@ -11,10 +11,10 @@ export interface DiagramRenderResult {
 
 function escapeXml(text: string): string {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/'/g, '&apos;')
 }
 
@@ -22,7 +22,7 @@ function buildFallbackSvg(diagramType: string, code: string): string {
   const lines = code
     .split(/\r?\n/)
     .map(l => l.trim())
-    .filter(l => l && !l.startsWith('%%') && !l.startsWith('@startuml') && !l.startsWith('@enduml'))
+    .filter(l => l && !l.startsWith('%%') && !l.startsWith('@startuml') && !l.startsWith('@enduml') && !l.startsWith('//'))
 
   const nodes: string[] = []
   for (const line of lines) {
@@ -32,41 +32,50 @@ function buildFallbackSvg(diagramType: string, code: string): string {
         const label = (m[1] || m[2] || m[3] || '').trim()
         if (label && !nodes.includes(label)) nodes.push(label)
       }
-    } else if (line.includes('-->') || line.includes('->')) {
-      const parts = line.split(/-->|->/).map(p => p.replace(/[^a-zA-Z0-9 _-]/g, '').trim()).filter(Boolean)
+    } else if (line.includes('-->') || line.includes('->') || line.includes('--')) {
+      const parts = line.split(/-->|->|--/).map(p => p.replace(/[^a-zA-Z0-9 _-]/g, '').trim()).filter(Boolean)
       for (const p of parts) {
         if (p && !nodes.includes(p)) nodes.push(p)
       }
     }
   }
 
-  const displayNodes = nodes.length > 0 ? nodes.slice(0, 6) : lines.slice(0, 5)
-  const height = Math.max(240, displayNodes.length * 70 + 80)
-  const width = 640
+  const displayNodes = nodes.length > 0 ? nodes.slice(0, 12) : lines.slice(0, 8)
+  const nodeHeight = 60
+  const nodeSpacing = 20
+  const startY = 50
+  const contentWidth = 600
+  const contentHeight = Math.max(300, displayNodes.length * (nodeHeight + nodeSpacing) + 100)
+
+  // Use viewBox for responsive scaling - no fixed width
+  const viewBoxWidth = contentWidth
+  const viewBoxHeight = contentHeight
 
   const boxes = displayNodes
     .map((label, idx) => {
-      const y = 60 + idx * 65
-      const arrow =
-        idx < displayNodes.length - 1
-          ? `<line x1="320" y1="${y + 40}" x2="320" y2="${y + 65}" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />`
-          : ''
+      const y = startY + idx * (nodeHeight + nodeSpacing)
+      const arrow = idx < displayNodes.length - 1
+        ? `<line x1="${viewBoxWidth / 2}" y1="${y + nodeHeight}" x2="${viewBoxWidth / 2}" y2="${y + nodeHeight + nodeSpacing}" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />`
+        : ''
+      const rectWidth = viewBoxWidth - 100
+      const rectX = 50
       return `
-        <rect x="140" y="${y}" width="360" height="40" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5" />
-        <text x="320" y="${y + 25}" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#1e1b4b">${escapeXml(label.slice(0, 48))}</text>
+        <rect x="${rectX}" y="${y}" width="${rectWidth}" height="${nodeHeight}" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5" />
+        <text x="${viewBoxWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#1e1b4b" dominant-baseline="middle">${escapeXml(label.slice(0, 80))}</text>
         ${arrow}
       `
     })
     .join('\n')
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  // Return responsive SVG with viewBox - no fixed width/height
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-width: 100%;">
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#6366f1" />
     </marker>
   </defs>
-  <rect width="100%" height="100%" fill="#ffffff" rx="12" />
-  <text x="24" y="32" font-family="sans-serif" font-size="12" font-weight="bold" fill="#64748b">${escapeXml(diagramType.toUpperCase())} DIAGRAM</text>
+  <rect width="100%" height="100%" fill="white" rx="12" />
+  <text x="24" y="28" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#64748b">${escapeXml(diagramType.toUpperCase())} DIAGRAM (Fallback)</text>
   ${boxes}
 </svg>`
 }
@@ -116,19 +125,20 @@ export class DiagramRenderer {
       return { success: false, error: 'Diagram code is empty' }
     }
     try {
-      const vizMod = await import('@viz-js/viz')
-      const instance = await vizMod.instance()
-      const svg = instance.renderString(code, { format: 'svg' })
+      // Try @viz-js/viz
+      const vizModule = await import('@viz-js/viz')
+      const instance = await vizModule.instance()
+      const svg = instance.renderString(code, { format: 'svg', engine: 'dot' })
       if (svg && svg.includes('<svg')) {
         return { success: true, svg }
       }
+      throw new Error('Graphviz rendering failed')
     } catch {
-      // Fall back to pure SVG renderer if @viz-js/viz is unavailable
-    }
-
-    return {
-      success: true,
-      svg: buildFallbackSvg('graphviz', code),
+      // Use fallback
+      return {
+        success: true,
+        svg: buildFallbackSvg('graphviz', code),
+      }
     }
   }
 
@@ -136,6 +146,7 @@ export class DiagramRenderer {
     if (!code || !code.trim()) {
       return { success: false, error: 'Diagram code is empty' }
     }
+    // PlantUML requires server-side rendering, use fallback
     return {
       success: true,
       svg: buildFallbackSvg('plantuml', code),
@@ -175,8 +186,8 @@ export async function renderDiagramFromCode(
     throw new Error(result.error || 'Failed to render diagram')
   }
 
-  const widthMatch = result.svg.match(/width="(\d+(?:\.\d+)?)"/)
-  const heightMatch = result.svg.match(/height="(\d+(?:\.\d+)?)"/)
+  const widthMatch = result.svg.match(/width="(\d+(?:\.\d+)?)/)
+  const heightMatch = result.svg.match(/height="(\d+(?:\.\d+)?)/)
 
   return {
     svg: result.svg,

@@ -61,10 +61,8 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
 
     switch (type) {
       case 'notes': {
-        const validTypes: DocumentSummaryType[] = [
-          'concise', 'detailed', 'exam', 'definitions', 'comparison'
-        ]
-        const analysisType: DocumentSummaryType = validTypes.includes(input.type) ? input.type : 'concise'
+        // Only Formula Sheet is allowed per requirements
+        const analysisType: DocumentSummaryType = 'formulas'
 
         const summary = await summarizeAndAnalyzeDocument({
           userId,

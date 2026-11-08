@@ -303,6 +303,11 @@ model User {
   projectDiscussions  ProjectDiscussion[]      @relation("ProjectDiscussionUser")
   dropboxConnection   DropboxConnection?
   plannerTasks        PlannerTask[]
+  questionPapers      QuestionPaper[]
+  questionAnalyses    QuestionAnalysis[]
+  generatedPracticePapers GeneratedPracticePaper[]
+  testAttempts        TestAttempt[]
+  createdTests        OnlineTest[] @relation("CreatedTests")
 
   @@map("users")
 }
@@ -386,6 +391,10 @@ model Subject {
   quizzes            Quiz[]
   generatedImages    GeneratedImage[]
   studyMaterialJobs  StudyMaterialJob[]
+  questionPapers     QuestionPaper[]
+  questionAnalyses   QuestionAnalysis[]
+  generatedPracticePapers GeneratedPracticePaper[]
+  onlineTests        OnlineTest[]
 
   @@unique([institutionId, semesterId, code])
   @@map("subjects")
@@ -1138,6 +1147,130 @@ model SubmissionAttachment {
   @@map("submission_attachments")
 }
 
+// Online Assessment System Models
+model OnlineTest {
+  id              String   @id @default(cuid())
+  subjectId       String
+  title           String
+  description     String?
+  instructions    String?
+  durationMinutes Int
+  totalMarks      Int
+  passingMarks    Int?
+  testType        String   // 'MCQ' | 'WRITTEN' | 'MIXED'
+  negativeMarking Float    @default(0)
+  maxAttempts     Int      @default(1)
+  startTime       DateTime?
+  endTime         DateTime?
+  isPublished     Boolean  @default(false)
+  isProctored     Boolean  @default(false)
+  shuffleQuestions Boolean  @default(false)
+  shuffleOptions  Boolean  @default(false)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subject         Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  creator         User                 @relation("CreatedTests", fields: [createdBy], references: [id], onDelete: Cascade)
+  questions       TestQuestion[]
+  attempts        TestAttempt[]
+
+  @@index([subjectId])
+  @@index([createdBy])
+  @@index([isPublished])
+  @@map("online_tests")
+}
+
+model TestQuestion {
+  id          String   @id @default(cuid())
+  testId      String
+  questionNumber Int
+  type        String   // 'SINGLE_CORRECT' | 'MULTIPLE_SELECT' | 'SHORT_ANSWER' | 'LONG_ANSWER' | 'NUMERICAL'
+  prompt      String   @db.Text
+  options     Json?    // For MCQ types: array of option strings
+  correctAnswer Json?  // For MCQ: number or array; for written: answer key/rubric
+  marks       Int
+  negativeMarks Float  @default(0)
+  explanation String?
+  unit        String?
+  topic       String?
+  difficulty  String?  // 'EASY' | 'MEDIUM' | 'HARD'
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  test        OnlineTest          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers     TestAnswer[]
+
+  @@index([testId])
+  @@map("test_questions")
+}
+
+model TestAttempt {
+  id              String   @id @default(cuid())
+  testId          String
+  userId          String
+  attemptNumber   Int      @default(1)
+  status          String   // 'IN_PROGRESS' | 'SUBMITTED' | 'AUTO_SUBMITTED' | 'EXPIRED' | 'GRADED'
+  startedAt       DateTime @default(now())
+  submittedAt     DateTime?
+  timeRemaining   Int?     // Seconds remaining when submitted
+  totalMarks      Int
+  obtainedMarks   Float?
+  autoSubmitted   Boolean  @default(false)
+  autoSubmitReason String?
+  integrityWarnings Int    @default(0)
+  lastWarningAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  test            OnlineTest          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers         TestAnswer[]
+  warnings        IntegrityWarning[]
+
+  @@unique([testId, userId, attemptNumber])
+  @@index([userId])
+  @@index([status])
+  @@map("test_attempts")
+}
+
+model TestAnswer {
+  id              String   @id @default(cuid())
+  attemptId       String
+  questionId      String
+  answer          Json     // For MCQ: number/array; for written: text
+  isCorrect       Boolean?
+  marksAwarded    Float?
+  gradedBy        String?
+  gradedAt        DateTime?
+  timeSpent       Int      @default(0) // Seconds
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attempt         TestAttempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question        TestQuestion        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("test_answers")
+}
+
+model IntegrityWarning {
+  id          String   @id @default(cuid())
+  attemptId   String
+  warningType String   // 'TAB_SWITCH' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY_ATTEMPT' | 'PASTE_ATTEMPT' | 'RIGHT_CLICK'
+  timestamp   DateTime @default(now())
+  details     Json?
+  acknowledged Boolean @default(false)
+
+  attempt     TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([warningType])
+  @@map("integrity_warnings")
+}
+
 model StudentAchievement {
   id                 String              @id @default(cuid())
   userId             String
@@ -1425,4 +1558,160 @@ model GeneratedImage {
 
   @@index([userId])
   @@map("generated_images")
+}
+
+// Important Questions Analyser Models
+model QuestionPaper {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  fileName        String
+  fileSize        BigInt
+  mimeType        String
+  storagePath     String
+  storageBucket   String   @default("documents")
+  paperType       String   // 'QB' | 'PYQ'
+  subjectId       String?
+  semester        String?
+  unit            String?
+  academicYear    String?
+  examinationYear Int?
+  marks           Int?
+  status          DocumentStatus @default(UPLOADED)
+  pageCount       Int?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject?         @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  questions   ExtractedQuestion[]
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([paperType])
+  @@map("question_papers")
+}
+
+model ExtractedQuestion {
+  id              String   @id @default(cuid())
+  questionPaperId String
+  questionNumber  String
+  text            String   @db.Text
+  subQuestions    Json?    // Array of sub-question objects
+  marks           Int?
+  unit            String?
+  topic           String?
+  concept         String?
+  questionType    String?  // 'MCQ' | 'SHORT_ANSWER' | 'LONG_ANSWER' | 'NUMERICAL' | etc.
+  difficulty      String?  // 'EASY' | 'MEDIUM' | 'HARD'
+  year            Int?
+  pageReference   Int?
+  extractionConfidence Float @default(1.0)
+  flags           String[] // e.g., 'UNCERTAIN_EXTRACTION', 'MISSING_MARKS'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  questionPaper QuestionPaper @relation(fields: [questionPaperId], references: [id], onDelete: Cascade)
+
+  @@index([questionPaperId])
+  @@index([topic])
+  @@index([concept])
+  @@index([unit])
+  @@index([year])
+  @@map("extracted_questions")
+}
+
+model QuestionAnalysis {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  subjectId       String?
+  paperIds        String[] // Source question paper IDs
+  totalQuestions  Int
+  exactRepeats    Int
+  semanticRepeats Int
+  analysisData    Json     // Full analysis results
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject        Subject?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  analysisItems  QuestionAnalysisItem[]
+  priorityItems  QuestionPriorityItem[]
+
+  @@index([userId])
+  @@index([subjectId])
+  @@map("question_analyses")
+}
+
+model QuestionAnalysisItem {
+  id              String   @id @default(cuid())
+  analysisId      String
+  questionId      String
+  questionText    String
+  frequency       Int
+  papersCount     Int
+  totalMarks      Int
+  avgMarks        Float
+  firstYear       Int?
+  lastYear        Int?
+  units           String[]
+  topics          String[]
+  concepts        String[]
+  questionTypes   String[]
+  priority        String   // 'HIGH' | 'MEDIUM' | 'LOW'
+  priorityReason  String
+  isExactRepeat   Boolean  @default(false)
+  matchedQuestionIds String[]
+  createdAt       DateTime @default(now())
+
+  analysis QuestionAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+  @@index([priority])
+  @@map("question_analysis_items")
+}
+
+model QuestionPriorityItem {
+  id              String   @id @default(cuid())
+  analysisId      String
+  questionId      String
+  priority        String   // 'HIGH' | 'MEDIUM' | 'LOW'
+  reason          String
+  frequency       Int
+  recencyScore    Float
+  marksWeight     Float
+  unitRelevance   Float
+  papersCount     Int
+  createdAt       DateTime @default(now())
+
+  analysis QuestionAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+  @@index([priority])
+  @@map("question_priority_items")
+}
+
+model GeneratedPracticePaper {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  sourceAnalysisId String?
+  paperType       String   // 'PRACTICE' | 'MOCK' | 'PREDICTED' | 'UNIT_WISE'
+  subjectId       String?
+  unit            String?
+  questions       Json     // Array of generated questions
+  totalMarks      Int
+  durationMinutes Int?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([sourceAnalysisId])
+  @@map("generated_practice_papers")
 }
