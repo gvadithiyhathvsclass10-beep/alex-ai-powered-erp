@@ -61,6 +61,50 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @alex/web run build
 
 # -----------------------------------------------------------------------------
+# Build Worker bundle using esbuild
+# -----------------------------------------------------------------------------
+FROM build-web AS build-worker
+
+# Install esbuild for bundling
+RUN pnpm add -w -D esbuild
+
+# Create worker bundle entrypoint
+RUN cat > /app/worker-bundle-entry.ts << 'EOF'
+// Worker bundle entrypoint - imports all modules needed by the worker
+import { PrismaClient } from '@prisma/client'
+import { summarizeAndAnalyzeDocument, generateStructuredOutput } from './apps/web/src/lib/ai/service'
+import { saveDiagram } from './apps/web/src/lib/diagrams/generator'
+import { decrypt, encrypt, generateKeyHash } from './apps/web/src/lib/encryption'
+import { prisma } from './apps/web/src/lib/prisma'
+import { cn } from './apps/web/src/lib/utils'
+
+// Re-export for the worker entrypoint
+export { 
+  PrismaClient,
+  summarizeAndAnalyzeDocument,
+  generateStructuredOutput,
+  saveDiagram,
+  decrypt,
+  encrypt,
+  generateKeyHash,
+  prisma,
+  cn
+}
+EOF
+
+# Bundle the worker modules
+RUN cd /app && npx esbuild worker-bundle-entry.ts \
+    --platform=node \
+    --target=node20 \
+    --format=cjs \
+    --bundle \
+    --external:@prisma/client \
+    --external:bcryptjs \
+    --external:@aws-sdk/* \
+    --outfile=worker-bundle.js \
+    --packages=external
+
+# -----------------------------------------------------------------------------
 # Production runtime: Next.js API + SSR
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS runner-api
@@ -115,12 +159,15 @@ RUN apk add --no-cache \
     && addgroup -g 1001 -S nodejs \
     && adduser -S worker -u 1001 -G nodejs
 
-# Copy built application
+# Copy built application (standalone Next.js server for Prisma client, etc.)
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/standalone ./
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/public ./apps/web/public
 COPY --from=build-web --chown=worker:nodejs /app/apps/web/prisma ./apps/web/prisma
 COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
+
+# Copy esbuild worker bundle
+COPY --from=build-worker --chown=worker:nodejs /app/worker-bundle.js ./worker-bundle.js
 
 # Copy worker entry point
 COPY --chown=worker:nodejs docker/worker-entrypoint.js ./worker-entrypoint.js

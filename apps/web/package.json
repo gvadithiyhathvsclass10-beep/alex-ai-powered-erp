@@ -92,6 +92,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.0",
+    "esbuild": "^0.24.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "prisma": "^5.22.0",

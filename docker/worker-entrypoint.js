@@ -6,55 +6,159 @@
  * - Study material generation (notes, flashcards, mindmaps, diagrams, quizzes)
  * - Scheduled jobs (cleanup, attendance alerts, reports)
  * - Notification delivery
+ * 
+ * This file runs as a standalone Node.js process in production.
+ * It uses an esbuild bundle (worker-bundle.js) for all internal modules.
  */
 
 const { PrismaClient } = require('@prisma/client')
+const path = require('path')
 
-const prisma = new PrismaClient()
-
-// Simple in-memory queue for demo; replace with BullMQ + Redis in production
-const jobQueue = []
-let isProcessing = false
-
-async function processQueue() {
-  if (isProcessing || jobQueue.length === 0) return
-  isProcessing = true
-  
-  while (jobQueue.length > 0) {
-    const job = jobQueue.shift()
-    if (job) {
-      try {
-        await job()
-      } catch (error) {
-        console.error('Job failed:', error)
-      }
+// Load the esbuild bundle which contains all internal modules
+let workerBundle = null
+async function loadWorkerBundle() {
+  if (!workerBundle) {
+    try {
+      workerBundle = require(path.join(__dirname, 'worker-bundle.js'))
+    } catch (e) {
+      console.error('[Worker] Failed to load worker bundle:', e.message)
+      throw new Error('Worker bundle not found. Ensure the worker image includes the esbuild bundle.')
     }
   }
-  
-  isProcessing = false
+  return workerBundle
 }
 
-function enqueueJob(job) {
-  jobQueue.push(job)
-  processQueue()
+// Create Prisma client using the bundled instance
+let prisma = null
+async function getPrisma() {
+  if (!prisma) {
+    const bundle = await loadWorkerBundle()
+    prisma = bundle.prisma || new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    })
+  }
+  return prisma
 }
 
-// Study Material Job Processing
-async function processStudyMaterialJobs() {
-  try {
-    // Find pending jobs
-    const jobs = await prisma.studyMaterialJob.findMany({
+// ============================================================================
+// Job Claiming & Concurrency Control
+// ============================================================================
+
+/**
+ * Attempts to atomically claim a pending job for processing.
+ * Uses a database transaction with row-level locking to prevent multiple workers
+ * from processing the same job simultaneously.
+ * 
+ * @returns The claimed job or null if no jobs available
+ */
+async function claimNextJob() {
+  const db = await getPrisma()
+  // Use a transaction to atomically find and claim a job
+  return await db.$transaction(async (tx) => {
+    // Find the oldest pending job
+    const job = await tx.studyMaterialJob.findFirst({
       where: { status: 'pending' },
-      take: 5,
       orderBy: { createdAt: 'asc' },
     })
 
-    for (const job of jobs) {
-      // Mark as processing
-      await prisma.studyMaterialJob.update({
-        where: { id: job.id },
-        data: { status: 'processing', startedAt: new Date() },
-      })
+    if (!job) return null
+
+    // Atomically claim the job by updating its status
+    // This prevents race conditions between multiple workers
+    const claimed = await tx.studyMaterialJob.update({
+      where: { 
+        id: job.id,
+        status: 'pending' // Only claim if still pending (double-check)
+      },
+      data: { 
+        status: 'processing', 
+        startedAt: new Date() 
+      },
+    })
+
+    return claimed
+  }).catch((error) => {
+    // If the job was already claimed by another worker, Prisma throws
+    // P2025 (record not found) or the update affects 0 rows
+    if (error.code === 'P2025' || error.code === 'P2003') {
+      return null
+    }
+    console.error('[Worker] Error claiming job:', error)
+    return null
+  })
+}
+
+/**
+ * Recovers stale jobs that have been stuck in 'processing' for too long.
+ * This handles cases where a worker crashed mid-processing.
+ * 
+ * @param {number} staleThresholdMs - Milliseconds after which a processing job is considered stale (default: 10 minutes)
+ */
+async function recoverStaleJobs(staleThresholdMs = 10 * 60 * 1000) {
+  const db = await getPrisma()
+  const staleCutoff = new Date(Date.now() - staleThresholdMs)
+  
+  const result = await db.studyMaterialJob.updateMany({
+    where: {
+      status: 'processing',
+      startedAt: { lt: staleCutoff },
+    },
+    data: {
+      status: 'pending',
+      startedAt: null,
+      errorMessage: 'Recovered from stale processing state',
+    },
+  })
+
+  if (result.count > 0) {
+    console.log(`[Worker] Recovered ${result.count} stale job(s) back to pending`)
+  }
+  
+  return result.count
+}
+
+// ============================================================================
+// AI Service Access (via worker bundle)
+// ============================================================================
+
+let aiService = null
+
+async function getAIService() {
+  if (!aiService) {
+    const bundle = await loadWorkerBundle()
+    aiService = {
+      summarizeAndAnalyzeDocument: bundle.summarizeAndAnalyzeDocument,
+      generateStructuredOutput: bundle.generateStructuredOutput,
+    }
+  }
+  return aiService
+}
+
+let diagramsGenerator = null
+
+async function getDiagramsGenerator() {
+  if (!diagramsGenerator) {
+    const bundle = await loadWorkerBundle()
+    diagramsGenerator = {
+      saveDiagram: bundle.saveDiagram,
+    }
+  }
+  return diagramsGenerator
+}
+
+// ============================================================================
+// Study Material Job Processing
+// ============================================================================
+
+async function processStudyMaterialJobs() {
+  try {
+    // First, recover any stale jobs
+    await recoverStaleJobs()
+
+    // Process up to 5 jobs per cycle
+    for (let i = 0; i < 5; i++) {
+      const job = await claimNextJob()
+      if (!job) break // No more pending jobs
 
       try {
         let result
@@ -80,7 +184,8 @@ async function processStudyMaterialJobs() {
         }
 
         // Mark as completed
-        await prisma.studyMaterialJob.update({
+        const db = await getPrisma()
+        await db.studyMaterialJob.update({
           where: { id: job.id },
           data: { 
             status: 'completed', 
@@ -88,11 +193,13 @@ async function processStudyMaterialJobs() {
             result,
           },
         })
+        console.log(`[Worker] Job ${job.id} (${job.type}) completed successfully`)
       } catch (error) {
         console.error(`[Worker] Study job ${job.id} failed:`, error)
         
-        // Mark as failed
-        await prisma.studyMaterialJob.update({
+        // Mark as failed with error message
+        const db = await getPrisma()
+        await db.studyMaterialJob.update({
           where: { id: job.id },
           data: { 
             status: 'failed', 
@@ -107,34 +214,17 @@ async function processStudyMaterialJobs() {
   }
 }
 
-// Poll for study material jobs every 10 seconds
-let studyJobInterval = null
+// ============================================================================
+// Job Generation Functions
+// ============================================================================
 
-function startStudyJobPoller() {
-  if (studyJobInterval) return
-  studyJobInterval = setInterval(() => {
-    processStudyMaterialJobs().catch(console.error)
-  }, 10000)
-  
-  // Process on startup
-  processStudyMaterialJobs().catch(console.error)
-}
-
-function stopStudyJobPoller() {
-  if (studyJobInterval) {
-    clearInterval(studyJobInterval)
-    studyJobInterval = null
-  }
-}
-
-// Import AI service functions dynamically
 async function generateNotes(job) {
-  // Dynamic import to avoid circular dependencies
-  const { summarizeAndAnalyzeDocument } = await import('../apps/web/src/lib/ai/service')
+  const { summarizeAndAnalyzeDocument } = await getAIService()
+  const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
   
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: job.sourceDocId },
     include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 40 } },
   })
@@ -145,13 +235,13 @@ async function generateNotes(job) {
     userId: job.userId,
     documentTitle: doc.title,
     chunks: doc.chunks,
-    analysisType: job.input.type || 'concise',
-    customInstructions: job.input.customInstructions,
-    provider: job.input.provider,
-    model: job.input.model,
+    analysisType: job.input?.type || 'concise',
+    customInstructions: job.input?.customInstructions,
+    provider: job.input?.provider,
+    model: job.input?.model,
   })
 
-  const material = await prisma.studyMaterial.create({
+  const material = await db.studyMaterial.create({
     data: {
       userId: job.userId,
       title: summary.title,
@@ -172,18 +262,19 @@ async function generateNotes(job) {
 }
 
 async function generateFlashcards(job) {
-  const { generateStructuredOutput } = await import('../apps/web/src/lib/ai/service')
+  const { generateStructuredOutput } = await getAIService()
+  const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
   
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: job.sourceDocId },
     include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 40 } },
   })
   
   if (!doc || !doc.chunks?.length) throw new Error('Document not found or empty')
   
-  const targetCount = Math.min(Math.max(Number(job.input.count) || 10, 1), 50)
+  const targetCount = Math.min(Math.max(Number(job.input?.count) || 10, 1), 50)
   const sourceText = doc.chunks
     .map((c, idx) => `[Source ${idx + 1}]: ${c.content.trim()}`)
     .join('\n\n')
@@ -191,8 +282,8 @@ async function generateFlashcards(job) {
 
   const structured = await generateStructuredOutput({
     userId: job.userId,
-    provider: job.input.provider,
-    model: job.input.model,
+    provider: job.input?.provider,
+    model: job.input?.model,
     systemPrompt: 'You are ALEX, an academic flashcard generator. Create high-signal spaced-repetition flashcards strictly grounded in the provided document text.',
     schemaDescription: `{
   "cards": [
@@ -220,10 +311,10 @@ async function generateFlashcards(job) {
     },
   })
 
-  const deck = await prisma.flashcardDeck.create({
+  const deck = await db.flashcardDeck.create({
     data: {
       userId: job.userId,
-      title: job.input.title || `${doc.title} — flashcards`,
+      title: job.input?.title || `${doc.title} — flashcards`,
       sourceDocId: doc.id,
       subjectId: doc.subjectId,
       cards: {
@@ -240,11 +331,12 @@ async function generateFlashcards(job) {
 }
 
 async function generateMindmap(job) {
-  const { generateStructuredOutput } = await import('../apps/web/src/lib/ai/service')
+  const { generateStructuredOutput } = await getAIService()
+  const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
   
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: job.sourceDocId },
     include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 20 } },
   })
@@ -258,8 +350,8 @@ async function generateMindmap(job) {
 
   const structured = await generateStructuredOutput({
     userId: job.userId,
-    provider: job.input.provider,
-    model: job.input.model,
+    provider: job.input?.provider,
+    model: job.input?.model,
     systemPrompt: 'You are ALEX, an academic knowledge-graph and mind-map generator. Extract the hierarchy of core concepts and their relationships from the provided document.',
     schemaDescription: `{
   "nodes": [
@@ -293,10 +385,10 @@ async function generateMindmap(job) {
     },
   })
 
-  const map = await prisma.mindMap.create({
+  const map = await db.mindMap.create({
     data: {
       userId: job.userId,
-      title: job.input.title || `${doc.title} — mind map`,
+      title: job.input?.title || `${doc.title} — mind map`,
       sourceDocId: doc.id,
       subjectId: doc.subjectId,
       nodes: structured.data.nodes,
@@ -308,12 +400,13 @@ async function generateMindmap(job) {
 }
 
 async function generateDiagram(job) {
-  const { generateStructuredOutput } = await import('../apps/web/src/lib/ai/service')
-  const { saveDiagram } = await import('../apps/web/src/lib/diagrams/generator')
+  const { generateStructuredOutput } = await getAIService()
+  const { saveDiagram } = await getDiagramsGenerator()
+  const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
   
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: job.sourceDocId },
     include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 15 } },
   })
@@ -321,25 +414,25 @@ async function generateDiagram(job) {
   if (!doc || !doc.chunks?.length) throw new Error('Document not found or empty')
   
   const contextText = doc.chunks.map(c => c.content.trim()).join('\n\n').slice(0, 10000)
-  const docTitle = job.input.title || `${doc.title} — diagram`
+  const docTitle = job.input?.title || `${doc.title} — diagram`
 
   const structured = await generateStructuredOutput({
     userId: job.userId,
-    provider: job.input.provider,
-    model: job.input.model,
+    provider: job.input?.provider,
+    model: job.input?.model,
     systemPrompt: 'You are ALEX, an academic diagram generator. Create a clear Mermaid flowchart or sequence diagram illustrating the core process or architecture in the provided content.',
     schemaDescription: `{
   "type": "mermaid",
   "title": "Diagram title",
   "code": "flowchart TD\\n  A[Step 1] --> B[Step 2]"
 }`,
-    prompt: `Generate a ${job.input.customType || 'mermaid'} diagram for "${docTitle}":\n\n${contextText}`,
+    prompt: `Generate a ${job.input?.customType || 'mermaid'} diagram for "${docTitle}":\n\n${contextText}`,
     validate: (parsed) => {
       if (!parsed || typeof parsed.code !== 'string' || !parsed.code.trim()) {
         throw new Error('Model did not return valid diagram code')
       }
       return {
-        type: (parsed.type || job.input.customType || 'mermaid'),
+        type: (parsed.type || job.input?.customType || 'mermaid'),
         title: String(parsed.title || docTitle),
         code: parsed.code.trim(),
       }
@@ -352,18 +445,19 @@ async function generateDiagram(job) {
 }
 
 async function generateQuiz(job) {
-  const { generateStructuredOutput } = await import('../apps/web/src/lib/ai/service')
+  const { generateStructuredOutput } = await getAIService()
+  const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
   
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: job.sourceDocId },
     include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 30 } },
   })
   
   if (!doc || !doc.chunks?.length) throw new Error('Document not found or empty')
   
-  const targetCount = Math.min(Math.max(Number(job.input.count) || 10, 1), 30)
+  const targetCount = Math.min(Math.max(Number(job.input?.count) || 10, 1), 30)
   const sourceText = doc.chunks
     .map((c, idx) => `[Source ${idx + 1}]: ${c.content.trim()}`)
     .join('\n\n')
@@ -371,8 +465,8 @@ async function generateQuiz(job) {
 
   const structured = await generateStructuredOutput({
     userId: job.userId,
-    provider: job.input.provider,
-    model: job.input.model,
+    provider: job.input?.provider,
+    model: job.input?.model,
     systemPrompt: 'You are ALEX, an academic assessment generator. Create multiple-choice quiz questions grounded strictly in the provided document text.',
     schemaDescription: `{
   "questions": [
@@ -385,7 +479,7 @@ async function generateQuiz(job) {
     }
   ]
 }`,
-    prompt: `Generate up to ${targetCount} ${job.input.difficulty || 'medium'}-difficulty multiple-choice questions from "${doc.title}":\n\n${sourceText}`,
+    prompt: `Generate up to ${targetCount} ${job.input?.difficulty || 'medium'}-difficulty multiple-choice questions from "${doc.title}":\n\n${sourceText}`,
     validate: (parsed) => {
       const rawQuestions = Array.isArray(parsed) ? parsed : parsed?.questions
       if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
@@ -403,13 +497,13 @@ async function generateQuiz(job) {
     },
   })
 
-  const quiz = await prisma.quiz.create({
+  const quiz = await db.quiz.create({
     data: {
       userId: job.userId,
-      title: job.input.title || `${doc.title} — quiz`,
+      title: job.input?.title || `${doc.title} — quiz`,
       sourceDocId: doc.id,
       subjectId: doc.subjectId,
-      difficulty: String(job.input.difficulty || 'medium'),
+      difficulty: String(job.input?.difficulty || 'medium'),
       questions: structured.data.questions,
     },
   })
@@ -417,12 +511,16 @@ async function generateQuiz(job) {
   return { quiz, provider: structured.provider, model: structured.model }
 }
 
-// Scheduled jobs
+// ============================================================================
+// Scheduled Jobs
+// ============================================================================
+
 async function cleanupOldNotifications() {
+  const db = await getPrisma()
   console.log('[Worker] Running scheduled cleanup of old notifications')
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   
-  const result = await prisma.notification.deleteMany({
+  const result = await db.notification.deleteMany({
     where: {
       createdAt: { lt: thirtyDaysAgo },
       isRead: true,
@@ -433,9 +531,10 @@ async function cleanupOldNotifications() {
 }
 
 async function attendanceAlerts() {
+  const db = await getPrisma()
   console.log('[Worker] Running scheduled attendance alerts')
   
-  const students = await prisma.user.findMany({
+  const students = await db.user.findMany({
     where: { role: 'STUDENT', isActive: true },
     include: {
       memberships: { where: { status: 'ACTIVE' } },
@@ -446,7 +545,7 @@ async function attendanceAlerts() {
     for (const membership of student.memberships) {
       if (!membership.semesterId) continue
       
-      const sessions = await prisma.attendanceSession.findMany({
+      const sessions = await db.attendanceSession.findMany({
         where: {
           semesterId: membership.semesterId,
           isCancelled: false,
@@ -470,7 +569,7 @@ async function attendanceAlerts() {
       if (total > 0) {
         const percentage = (present / total) * 100
         if (percentage < 35) {
-          await prisma.notification.create({
+          await db.notification.create({
             data: {
               userId: student.id,
               category: 'ATTENDANCE',
@@ -486,7 +585,10 @@ async function attendanceAlerts() {
   }
 }
 
-// Job scheduler
+// ============================================================================
+// Job Scheduler
+// ============================================================================
+
 let schedulerInterval = null
 
 function startScheduler() {
@@ -526,9 +628,48 @@ function scheduleJob(cron, fn) {
   }, 60000) // Check every minute
 }
 
-// Main entry point
+// ============================================================================
+// Job Poller
+// ============================================================================
+
+let studyJobInterval = null
+
+function startStudyJobPoller() {
+  if (studyJobInterval) return
+  studyJobInterval = setInterval(() => {
+    processStudyMaterialJobs().catch(console.error)
+  }, 10000)
+  
+  // Process on startup
+  processStudyMaterialJobs().catch(console.error)
+}
+
+function stopStudyJobPoller() {
+  if (studyJobInterval) {
+    clearInterval(studyJobInterval)
+    studyJobInterval = null
+  }
+}
+
+// ============================================================================
+// Main Entry Point
+// ============================================================================
+
 async function start() {
   console.log('[Worker] Starting ALEX background worker...')
+  console.log('[Worker] NODE_ENV:', process.env.NODE_ENV)
+  console.log('[Worker] Database URL configured:', !!process.env.DATABASE_URL)
+  
+  try {
+    // Test database connection
+    const db = await getPrisma()
+    await db.$queryRaw`SELECT 1`
+    console.log('[Worker] Database connection verified')
+  } catch (error) {
+    console.error('[Worker] Database connection failed:', error)
+    throw error
+  }
+  
   startScheduler()
   startStudyJobPoller()
   
@@ -539,7 +680,8 @@ async function start() {
     console.log('[Worker] Shutting down...')
     stopStudyJobPoller()
     stopScheduler()
-    await prisma.$disconnect()
+    const db = await getPrisma()
+    await db.$disconnect()
     process.exit(0)
   })
   
@@ -547,16 +689,32 @@ async function start() {
     console.log('[Worker] Shutting down...')
     stopStudyJobPoller()
     stopScheduler()
-    await prisma.$disconnect()
+    const db = await getPrisma()
+    await db.$disconnect()
     process.exit(0)
   })
 }
 
+// ============================================================================
+// Auto-start when run directly (not imported as module)
+// ============================================================================
+
+// In Node.js, when a file is run directly with `node worker-entrypoint.js`,
+// `require.main === module` is true. When imported, it's false.
+if (require.main === module) {
+  start().catch((error) => {
+    console.error('[Worker] Fatal startup error:', error)
+    process.exit(1)
+  })
+}
+
 module.exports = {
-  enqueueJob,
+  enqueueJob: () => {}, // Deprecated - kept for compatibility
   scheduleJob,
   start,
   stopStudyJobPoller,
   stopScheduler,
   processStudyMaterialJobs,
+  claimNextJob,
+  recoverStaleJobs,
 }
