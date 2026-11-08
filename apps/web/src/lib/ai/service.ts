@@ -1283,17 +1283,17 @@ export async function summarizeAndAnalyzeDocument(
 
   const typeInstructions: Record<DocumentSummaryType, string> = {
     concise:
-      'Produce concise, high-signal bullet-point study notes capturing the core thesis, key takeaways, and essential facts. Cite sources as [Source X].',
+      'Produce concise, high-signal bullet-point study notes capturing the core thesis, key takeaways, and essential facts. Use clear headings and subheadings. Cite sources as [Source X].',
     detailed:
-      'Produce comprehensive, structured study notes with section headings, thorough explanations of every concept, examples, and citations [Source X].',
+      'Produce comprehensive, structured study notes with section headings, thorough explanations of every concept, worked examples, and citations [Source X]. Include definitions, formulas, and important theorems.',
     exam:
-      'Produce high-yield exam revision notes highlighting testable concepts, common pitfalls, key definitions, and likely exam questions with answers. Cite [Source X].',
+      'Produce high-yield exam revision notes highlighting testable concepts, common pitfalls, key definitions, likely exam questions with model answers, and memory aids. Cite [Source X]. Focus on what examiners typically test.',
     formulas:
-      'Extract and explain all mathematical formulas, equations, complexity bounds, constants, and variable definitions from the document. Cite [Source X].',
+      'Extract ALL mathematical formulas, equations, and identities from the document. For each formula: provide the LaTeX/MathJax formatted equation, define all variables with units, state assumptions/conditions, and give a brief explanation of when to use it. Organize by topic. Cite [Source X].',
     definitions:
-      'Compile a structured glossary of key terms, theorems, and technical definitions from the document with clear explanations and [Source X] citations.',
+      'Compile a structured glossary of key terms, theorems, and technical definitions. For each term: provide the precise definition, mathematical formulation if applicable, context/usage, and a clarifying example. Use alphabetical order with clear headings. Cite [Source X].',
     comparison:
-      'Create a structured Markdown comparison (including a Markdown table) contrasting the methods, concepts, algorithms, or theories discussed in the document. Cite [Source X].',
+      'Create a detailed Markdown comparison table contrasting the methods, concepts, algorithms, or theories in the document. Include columns for: Feature/Aspect, Option A, Option B, etc., with detailed cell content. Add explanatory paragraphs before/after the table. Cite [Source X].',
   }
 
   const instruction =

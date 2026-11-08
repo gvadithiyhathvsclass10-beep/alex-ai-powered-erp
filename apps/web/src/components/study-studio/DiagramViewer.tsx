@@ -20,6 +20,7 @@ import {
   Zap,
   FileText,
   Monitor,
+  Expand,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -51,7 +52,6 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
   
   React.useEffect(() => {
     let mounted = true
-    let abortController: AbortController | null = null
     
     const renderDiagram = async () => {
       setLoading(true)
@@ -78,42 +78,40 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
     }
     
     const renderMermaid = async (code: string) => {
-      // Try to use mermaid from CDN or local
       try {
-        // Check if mermaid is available globally
+        // Use locally installed mermaid package
+        const mermaid = await import('mermaid')
+        mermaid.default.initialize({ 
+          startOnLoad: false, 
+          theme: 'default',
+          securityLevel: 'loose',
+          fontFamily: 'system-ui, sans-serif',
+        })
+        
+        const { svg } = await mermaid.default.render('diagram-' + Date.now(), code)
+        if (mounted) setSvg(svg)
+        return
+      } catch (mermaidError) {
+        console.warn('[DiagramViewer] Mermaid render failed, trying fallback:', mermaidError)
+        
+        // Fallback: try global mermaid if available (e.g., from script tag)
         if (typeof window !== 'undefined' && (window as any).mermaid) {
-          const mermaid = (window as any).mermaid
-          mermaid.initialize({ 
-            startOnLoad: false, 
-            theme: 'default',
-            securityLevel: 'loose',
-            fontFamily: 'system-ui, sans-serif',
-          })
-          
-          const { svg } = await mermaid.render('diagram-' + Date.now(), code)
-          if (mounted) setSvg(svg)
-          return
+          try {
+            const mermaid = (window as any).mermaid
+            mermaid.initialize({ 
+              startOnLoad: false, 
+              theme: 'default',
+              securityLevel: 'loose',
+              fontFamily: 'system-ui, sans-serif',
+            })
+            
+            const { svg } = await mermaid.render('diagram-' + Date.now(), code)
+            if (mounted) setSvg(svg)
+            return
+          } catch {}
         }
         
-        // Fallback: load mermaid from CDN
-        await loadScript('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs')
-        if ((window as any).mermaid) {
-          const mermaid = (window as any).mermaid
-          mermaid.initialize({ 
-            startOnLoad: false, 
-            theme: 'default',
-            securityLevel: 'loose',
-            fontFamily: 'system-ui, sans-serif',
-          })
-          
-          const { svg } = await mermaid.render('diagram-' + Date.now(), code)
-          if (mounted) setSvg(svg)
-          return
-        }
-        
-        throw new Error('Mermaid not available')
-      } catch {
-        // Use fallback SVG
+        // Final fallback
         setSvg(buildFallbackSvg('mermaid', code))
       }
     }
@@ -140,26 +138,10 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
       setSvg(buildFallbackSvg('plantuml', code))
     }
     
-    const loadScript = (src: string): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) {
-          resolve()
-          return
-        }
-        const script = document.createElement('script')
-        script.src = src
-        script.type = 'module'
-        script.onload = () => resolve()
-        script.onerror = () => reject(new Error(`Failed to load ${src}`))
-        document.head.appendChild(script)
-      })
-    }
-    
     renderDiagram()
     
     return () => {
       mounted = false
-      if (abortController) abortController.abort()
     }
   }, [definition])
   

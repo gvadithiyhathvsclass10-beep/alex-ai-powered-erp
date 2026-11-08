@@ -93,14 +93,12 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
   const centralNode = getCentralNode(nodes, edges)
   if (!centralNode) return positions
   
-  // Use a force-directed layout for better visualization
+  // Use improved force-directed layout with collision avoidance
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
-  
-  // Initialize positions with some randomness around center
   const centerX = 400
   const centerY = 300
   
-  // Simple radial layout for tree-like structures
+  // First pass: hierarchical layout based on graph distance from central node
   const visited = new Set<string>()
   const levelMap = new Map<string, number>()
   
@@ -111,6 +109,10 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
     
     const children = adjacency.get(nodeId) || []
     children.forEach(child => assignLevels(child, level + 1))
+    
+    // Also traverse reverse edges for a more complete layout
+    const parents = reverseAdjacency.get(nodeId) || []
+    parents.forEach(parent => assignLevels(parent, level - 1))
   }
   
   assignLevels(centralNode.id, 0)
@@ -122,34 +124,129 @@ function buildTreeLayout(nodes: MindMapNode[], edges: MindMapEdge[]): Map<string
     levels.get(level)!.push(nodeId)
   })
   
-  // Position nodes
-  const maxLevel = Math.max(...Array.from(levels.keys()))
-  levels.forEach((levelNodes, level) => {
-    const radius = 100 + level * 180
+  // Position nodes with improved radial layout and collision avoidance
+  const levelEntries = Array.from(levels.entries()).sort((a, b) => a[0] - b[0])
+  
+  levelEntries.forEach(([level, levelNodes]) => {
+    const radius = Math.max(120, 80 + Math.abs(level) * 160)
     const angleStep = (2 * Math.PI) / Math.max(levelNodes.length, 1)
+    const startAngle = -Math.PI / 2 // Start at top
     
     levelNodes.forEach((nodeId, index) => {
-      const angle = index * angleStep - Math.PI / 2
+      const angle = startAngle + index * angleStep
       const node = nodeMap.get(nodeId)
-      if (node) {
-        // Use existing position if it looks reasonable, otherwise compute new one
-        const existingX = node.position.x
-        const existingY = node.position.y
-        const computedX = centerX + radius * Math.cos(angle)
-        const computedY = centerY + radius * Math.sin(angle)
-        
-        // If existing position is close to computed, keep it; otherwise use computed
-        const dist = Math.sqrt((existingX - computedX) ** 2 + (existingY - computedY) ** 2)
-        if (dist < 100 && existingX !== 0 && existingY !== 0) {
-          positions.set(nodeId, node.position)
-        } else {
-          positions.set(nodeId, { x: computedX, y: computedY })
-        }
+      if (!node) return
+      
+      // Base position
+      let computedX = centerX + radius * Math.cos(angle)
+      let computedY = centerY + radius * Math.sin(angle)
+      
+      // Collision avoidance: check against already positioned nodes
+      const minDist = 120 // Minimum distance between nodes
+      let attempts = 0
+      const maxAttempts = 50
+      
+      while (attempts < maxAttempts) {
+        let collision = false
+        positions.forEach((pos, otherId) => {
+          if (otherId === nodeId) return
+          const dx = computedX - pos.x
+          const dy = computedY - pos.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < minDist) {
+            collision = true
+            // Push away from collision
+            const pushAngle = Math.atan2(dy, dx) + Math.PI
+            computedX = pos.x + minDist * Math.cos(pushAngle)
+            computedY = pos.y + minDist * Math.sin(pushAngle)
+          }
+        })
+        if (!collision) break
+        attempts++
+      }
+      
+      // If existing position is reasonable, prefer it
+      const existingX = node.position.x
+      const existingY = node.position.y
+      const dist = Math.sqrt((existingX - computedX) ** 2 + (existingY - computedY) ** 2)
+      if (dist < 80 && existingX !== 0 && existingY !== 0) {
+        positions.set(nodeId, node.position)
+      } else {
+        positions.set(nodeId, { x: computedX, y: computedY })
       }
     })
   })
   
   // Ensure central node is at center
+  positions.set(centralNode.id, { x: centerX, y: centerY })
+  
+  // Second pass: force-directed relaxation for better edge lengths
+  const iterations = 50
+  const springLength = 150
+  const springStrength = 0.1
+  const repulsionStrength = 8000
+  
+  for (let iter = 0; iter < iterations; iter++) {
+    const forces = new Map<string, { x: number; y: number }>()
+    const posArray = Array.from(positions.entries())
+    
+    // Repulsion between all nodes
+    for (let i = 0; i < posArray.length; i++) {
+      const [id1, pos1] = posArray[i]
+      if (!forces.has(id1)) forces.set(id1, { x: 0, y: 0 })
+      
+      for (let j = i + 1; j < posArray.length; j++) {
+        const [id2, pos2] = posArray[j]
+        if (!forces.has(id2)) forces.set(id2, { x: 0, y: 0 })
+        
+        const dx = pos1.x - pos2.x
+        const dy = pos1.y - pos2.y
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1
+        const force = repulsionStrength / (dist * dist)
+        const fx = (dx / dist) * force
+        const fy = (dy / dist) * force
+        
+        forces.get(id1)!.x += fx
+        forces.get(id1)!.y += fy
+        forces.get(id2)!.x -= fx
+        forces.get(id2)!.y -= fy
+      }
+    }
+    
+    // Spring forces along edges
+    edges.forEach(edge => {
+      const pos1 = positions.get(edge.source)
+      const pos2 = positions.get(edge.target)
+      if (!pos1 || !pos2) return
+      
+      const dx = pos2.x - pos1.x
+      const dy = pos2.y - pos1.y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1
+      const force = (dist - springLength) * springStrength
+      const fx = (dx / dist) * force
+      const fy = (dy / dist) * force
+      
+      if (!forces.has(edge.source)) forces.set(edge.source, { x: 0, y: 0 })
+      if (!forces.has(edge.target)) forces.set(edge.target, { x: 0, y: 0 })
+      
+      forces.get(edge.source)!.x += fx
+      forces.get(edge.source)!.y += fy
+      forces.get(edge.target)!.x -= fx
+      forces.get(edge.target)!.y -= fy
+    })
+    
+    // Apply forces (with damping)
+    const damping = 0.5 - iter / iterations * 0.3
+    forces.forEach((force, nodeId) => {
+      const pos = positions.get(nodeId)
+      if (pos && nodeId !== centralNode.id) {
+        pos.x += force.x * damping
+        pos.y += force.y * damping
+      }
+    })
+  }
+  
+  // Ensure central node stays at center
   positions.set(centralNode.id, { x: centerX, y: centerY })
   
   return positions

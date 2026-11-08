@@ -77,6 +77,9 @@ import { saveDiagram } from './apps/web/src/lib/diagrams/generator'
 import { decrypt, encrypt, generateKeyHash } from './apps/web/src/lib/encryption'
 import { prisma } from './apps/web/src/lib/prisma'
 import { cn } from './apps/web/src/lib/utils'
+import { extractContent } from './apps/web/src/lib/document-processing/extractors'
+import { chunkText } from './apps/web/src/lib/document-processing/chunker'
+import { processDocument } from './apps/web/src/lib/document-processing/pipeline'
 
 // Re-export for the worker entrypoint
 export { 
@@ -88,7 +91,10 @@ export {
   encrypt,
   generateKeyHash,
   prisma,
-  cn
+  cn,
+  extractContent,
+  chunkText,
+  processDocument
 }
 EOF
 

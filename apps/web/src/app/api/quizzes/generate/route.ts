@@ -24,6 +24,30 @@ export async function GET() {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const user = await requireAuth()
+    const { searchParams } = new URL(request.url)
+    const quizId = searchParams.get('id')
+
+    if (!quizId) {
+      return NextResponse.json({ error: 'Quiz ID is required' }, { status: 400 })
+    }
+
+    const quiz = await prisma.quiz.findUnique({ where: { id: quizId } })
+    if (!quiz || quiz.userId !== user.id) {
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 })
+    }
+
+    await prisma.quiz.delete({ where: { id: quizId } })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Delete quiz error:', error)
+    return NextResponse.json({ error: 'Failed to delete quiz' }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()

@@ -1115,7 +1115,7 @@ export default function StudyStudioPage() {
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {quizzesData.map((quiz: QuizData) => (
-                    <Card key={quiz.id} className="hover:shadow-md transition-shadow">
+                    <Card key={quiz.id} className="hover:shadow-md transition-shadow flex flex-col">
                       <CardHeader>
                         <CardTitle className="truncate">{quiz.title}</CardTitle>
                         <div className="flex items-center gap-2 mt-1">
@@ -1123,8 +1123,35 @@ export default function StudyStudioPage() {
                           <Badge variant="secondary">{quiz.questions.length} questions</Badge>
                         </div>
                       </CardHeader>
-                      <CardContent>
-                        <QuizViewer quiz={quiz} />
+                      <CardContent className="flex-1 flex flex-col">
+                        <p className="text-sm text-muted-foreground mb-4 flex-1">
+                          {quiz.questions.slice(0, 2).map(q => q.prompt.slice(0, 60)).join(' · ')}
+                          {quiz.questions.length > 2 && '…'}
+                        </p>
+                        <div className="flex items-center gap-2 pt-4 border-t">
+                          <Button 
+                            variant="default" 
+                            className="flex-1"
+                            onClick={() => setGeneratedQuiz(quiz)}
+                          >
+                            Start Quiz
+                            <ChevronRight className="ml-2 h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={async () => {
+                              if (confirm('Delete this quiz?')) {
+                                await fetch(`/api/quizzes/generate?id=${quiz.id}`, { method: 'DELETE' })
+                                queryClient.invalidateQueries({ queryKey: ['quizzes'] })
+                                toast({ title: 'Quiz deleted' })
+                              }
+                            }}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
