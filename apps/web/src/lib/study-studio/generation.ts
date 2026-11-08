@@ -62,7 +62,7 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
     switch (type) {
       case 'notes': {
         const validTypes: DocumentSummaryType[] = [
-          'concise', 'detailed', 'exam', 'formulas', 'definitions', 'comparison'
+          'concise', 'detailed', 'exam', 'definitions', 'comparison'
         ]
         const analysisType: DocumentSummaryType = validTypes.includes(input.type) ? input.type : 'concise'
 
@@ -224,8 +224,11 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
         let usedProvider: string | undefined
         let usedModel: string | undefined
 
+        // Use top-level sourceDocId from context, not from input
+        const sourceDocIdForDiagram = sourceDocId
+
         const isPlaceholderMermaid =
-          input.customCode === 'flowchart TD\n  A[Source document] --> B[Key concepts]' && Boolean(input.sourceDocId)
+          input.customCode === 'flowchart TD\n  A[Source document] --> B[Key concepts]' && Boolean(sourceDocIdForDiagram)
 
         if (input.templateId) {
           definition = await generateDiagramFromTemplate(input.templateId, input.variables || {})
@@ -236,13 +239,13 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
             code: input.customCode,
             title: input.title || 'Custom Diagram',
           }
-        } else if (input.sourceDocId || input.prompt) {
+        } else if (sourceDocIdForDiagram || input.prompt) {
           let contextText = input.prompt || ''
           let docTitle = input.title || 'Generated Diagram'
 
-          if (input.sourceDocId) {
+          if (sourceDocIdForDiagram) {
             const doc = await prisma.document.findFirst({
-              where: { id: input.sourceDocId },
+              where: { id: sourceDocIdForDiagram },
               include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 15 } },
             })
             if (!doc) {
@@ -291,7 +294,7 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
           return { success: false, error: 'Either templateId, customCode+customType, sourceDocId, or prompt is required', errorCode: 'MISSING_INPUT' }
         }
 
-        const saved = await saveDiagram(userId, definition, input.sourceDocId, input.subjectId)
+        const saved = await saveDiagram(userId, definition, sourceDocIdForDiagram, input.subjectId)
 
         result = {
           id: saved.id,
