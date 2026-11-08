@@ -46,46 +46,33 @@ async function getPrisma() {
 
 /**
  * Attempts to atomically claim a pending job for processing.
- * Uses a database transaction with row-level locking to prevent multiple workers
- * from processing the same job simultaneously.
+ * Uses FOR UPDATE SKIP LOCKED for true atomic job claiming.
  * 
  * @returns The claimed job or null if no jobs available
  */
 async function claimNextJob() {
   const db = await getPrisma()
-  // Use a transaction to atomically find and claim a job
-  return await db.$transaction(async (tx) => {
-    // Find the oldest pending job
-    const job = await tx.studyMaterialJob.findFirst({
-      where: { status: 'pending' },
-      orderBy: { createdAt: 'asc' },
-    })
-
-    if (!job) return null
-
-    // Atomically claim the job by updating its status
-    // This prevents race conditions between multiple workers
-    const claimed = await tx.studyMaterialJob.update({
-      where: { 
-        id: job.id,
-        status: 'pending' // Only claim if still pending (double-check)
-      },
-      data: { 
-        status: 'processing', 
-        startedAt: new Date() 
-      },
-    })
-
-    return claimed
-  }).catch((error) => {
-    // If the job was already claimed by another worker, Prisma throws
-    // P2025 (record not found) or the update affects 0 rows
-    if (error.code === 'P2025' || error.code === 'P2003') {
-      return null
-    }
-    console.error('[Worker] Error claiming job:', error)
-    return null
-  })
+  
+  // Use raw query with FOR UPDATE SKIP LOCKED for true atomic claiming
+  // This prevents race conditions between multiple workers
+  const result = await db.$queryRaw`
+    UPDATE "StudyMaterialJob"
+    SET status = 'processing', "startedAt" = NOW()
+    WHERE id = (
+      SELECT id FROM "StudyMaterialJob"
+      WHERE status = 'pending'
+      ORDER BY "createdAt" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    )
+    RETURNING *
+  `
+  
+  if (result && result.length > 0) {
+    return result[0]
+  }
+  
+  return null
 }
 
 /**
@@ -123,12 +110,12 @@ async function recoverStaleJobs(staleThresholdMs = 10 * 60 * 1000) {
 
 let aiService = null
 
-async function getAIService() {
+async function getAIService(userId) {
   if (!aiService) {
     const bundle = await loadWorkerBundle()
     aiService = {
-      summarizeAndAnalyzeDocument: bundle.summarizeAndAnalyzeDocument,
-      generateStructuredOutput: bundle.generateStructuredOutput,
+      summarizeAndAnalyzeDocument: (options) => bundle.summarizeAndAnalyzeDocument({ ...options, userId }),
+      generateStructuredOutput: (options) => bundle.generateStructuredOutput({ ...options, userId }),
     }
   }
   return aiService
@@ -136,11 +123,11 @@ async function getAIService() {
 
 let diagramsGenerator = null
 
-async function getDiagramsGenerator() {
+async function getDiagramsGenerator(userId) {
   if (!diagramsGenerator) {
     const bundle = await loadWorkerBundle()
     diagramsGenerator = {
-      saveDiagram: bundle.saveDiagram,
+      saveDiagram: (userId, definition, sourceDocId, subjectId) => bundle.saveDiagram(userId, definition, sourceDocId, subjectId),
     }
   }
   return diagramsGenerator
@@ -163,21 +150,24 @@ async function processStudyMaterialJobs() {
       try {
         let result
         
+        const aiService = await getAIService(job.userId)
+        const diagramsGenerator = await getDiagramsGenerator(job.userId)
+        
         switch (job.type) {
           case 'notes':
-            result = await generateNotes(job)
+            result = await generateNotes(job, aiService)
             break
           case 'flashcards':
-            result = await generateFlashcards(job)
+            result = await generateFlashcards(job, aiService)
             break
           case 'mindmaps':
-            result = await generateMindmap(job)
+            result = await generateMindmap(job, aiService)
             break
           case 'diagrams':
-            result = await generateDiagram(job)
+            result = await generateDiagram(job, aiService, diagramsGenerator)
             break
           case 'quizzes':
-            result = await generateQuiz(job)
+            result = await generateQuiz(job, aiService)
             break
           default:
             throw new Error(`Unknown job type: ${job.type}`)
@@ -218,8 +208,8 @@ async function processStudyMaterialJobs() {
 // Job Generation Functions
 // ============================================================================
 
-async function generateNotes(job) {
-  const { summarizeAndAnalyzeDocument } = await getAIService()
+async function generateNotes(job, aiService) {
+  const { summarizeAndAnalyzeDocument } = aiService
   const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
@@ -261,8 +251,8 @@ async function generateNotes(job) {
   return { materialId: material.id, ...summary }
 }
 
-async function generateFlashcards(job) {
-  const { generateStructuredOutput } = await getAIService()
+async function generateFlashcards(job, aiService) {
+  const { generateStructuredOutput } = aiService
   const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
@@ -330,8 +320,8 @@ async function generateFlashcards(job) {
   return { deckId: deck.id, deck, provider: structured.provider, model: structured.model }
 }
 
-async function generateMindmap(job) {
-  const { generateStructuredOutput } = await getAIService()
+async function generateMindmap(job, aiService) {
+  const { generateStructuredOutput } = aiService
   const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
@@ -353,33 +343,30 @@ async function generateMindmap(job) {
     provider: job.input?.provider,
     model: job.input?.model,
     systemPrompt: 'You are ALEX, an academic knowledge-graph and mind-map generator. Extract the hierarchy of core concepts and their relationships from the provided document.',
-    schemaDescription: `{
-  "nodes": [
-    { "id": "node-0", "label": "Central Topic", "position": { "x": 0, "y": 0 } }
-  ],
-  "edges": [
-    { "id": "edge-0", "source": "node-0", "target": "node-1" }
-  ]
-}`,
-    prompt: `Generate a structured concept mind map from "${doc.title}":\n\n${sourceText}`,
+    schemaDescription: '{"nodes":[{"id":"node-0","label":"Central Topic","position":{"x":0,"y":0}}],"edges":[{"id":"edge-0","source":"node-0","target":"node-1"}]}',
+    prompt: 'Generate a structured concept mind map from "' + doc.title + '":\n\n' + sourceText,
     validate: (parsed) => {
       if (!parsed || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) {
         throw new Error('Model did not return valid mind map nodes')
       }
-      const nodes = parsed.nodes.map((n, idx) => ({
-        id: String(n.id || `node-${idx}`),
-        label: String(n.label || `Concept ${idx + 1}`).slice(0, 160),
-        position: {
-          x: typeof n.position?.x === 'number' ? n.position.x : (idx % 3) * 260,
-          y: typeof n.position?.y === 'number' ? n.position.y : Math.floor(idx / 3) * 140,
-        },
-      }))
+      const nodes = parsed.nodes.map((n, idx) => {
+        const nodeId = n.id ? String(n.id) : 'node-' + idx
+        const nodeLabel = n.label ? String(n.label) : 'Concept ' + (idx + 1)
+        const posX = typeof n.position?.x === 'number' ? n.position.x : (idx % 3) * 260
+        const posY = typeof n.position?.y === 'number' ? n.position.y : Math.floor(idx / 3) * 140
+        return {
+          id: nodeId,
+          label: nodeLabel.slice(0, 160),
+          position: { x: posX, y: posY }
+        }
+      })
       const edges = Array.isArray(parsed.edges)
-        ? parsed.edges.map((e, idx) => ({
-            id: String(e.id || `edge-${idx}`),
-            source: String(e.source || nodes[0].id),
-            target: String(e.target || nodes[Math.min(idx + 1, nodes.length - 1)].id),
-          }))
+        ? parsed.edges.map((e, idx) => {
+            const edgeId = e.id ? String(e.id) : 'edge-' + idx
+            const edgeSource = e.source ? String(e.source) : nodes[0].id
+            const edgeTarget = e.target ? String(e.target) : nodes[Math.min(idx + 1, nodes.length - 1)].id
+            return { id: edgeId, source: edgeSource, target: edgeTarget }
+          })
         : []
       return { nodes, edges }
     },
@@ -399,9 +386,9 @@ async function generateMindmap(job) {
   return { mindMap: map, provider: structured.provider, model: structured.model }
 }
 
-async function generateDiagram(job) {
-  const { generateStructuredOutput } = await getAIService()
-  const { saveDiagram } = await getDiagramsGenerator()
+async function generateDiagram(job, aiService, diagramsGenerator) {
+  const { generateStructuredOutput } = aiService
+  const { saveDiagram } = diagramsGenerator
   const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
@@ -444,8 +431,8 @@ async function generateDiagram(job) {
   return { id: saved.id, title: saved.title, type: saved.type, definition: saved.definition, provider: structured.provider, model: structured.model }
 }
 
-async function generateQuiz(job) {
-  const { generateStructuredOutput } = await getAIService()
+async function generateQuiz(job, aiService) {
+  const { generateStructuredOutput } = aiService
   const db = await getPrisma()
   
   if (!job.sourceDocId) throw new Error('No source document')
@@ -665,6 +652,13 @@ async function start() {
     const db = await getPrisma()
     await db.$queryRaw`SELECT 1`
     console.log('[Worker] Database connection verified')
+    
+    // Recover any stale jobs on startup
+    console.log('[Worker] Recovering stale jobs...')
+    const recovered = await recoverStaleJobs()
+    if (recovered > 0) {
+      console.log(`[Worker] Recovered ${recovered} stale job(s) on startup`)
+    }
   } catch (error) {
     console.error('[Worker] Database connection failed:', error)
     throw error
