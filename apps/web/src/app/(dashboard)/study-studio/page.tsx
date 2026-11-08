@@ -11,13 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2 } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2, ChevronRight, ChevronLeft, Settings, Search } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
 import { QuizViewer } from "@/components/study-studio/QuizViewer"
 import { MarkdownRenderer } from "@/components/ui/markdown"
 import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
 
 interface StudyMaterial {
   id: string
@@ -88,6 +91,156 @@ interface QuizData {
   createdAt: string
 }
 
+interface Document {
+  id: string
+  title: string
+  fileName: string
+  status: string
+  subjectId?: string | null
+}
+
+interface StudyJob {
+  id: string
+  type: string
+  status: string
+  sourceDocId: string | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+  result: any
+  errorMessage: string | null
+}
+
+// Shared Document Selector Component
+function DocumentSelector({ 
+  value, 
+  onChange, 
+  documents,
+  placeholder = "Select a processed document",
+  className,
+  disabled
+}: {
+  value: string
+  onChange: (value: string) => void
+  documents: Document[]
+  placeholder?: string
+  className?: string
+  disabled?: boolean
+}) {
+  const filteredDocs = documents.filter(d => d.status === "READY")
+  
+  return (
+    <div className={cn("w-full", className)}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {filteredDocs.length === 0 ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              No processed documents available. Upload a document first.
+            </div>
+          ) : (
+            filteredDocs.map((doc) => (
+              <SelectItem key={doc.id} value={doc.id}>
+                {doc.title} {doc.subjectId && `(${doc.subjectId})`}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+// Loading State Component
+function LoadingState({ message = "Processing...", subtitle }: { message?: string; subtitle?: string }) {
+  return (
+    <Card className="animate-in slide-in-from-bottom-2">
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <div className="text-center space-y-3">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="font-medium">{message}</p>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Empty State Component
+function EmptyState({ 
+  icon: Icon, 
+  title, 
+  description, 
+  action,
+  className 
+}: { 
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+  action?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <Card className={cn("text-center py-12", className)}>
+      <CardContent className="flex flex-col items-center gap-4">
+        <div className="p-4 rounded-full bg-muted">
+          <Icon className="h-10 w-10 text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-lg">{title}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{description}</p>
+        </div>
+        {action}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Generation Card Component
+function GenerationCard({ 
+  icon: Icon, 
+  title, 
+  description, 
+  onClick, 
+  disabled = false,
+  loading = false,
+  children
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+  onClick: () => void
+  disabled?: boolean
+  loading?: boolean
+  children?: React.ReactNode
+}) {
+  return (
+    <Card onClick={onClick} className={cn("hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col", disabled && "opacity-50 cursor-not-allowed")}>
+      <CardContent className="pt-6 flex-1 flex flex-col">
+        <div className="flex items-start gap-4">
+          <div className="p-3 rounded-lg bg-primary/10 text-primary flex-shrink-0">
+            <Icon className="h-6 w-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium truncate">{title}</h4>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        <div className="mt-auto pt-4 border-t">
+          {children || (
+            <Button className="w-full justify-between" variant="outline" size="sm" disabled={disabled || loading}>
+              <span>{loading ? "Generating..." : "Generate"}</span>
+              <Sparkles className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function StudyStudioPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = React.useState("notes")
@@ -107,8 +260,11 @@ export default function StudyStudioPage() {
   const [generatingDiagram, setGeneratingDiagram] = React.useState(false)
   const [generatingQuiz, setGeneratingQuiz] = React.useState(false)
   
+  // Generation type for notes
+  const [selectedNoteType, setSelectedNoteType] = React.useState<string | null>(null)
+
   // Fetch user documents
-  const { data: documents, isError: documentsError } = useQuery({
+  const { data: documents, isError: documentsError, isLoading: documentsLoading } = useQuery({
     queryKey: ['documents'],
     queryFn: async () => {
       const res = await fetch('/api/documents')
@@ -136,7 +292,6 @@ export default function StudyStudioPage() {
     queryFn: async () => {
       const res = await fetch('/api/diagrams/generate')
       if (!res.ok) throw new Error('Failed to fetch diagrams')
-      // API returns array directly
       return res.json()
     },
     retry: 1,
@@ -155,7 +310,7 @@ export default function StudyStudioPage() {
   })
 
   // Fetch study notes
-  const { data: notes, isError: notesError } = useQuery({
+  const { data: notes, isError: notesError, isLoading: notesLoading } = useQuery({
     queryKey: ['study-materials'],
     queryFn: async () => {
       const res = await fetch('/api/study-materials')
@@ -166,7 +321,7 @@ export default function StudyStudioPage() {
   })
 
   // Fetch flashcard decks
-  const { data: decks, isError: decksError } = useQuery({
+  const { data: decks, isError: decksError, isLoading: decksLoading } = useQuery({
     queryKey: ['flashcard-decks'],
     queryFn: async () => {
       const res = await fetch('/api/flashcards/decks')
@@ -197,12 +352,15 @@ export default function StudyStudioPage() {
       if (!res.ok) throw new Error('Failed to fetch jobs')
       return res.json()
     },
-    refetchInterval: 3000, // Poll every 3 seconds
+    refetchInterval: 3000,
     retry: 1,
   })
 
   // Check if any critical queries failed
   const hasCriticalError = documentsError || notesError || decksError || mindMapsError || quizzesError
+
+  const documentsList = Array.isArray(documents) ? documents : (documents?.documents || [])
+  const filteredDocuments = documentsList.filter((d: any) => d.status === "READY")
 
   // Create study job and poll for completion
   const createStudyJob = async (type: string, sourceDocId: string, input: Record<string, any> = {}) => {
@@ -231,12 +389,10 @@ export default function StudyStudioPage() {
         throw new Error(job.errorMessage || 'Job failed')
       }
       
-      // Update progress
       if (onProgress) {
         onProgress(job.status === 'processing' ? 50 : 10)
       }
       
-      // Wait 3 seconds before next poll
       await new Promise(resolve => setTimeout(resolve, 3000))
     }
     throw new Error('Job timed out')
@@ -303,9 +459,7 @@ export default function StudyStudioPage() {
     setGeneratingMindMap(true)
     try {
       const job = await createStudyJob('mindmaps', selectedSourceDoc)
-      const result = await waitForJob(job.id, (progress) => {
-        // Could update a progress state here
-      })
+      const result = await waitForJob(job.id)
       setGeneratedMindMap(result.mindMap || result)
       toast({ title: 'Mind map generated successfully' })
     } catch (error) {
@@ -360,8 +514,15 @@ export default function StudyStudioPage() {
     else if (type === 'quiz') setGeneratedQuiz(null)
   }, [])
 
-  const documentsList = Array.isArray(documents) ? documents : (documents?.documents || [])
-  const filteredDocuments = documentsList.filter((d: any) => d.status === "READY")
+  // Note type options
+  const noteTypes = [
+    { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
+    { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
+    { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
+    { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
+    { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
+    { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
+  ]
 
   // Show error state if critical queries failed
   if (hasCriticalError) {
@@ -398,13 +559,51 @@ export default function StudyStudioPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Study Studio</h1>
         <p className="text-muted-foreground mt-1">Generate and manage your study materials</p>
       </div>
 
+      {/* Document Selector - Shared across all tabs */}
+      <Card className="bg-muted/30 border-muted">
+        <CardContent className="pt-4 pb-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 w-full sm:w-80">
+              <DocumentSelector 
+                value={selectedSourceDoc} 
+                onChange={setSelectedSourceDoc} 
+                documents={documentsList}
+                disabled={documentsLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedSourceDoc("")}
+                disabled={!selectedSourceDoc}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Clear
+              </Button>
+              <DocumentUpload
+                onSuccess={(doc) => {
+                  setSelectedSourceDoc(doc.id)
+                }}
+              />
+            </div>
+          </div>
+          {filteredDocuments.length > 0 && (
+            <div className="mt-4">
+              <DocumentList documents={documentsList} showUpload={false} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="notes">Smart Notes</TabsTrigger>
           <TabsTrigger value="flashcards">Flashcards</TabsTrigger>
           <TabsTrigger value="mindmaps">Mind Maps</TabsTrigger>
@@ -415,86 +614,48 @@ export default function StudyStudioPage() {
         {/* SMART NOTES TAB */}
         <TabsContent value="notes" className="mt-4 space-y-6">
           <div className="space-y-6">
+            {/* Generation Options */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5" />
-                  Generate Study Materials
+                  Generate Study Notes
                 </CardTitle>
                 <CardDescription>
-                  Select a document and choose a material type to generate AI-powered study content
+                  Select a document above and choose a note type to generate AI-powered study content
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    { type: "concise", title: "Concise Notes", icon: FileText, desc: "Key points only" },
-                    { type: "detailed", title: "Detailed Notes", icon: BookOpen, desc: "Comprehensive coverage" },
-                    { type: "exam", title: "Exam Notes", icon: Target, desc: "High-yield for tests" },
-                    { type: "formulas", title: "Formula Sheet", icon: Zap, desc: "Equations & constants" },
-                    { type: "definitions", title: "Definitions", icon: Sparkles, desc: "Key terms explained" },
-                    { type: "comparison", title: "Comparison Table", icon: Brain, desc: "Side-by-side analysis" },
-                  ].map(item => (
-                    <Card 
-                      key={item.type} 
-                      onClick={() => { 
-                        if (selectedSourceDoc) generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }); 
-                        else toast({ title: "Select a document first", description: "Choose a processed document below to generate this study material." }) 
-                      }} 
-                      className="hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col"
-                    >
-                      <CardContent className="pt-6 flex-1 flex flex-col">
-                        <div className="flex items-start gap-4">
-                          <div className="p-3 rounded-lg bg-primary/10 text-primary flex-shrink-0">
-                            <item.icon className="h-6 w-6" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium truncate">{item.title}</h4>
-                            <p className="text-sm text-muted-foreground">{item.desc}</p>
-                          </div>
-                        </div>
-                        <div className="mt-auto pt-4 border-t">
-                          <Button className="w-full justify-between" variant="outline" size="sm" disabled={generateNotes.isPending || !selectedSourceDoc}>
-                            <span>{generateNotes.isPending ? "Generating..." : "Generate"}</span>
-                            <Sparkles className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-4 border-t">
-                  <div className="flex-1 w-full sm:w-80">
-                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-                      <SelectTrigger><SelectValue placeholder="Select a processed document" /></SelectTrigger>
-                      <SelectContent>
-                        {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                {selectedSourceDoc ? (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {noteTypes.map(item => (
+                      <GenerationCard
+                        key={item.type}
+                        icon={item.icon}
+                        title={item.title}
+                        description={item.desc}
+                        onClick={() => generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type })}
+                        disabled={generateNotes.isPending}
+                        loading={generateNotes.isPending}
+                      >
+                        <Button className="w-full justify-between" variant="outline" size="sm" disabled={generateNotes.isPending} onClick={(e) => { e.stopPropagation(); generateNotes.mutate({ sourceDocId: selectedSourceDoc, type: item.type }) }}>
+                          <span>{generateNotes.isPending ? "Generating..." : "Generate"}</span>
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
+                      </GenerationCard>
+                    ))}
                   </div>
-                  <p className="text-sm text-muted-foreground">Or upload a new document:</p>
-                </div>
+                ) : (
+                  <EmptyState
+                    icon={FileText}
+                    title="Select a document to begin"
+                    description="Choose a processed document from the selector above to generate study notes."
+                  />
+                )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Document Library
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DocumentUpload
-                  onSuccess={(doc) => {
-                    setSelectedSourceDoc(doc.id)
-                  }}
-                />
-                <DocumentList documents={documentsList} showUpload={false} />
-              </CardContent>
-            </Card>
-
+            {/* Generated Study Materials */}
             {notes?.materials?.length > 0 && (
               <Card>
                 <CardHeader>
@@ -528,6 +689,14 @@ export default function StudyStudioPage() {
                 </CardContent>
               </Card>
             )}
+            
+            {(!notes?.materials?.length || notes.materials.length === 0) && selectedSourceDoc && !generateNotes.isPending && (
+              <EmptyState
+                icon={FileText}
+                title="No notes generated yet"
+                description="Select a note type above to generate your first study material."
+              />
+            )}
           </div>
         </TabsContent>
 
@@ -535,10 +704,12 @@ export default function StudyStudioPage() {
         <TabsContent value="flashcards" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Flashcard Decks</h2>
-            <Button onClick={() => setSelectedDeck("new")}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Deck
-            </Button>
+            {selectedSourceDoc && (
+              <Button onClick={() => setSelectedDeck("new")} disabled={generateFlashcards.isPending}>
+                <Plus className="mr-2 h-4 w-4" />
+                Generate Flashcards
+              </Button>
+            )}
           </div>
 
           {selectedDeck === "new" ? (
@@ -547,27 +718,26 @@ export default function StudyStudioPage() {
                 <CardTitle>Create New Deck</CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={e => { e.preventDefault(); }} className="space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-4 max-w-md">
                   <div>
                     <Label>Deck Title</Label>
-                    <Input placeholder="e.g., Biology Chapter 1" />
+                    <Input placeholder="e.g., Biology Chapter 1" defaultValue={selectedSourceDoc ? undefined : ""} />
                   </div>
-                  <div>
-                    <Label>Source Document</Label>
-                    <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-                      <SelectTrigger><SelectValue placeholder="Select document" /></SelectTrigger>
-                      <SelectContent>
-                        {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Number of Cards</Label>
-                    <Input type="number" defaultValue="20" min="5" max="100" />
-                  </div>
-                  <Button type="submit" disabled={!selectedSourceDoc} onClick={e => { e.preventDefault(); generateFlashcards.mutate({ sourceDocId: selectedSourceDoc, count: 20 }) }}>
-                    Generate Flashcards
-                  </Button>
+                  {selectedSourceDoc && (
+                    <>
+                      <input type="hidden" name="sourceDocId" value={selectedSourceDoc} />
+                      <div>
+                        <Label>Number of Cards</Label>
+                        <Input type="number" defaultValue="20" min="5" max="100" name="count" />
+                      </div>
+                      <Button type="submit" disabled={generateFlashcards.isPending} onClick={(e) => { e.preventDefault(); generateFlashcards.mutate({ sourceDocId: selectedSourceDoc, count: 20 }) }}>
+                        {generateFlashcards.isPending ? "Generating..." : "Generate Flashcards"}
+                      </Button>
+                    </>
+                  )}
+                  {!selectedSourceDoc && (
+                    <p className="text-sm text-muted-foreground">Select a document above to enable flashcard generation.</p>
+                  )}
                 </form>
               </CardContent>
             </Card>
@@ -629,7 +799,7 @@ export default function StudyStudioPage() {
                         <p className="text-sm text-muted-foreground">{deck._count.cards} cards · {deck.algorithm}</p>
                       </CardHeader>
                       <CardContent>
-                        <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedDeck(deck.id) }}>
+                        <Button className="w-full" variant="outline" onClick={(e) => { e.stopPropagation(); setSelectedDeck(deck.id) }}>
                           Review
                         </Button>
                       </CardContent>
@@ -647,13 +817,21 @@ export default function StudyStudioPage() {
                     <p className="text-sm text-muted-foreground">{deck._count.cards} cards · {deck.algorithm}</p>
                   </CardHeader>
                   <CardContent>
-                    <Button className="w-full" variant="outline" onClick={e => { e.stopPropagation(); setSelectedDeck(deck.id) }}>
+                    <Button className="w-full" variant="outline" onClick={(e) => { e.stopPropagation(); setSelectedDeck(deck.id) }}>
                       Review
                     </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
+          )}
+          
+          {(!decks?.decks?.length || decks.decks.length === 0) && !selectedDeck && !selectedSourceDoc && (
+            <EmptyState
+              icon={Brain}
+              title="No flashcard decks yet"
+              description="Select a document and click 'Generate Flashcards' to create your first deck."
+            />
           )}
         </TabsContent>
 
@@ -685,14 +863,7 @@ export default function StudyStudioPage() {
           )}
 
           {generatingMindMap && (
-            <Card className="animate-in slide-in-from-bottom-2">
-              <CardContent className="flex items-center justify-center py-12">
-                <div className="text-center space-y-3">
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Generating mind map...</p>
-                </div>
-              </CardContent>
-            </Card>
+            <LoadingState message="Generating mind map..." subtitle="This may take a moment" />
           )}
 
           {/* Generate new mind map */}
@@ -708,12 +879,12 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
-                  <SelectContent>
-                    {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DocumentSelector 
+                  value={selectedSourceDoc} 
+                  onChange={setSelectedSourceDoc} 
+                  documents={documentsList}
+                  className="w-full sm:w-80"
+                />
                 <Button onClick={generateMindMap} disabled={!selectedSourceDoc || generatingMindMap}>
                   {generatingMindMap ? (
                     <>
@@ -728,13 +899,6 @@ export default function StudyStudioPage() {
                   )}
                 </Button>
               </div>
-              
-              <DocumentUpload
-                onSuccess={(doc) => {
-                  setSelectedSourceDoc(doc.id)
-                }}
-              />
-              <DocumentList documents={documentsList} showUpload={false} />
             </CardContent>
           </Card>
 
@@ -768,6 +932,14 @@ export default function StudyStudioPage() {
               </CardContent>
             </Card>
           )}
+
+          {(!mindMapsData?.length && !generatingMindMap && !generatedMindMap) && (
+            <EmptyState
+              icon={Brain}
+              title="No mind maps yet"
+              description="Select a document and click 'Generate Mind Map' to create your first concept map."
+            />
+          )}
         </TabsContent>
 
         {/* DIAGRAMS TAB */}
@@ -795,14 +967,7 @@ export default function StudyStudioPage() {
           )}
 
           {generatingDiagram && (
-            <Card className="animate-in slide-in-from-bottom-2">
-              <CardContent className="flex items-center justify-center py-12">
-                <div className="text-center space-y-3">
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Generating diagram...</p>
-                </div>
-              </CardContent>
-            </Card>
+            <LoadingState message="Generating diagram..." subtitle="This may take a moment" />
           )}
 
           {/* Generate new diagram */}
@@ -818,12 +983,12 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
-                  <SelectContent>
-                    {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DocumentSelector 
+                  value={selectedSourceDoc} 
+                  onChange={setSelectedSourceDoc} 
+                  documents={documentsList}
+                  className="w-full sm:w-80"
+                />
                 <Button onClick={generateDiagram} disabled={!selectedSourceDoc || generatingDiagram}>
                   {generatingDiagram ? (
                     <>
@@ -838,13 +1003,6 @@ export default function StudyStudioPage() {
                   )}
                 </Button>
               </div>
-              
-              <DocumentUpload
-                onSuccess={(doc) => {
-                  setSelectedSourceDoc(doc.id)
-                }}
-              />
-              <DocumentList documents={documentsList} showUpload={false} />
             </CardContent>
           </Card>
 
@@ -875,6 +1033,14 @@ export default function StudyStudioPage() {
               </CardContent>
             </Card>
           )}
+
+          {(!diagrams?.length && !generatingDiagram && !generatedDiagram) && (
+            <EmptyState
+              icon={Zap}
+              title="No diagrams yet"
+              description="Select a document and click 'Generate Diagram' to create your first diagram."
+            />
+          )}
         </TabsContent>
 
         {/* QUIZZES TAB */}
@@ -901,14 +1067,7 @@ export default function StudyStudioPage() {
           )}
 
           {generatingQuiz && (
-            <Card className="animate-in slide-in-from-bottom-2">
-              <CardContent className="flex items-center justify-center py-12">
-                <div className="text-center space-y-3">
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Generating quiz...</p>
-                </div>
-              </CardContent>
-            </Card>
+            <LoadingState message="Generating quiz..." subtitle="This may take a moment" />
           )}
 
           {/* Generate new quiz */}
@@ -924,12 +1083,12 @@ export default function StudyStudioPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <Select value={selectedSourceDoc} onValueChange={setSelectedSourceDoc}>
-                  <SelectTrigger className="w-full sm:w-80"><SelectValue placeholder="Select a processed document" /></SelectTrigger>
-                  <SelectContent>
-                    {(documentsList || []).map((doc: any) => <SelectItem key={doc.id} value={doc.id}>{doc.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DocumentSelector 
+                  value={selectedSourceDoc} 
+                  onChange={setSelectedSourceDoc} 
+                  documents={documentsList}
+                  className="w-full sm:w-80"
+                />
                 <Button onClick={generateQuiz} disabled={!selectedSourceDoc || generatingQuiz}>
                   {generatingQuiz ? (
                     <>
@@ -944,13 +1103,6 @@ export default function StudyStudioPage() {
                   )}
                 </Button>
               </div>
-              
-              <DocumentUpload
-                onSuccess={(doc) => {
-                  setSelectedSourceDoc(doc.id)
-                }}
-              />
-              <DocumentList documents={documentsList} showUpload={false} />
             </CardContent>
           </Card>
 
@@ -979,6 +1131,14 @@ export default function StudyStudioPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {(!quizzesData?.length && !generatingQuiz && !generatedQuiz) && (
+            <EmptyState
+              icon={CheckCircle2}
+              title="No quizzes yet"
+              description="Select a document and click 'Generate Quiz' to create your first practice quiz."
+            />
           )}
         </TabsContent>
       </Tabs>
