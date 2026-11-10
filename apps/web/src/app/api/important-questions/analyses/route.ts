@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { serializeBigInt } from '@/lib/prisma'
+import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
 
 export async function GET() {
   try {
@@ -70,8 +71,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Perform analysis
-    const analysisResult = analyzeQuestions(filteredQuestions, papers)
+    // Perform analysis with embeddings for semantic similarity
+    const analysisResult = await analyzeQuestions(filteredQuestions, papers, user.id)
 
     // Save analysis
     const analysis = await prisma.questionAnalysis.create({
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
   }
 }
 
-function analyzeQuestions(questions: any[], papers: any[]) {
+async function analyzeQuestions(questions: any[], papers: any[], userId: string) {
   // Group questions by normalized text for exact repeats
   const exactGroups = new Map<string, any[]>()
   const semanticGroups: any[] = []
@@ -134,9 +135,65 @@ function analyzeQuestions(questions: any[], papers: any[]) {
     }
   })
 
-  // For semantic similarity, we'd ideally use embeddings
-  // For now, we'll do a simple keyword-based grouping
-  const semanticRepeats = 0 // Placeholder for semantic analysis
+  // Compute semantic similarity using embeddings
+  let semanticRepeats = 0
+  const questionEmbeddings = new Map<string, number[]>()
+  
+  try {
+    const embeddingProvider = await getUserEmbeddingProvider(userId)
+    if (embeddingProvider && questions.length > 0) {
+      // Generate embeddings for all questions in batches
+      const texts = questions.map(q => q.text)
+      const batchSize = 50
+      for (let i = 0; i < texts.length; i += batchSize) {
+        const batch = texts.slice(i, i + batchSize)
+        const result = await embeddingProvider.provider.generateEmbeddings(batch)
+        batch.forEach((text, idx) => {
+          const question = questions.find(q => q.text === text)
+          if (question && result.embeddings[idx]) {
+            questionEmbeddings.set(question.id, result.embeddings[idx])
+          }
+        })
+      }
+
+      // Find semantic similarities (cosine similarity > 0.85)
+      const questionIds = Array.from(questionEmbeddings.keys())
+      for (let i = 0; i < questionIds.length; i++) {
+        for (let j = i + 1; j < questionIds.length; j++) {
+          const emb1 = questionEmbeddings.get(questionIds[i])
+          const emb2 = questionEmbeddings.get(questionIds[j])
+          if (emb1 && emb2) {
+            const similarity = cosineSimilarity(emb1, emb2)
+            if (similarity > 0.85) {
+              semanticRepeats++
+              semanticGroups.push({
+                questionId1: questionIds[i],
+                questionId2: questionIds[j],
+                similarity,
+              })
+            }
+          }
+        }
+      }
+    }
+  } catch (embeddingError) {
+    console.warn('[ImportantQuestions] Embedding-based semantic analysis failed, falling back to keyword matching:', embeddingError)
+    // Fallback to keyword-based semantic grouping
+    const keywordGroups = new Map<string, any[]>()
+    questions.forEach(q => {
+      const keywords = extractKeywords(q.text)
+      const key = keywords.slice(0, 5).sort().join(',')
+      if (!keywordGroups.has(key)) {
+        keywordGroups.set(key, [])
+      }
+      keywordGroups.get(key)!.push(q)
+    })
+    keywordGroups.forEach((group, key) => {
+      if (group.length > 1) {
+        semanticRepeats += group.length - 1
+      }
+    })
+  }
 
   // Unit-wise distribution
   const unitDistribution = new Map<string, number>()
@@ -259,6 +316,29 @@ function analyzeQuestions(questions: any[], papers: any[]) {
     totalPapers: papers.length,
     priorityItems,
   }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  if (normA === 0 || normB === 0) return 0
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 10)
 }
 
 function normalizeQuestionText(text: string): string {

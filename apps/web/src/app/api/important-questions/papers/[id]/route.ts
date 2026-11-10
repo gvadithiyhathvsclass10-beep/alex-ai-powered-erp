@@ -6,6 +6,8 @@ import {
   generateStructuredOutput,
   formatAIServiceErrorResponse,
 } from '@/lib/ai/service'
+import { extractContent } from '@/lib/document-processing/extractors'
+import { downloadFile } from '@/lib/storage/client'
 
 export async function GET(
   request: Request,
@@ -95,29 +97,51 @@ export async function POST(
     }
 
     if (action === 'extract') {
-      // Get the document content
+      // Get the document content using the document processing pipeline
+      // This supports PDF, DOCX, TXT, and other formats
       let textContent = ''
-      if (paper.metadata && typeof paper.metadata === 'object' && 'base64Data' in paper.metadata) {
-        const metadata = paper.metadata as { base64Data?: string }
-        if (metadata.base64Data) {
-          // For text-based files, decode base64
-          try {
-            textContent = Buffer.from(metadata.base64Data, 'base64').toString('utf-8')
-          } catch {
-            // If not valid UTF-8, it might be a binary file (PDF, DOCX)
-            // In production, use a proper document extraction library
-            textContent = '[Binary document - text extraction not implemented]'
+      let pageCount = paper.pageCount || 1
+
+      try {
+        // Download the file from storage
+        const buffer = await downloadFile(paper.storageBucket, paper.storagePath)
+        
+        // Determine document type from mime type or file extension
+        const fileName = paper.fileName || ''
+        const mimeType = paper.mimeType || ''
+        
+        // Use the existing extractContent function which handles multiple formats
+        const extracted = await extractContent(buffer, paper.mimeType ? paper.mimeType : 'application/octet-stream')
+        textContent = extracted.text
+        pageCount = Math.max(pageCount, extracted.pages.length)
+      } catch (extractionError) {
+        console.error('[ImportantQuestions] Document extraction error:', extractionError)
+        // Fallback: try base64 metadata for text-based files
+        if (paper.metadata && typeof paper.metadata === 'object' && 'base64Data' in paper.metadata) {
+          const metadata = paper.metadata as { base64Data?: string }
+          if (metadata.base64Data) {
+            try {
+              textContent = Buffer.from(metadata.base64Data, 'base64').toString('utf-8')
+            } catch {
+              // Ignore fallback errors
+            }
           }
         }
       }
 
-      if (!textContent || textContent === '[Binary document - text extraction not implemented]') {
-        // For PDF/DOCX files, we'd need to use a document processing library
-        // For now, we'll use AI to extract from the stored document if available
+      if (!textContent || textContent.trim().length === 0) {
         return NextResponse.json(
-          { error: 'Text extraction from binary documents requires document processing pipeline. Please use text-based files or ensure document processing is complete.' },
+          { error: 'Could not extract readable text from the document. Please ensure the document contains extractable text.' },
           { status: 400 }
         )
+      }
+
+      // Update paper with page count if extracted
+      if (pageCount !== paper.pageCount) {
+        await prisma.questionPaper.update({
+          where: { id: paper.id },
+          data: { pageCount },
+        })
       }
 
       // Use AI to extract questions
@@ -225,7 +249,7 @@ export async function POST(
       // Update paper status
       await prisma.questionPaper.update({
         where: { id: paper.id },
-        data: { status: 'READY', pageCount: paper.pageCount || 1 },
+        data: { status: 'READY', pageCount },
       })
 
       return NextResponse.json({

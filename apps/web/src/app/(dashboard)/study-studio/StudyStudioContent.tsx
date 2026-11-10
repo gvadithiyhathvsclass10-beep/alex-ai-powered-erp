@@ -2276,7 +2276,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                                       {q.citations && q.citations.length > 0 && (
                                         <div className="flex flex-wrap gap-1 pt-1">
                                           {q.citations.map((c, cIdx) => (
-                                            <Badge key={cIdx} variant="outline" className="text-[10px]">
+                                            <Badge key={cIdx} variant="outline" className="text-xs">
                                               {c.documentTitle}
                                               {c.pageNumber ? ` · p.${c.pageNumber}` : ""}
                                               {c.sectionTitle ? ` · ${c.sectionTitle}` : ""}
@@ -2436,7 +2436,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                               <CardTitle className="text-base">{note.title}</CardTitle>
                               <div className="flex gap-1 mt-1">
                                 {(note.tags || []).map(tag => (
-                                  <Badge key={tag} variant="secondary" className="text-[10px]">
+                                  <Badge key={tag} variant="secondary" className="text-xs">
                                     {tag}
                                   </Badge>
                                 ))}
@@ -2749,13 +2749,19 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                       <Card>
                         <CardHeader>
                           <CardTitle>Extracted Questions ({selectedIqPaper.questions.length})</CardTitle>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
+                                Extracted PYQ
+                              </Badge>
+                              <span>Source: {selectedIqPaper.fileName}</span>
+                            </div>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-4 max-h-[600px] overflow-y-auto">
                             {selectedIqPaper.questions.map((q: ExtractedQuestion, idx: number) => (
-                              <div key={q.id} className="p-4 border rounded-lg space-y-2">
+                              <div key={q.id} className="p-4 border rounded-lg space-y-3 bg-card">
                                 <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1">
+                                  <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm">
                                       <span className="text-primary mr-2">Q{q.questionNumber}.</span>
                                       {q.text}
@@ -2778,10 +2784,10 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                                     {q.year && <Badge variant="outline">{q.year}</Badge>}
                                     {q.pageReference && <Badge variant="outline">p.{q.pageReference}</Badge>}
                                     {q.extractionConfidence < 0.8 && (
-                                      <Badge variant="destructive" className="text-[10px]">Low confidence: {(q.extractionConfidence * 100).toFixed(0)}%</Badge>
+                                      <Badge variant="destructive" className="text-xs">Low confidence: {(q.extractionConfidence * 100).toFixed(0)}%</Badge>
                                     )}
                                     {q.flags && q.flags.length > 0 && (
-                                      <Badge variant="destructive" className="text-[10px]">{q.flags.join(', ')}</Badge>
+                                      <Badge variant="destructive" className="text-xs">{q.flags.join(', ')}</Badge>
                                     )}
                                   </div>
                                 </div>
@@ -3072,19 +3078,19 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                                         {item.firstYear && item.lastYear && (
                                           <Badge variant="outline">Years: {item.firstYear}-{item.lastYear}</Badge>
                                         )}
-                                        {item.isExactRepeat && <Badge variant="destructive" className="text-[10px]">Exact Repeat</Badge>}
+                                        {item.isExactRepeat && <Badge variant="destructive" className="text-xs">Exact Repeat</Badge>}
                                       </div>
                                       {item.units && item.units.length > 0 && (
                                         <div className="mt-2 flex flex-wrap gap-1">
                                           {item.units.map((u: string, ui: number) => (
-                                            <Badge key={ui} variant="secondary" className="text-[10px]">{u}</Badge>
+                                            <Badge key={ui} variant="secondary" className="text-xs">{u}</Badge>
                                           ))}
                                         </div>
                                       )}
                                       {item.topics && item.topics.length > 0 && (
                                         <div className="mt-2 flex flex-wrap gap-1">
                                           {item.topics.map((t: string, ti: number) => (
-                                            <Badge key={ti} variant="outline" className="text-[10px]">{t}</Badge>
+                                            <Badge key={ti} variant="outline" className="text-xs">{t}</Badge>
                                           ))}
                                         </div>
                                       )}
