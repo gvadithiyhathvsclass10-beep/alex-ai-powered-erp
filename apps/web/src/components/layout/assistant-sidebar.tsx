@@ -48,10 +48,8 @@ const navItems: NavItem[] = [
   { label: "Smart Planner", href: "/dashboard/planner", icon: Calendar, roles: ["STUDENT"] },
   { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["STUDENT", "LECTURER", "ADMIN"] },
   { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Projects", href: "/dashboard/projects", icon: FolderKanban, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
   { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
   { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Assignments", href: "/dashboard/assignments", icon: FileText, roles: ["STUDENT", "LECTURER"] },
   { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
 ]
@@ -60,7 +58,6 @@ const lecturerOnlyItems: NavItem[] = [
   { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"] },
   { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
   { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"] },
-  { label: "Create Assignment", href: "/dashboard/assignments", icon: FileText, roles: ["LECTURER"] },
   { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"] },
 ]
 

@@ -415,7 +415,7 @@ export function AIAvatar({
       summarize: "Please summarize the content of the current page I'm viewing.",
       explain: "Please explain the main topic of the current page in simple terms.",
       notes: "Create structured study notes from the current page content.",
-      deadlines: "What are my upcoming deadlines and assignments?",
+      deadlines: "What are my upcoming deadlines?",
       clear: "",
     }
     
@@ -523,8 +523,6 @@ export function AIAvatar({
     '/dashboard/study-studio': 'Study Studio - flashcards, notes, mind maps, quizzes',
     '/dashboard/attendance': 'Attendance tracking and management',
     '/dashboard/assessments': 'Assessments and internal marks',
-    '/dashboard/assignments': 'Assignments management',
-    '/dashboard/projects': 'Project management and collaboration',
     '/dashboard/research': 'Research Lab - notebooks, sources, notes',
     '/dashboard/planner': 'Smart Planner - calendar, tasks, events',
     '/dashboard/subjects': 'Subject enrollment and resources',
@@ -700,7 +698,7 @@ export function AIAvatar({
                           <div className="text-center py-8 text-muted-foreground">
                             <Brain className="mx-auto h-12 w-12 text-muted-foreground/50" />
                             <p className="text-sm">How can I help you today?</p>
-                            <p className="text-xs mt-1">Ask about your documents, assignments, or studies</p>
+                            <p className="text-xs mt-1">Ask about your documents or studies</p>
                             <div className="mt-4 flex flex-wrap justify-center gap-2">
                               {quickActions.slice(0, 4).map(action => (
                                 <Button

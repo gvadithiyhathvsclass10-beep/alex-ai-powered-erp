@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     const doc = await prisma.document.findFirst({
       where: { id: sourceDocId },
-      include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 30 } },
+      include: { chunks: { orderBy: { chunkIndex: 'asc' }, take: 40 } },
     })
 
     if (!doc) {
@@ -80,10 +80,10 @@ export async function POST(request: Request) {
     }
 
     const targetCount = Math.min(Math.max(Number(count) || 10, 1), 30)
-    const sourceText = doc.chunks
-      .map((c, idx) => `[Source ${idx + 1}]: ${c.content.trim()}`)
-      .join('\n\n')
-      .slice(0, 16000)
+    const sourceChunks = doc.chunks
+      .map((c, idx) => `[Source ${idx + 1}] (${doc.title}${c.pageNumber ? `, p.${c.pageNumber}` : ''}${c.sectionTitle ? `, ${c.sectionTitle}` : ''}):\n${c.content.trim()}`)
+      .join('\n\n---\n\n')
+      .slice(0, 20000)
 
     const structured = await generateStructuredOutput<{
       questions: Array<{
@@ -92,13 +92,15 @@ export async function POST(request: Request) {
         options: string[]
         answer: number
         explanation?: string
+        sourceIds?: number[]
+        questionType?: 'multiple-choice' | 'true-false' | 'short-answer'
       }>
     }>({
       userId: user.id,
       provider,
       model,
       systemPrompt:
-        'You are ALEX, an academic assessment generator. Create multiple-choice quiz questions grounded strictly in the provided document text.',
+        'You are ALEX, an academic assessment generator. Create quiz questions grounded strictly in the provided document text. CRITICAL: Every question MUST be answerable from the source text. Do not invent concepts. Include sourceIds (1-indexed chunk numbers) for each question. Support multiple-choice, true-false, and short-answer types.',
       schemaDescription: `{
   "questions": [
     {
@@ -106,25 +108,58 @@ export async function POST(request: Request) {
       "prompt": "Question text testing understanding of the source material",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "answer": 0,
-      "explanation": "Explanation of why the correct option is right, citing [Source X]"
+      "explanation": "Explanation of why the correct option is right, citing [Source X]",
+      "sourceIds": [1, 2],
+      "questionType": "multiple-choice"
     }
   ]
 }`,
-      prompt: `Generate up to ${targetCount} ${difficulty}-difficulty multiple-choice questions from "${doc.title}":\n\n${sourceText}`,
+      prompt: `Generate up to ${targetCount} ${difficulty}-difficulty quiz questions from "${doc.title}" strictly based on the provided sources:\n\n${sourceChunks}\n\nRequirements:
+- Questions must be answerable from the provided sources only
+- Include sourceIds (1-indexed chunk numbers) for each question
+- Support types: "multiple-choice" (4 options), "true-false" (2 options), "short-answer" (no options)
+- For multiple-choice: exactly one correct answer
+- For true-false: answer is 0 (true) or 1 (false)
+- If the source does not contain enough information for ${targetCount} questions, generate fewer`,
       validate: (parsed) => {
         const rawQuestions = Array.isArray(parsed) ? parsed : parsed?.questions
         if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
           throw new Error('Model did not return a non-empty questions array')
         }
-        return {
-          questions: rawQuestions.slice(0, targetCount).map((q: any, idx: number) => ({
+        const maxSourceId = doc.chunks.length
+        
+        const validatedQuestions = rawQuestions.slice(0, targetCount).map((q: any, idx: number) => {
+          const questionType = q.questionType || (q.options?.length === 2 ? 'true-false' : 'multiple-choice')
+          const options = Array.isArray(q.options) && q.options.length >= 2 ? q.options.map(String) : 
+            questionType === 'true-false' ? ['True', 'False'] : ['Option A', 'Option B', 'Option C', 'Option D']
+          
+          // Validate source references
+          if (q.sourceIds && Array.isArray(q.sourceIds)) {
+            for (const sourceId of q.sourceIds) {
+              if (typeof sourceId !== 'number' || sourceId < 1 || sourceId > maxSourceId) {
+                throw new Error(`Invalid question source reference: ${sourceId}. Must be between 1 and ${maxSourceId}`)
+              }
+            }
+          }
+          
+          // Validate answer index
+          const answer = typeof q.answer === 'number' ? q.answer : 0
+          if (answer < 0 || answer >= options.length) {
+            throw new Error(`Invalid answer index: ${answer} for ${options.length} options`)
+          }
+          
+          return {
             id: q.id || `q-${idx + 1}`,
             prompt: String(q.prompt || q.question || ''),
-            options: Array.isArray(q.options) && q.options.length >= 2 ? q.options.map(String) : ['True', 'False'],
-            answer: typeof q.answer === 'number' ? q.answer : 0,
+            options,
+            answer,
             explanation: q.explanation ? String(q.explanation) : undefined,
-          })),
-        }
+            sourceIds: Array.isArray(q.sourceIds) ? q.sourceIds : [],
+            questionType,
+          }
+        })
+        
+        return { questions: validatedQuestions }
       },
     })
 

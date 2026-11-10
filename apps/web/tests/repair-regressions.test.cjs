@@ -6,7 +6,7 @@ const path = require('node:path')
 const root = path.resolve(__dirname, '..')
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8')
 
-test('Achievements route is disabled while Assignments remains in navigation', () => {
+test('Achievements, Assignments, and Projects routes are disabled and removed from navigation', () => {
   const route = read('src/app/(dashboard)/achievements/page.tsx')
   assert.match(route, /notFound\(\)/)
   for (const file of [
@@ -16,7 +16,8 @@ test('Achievements route is disabled while Assignments remains in navigation', (
   ]) {
     const source = read(file)
     assert.doesNotMatch(source, /href:\s*["']\/dashboard\/achievements["']/)
-    assert.match(source, /href:\s*["']\/dashboard\/assignments["']/)
+    assert.doesNotMatch(source, /href:\s*["']\/dashboard\/assignments["']/)
+    assert.doesNotMatch(source, /href:\s*["']\/dashboard\/projects["']/)
   }
 })
 

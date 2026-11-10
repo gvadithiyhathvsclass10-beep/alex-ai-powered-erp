@@ -2,11 +2,14 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 /**
  * A safe, feature-rich Markdown renderer for AI chat messages.
  * Supports: headings, bold, italic, code, code blocks, lists, tables, blockquotes, links, inline code.
  * Does NOT render raw HTML for security.
+ * Supports LaTeX math: $...$ for inline, $$...$$ for block.
  */
 export function MarkdownRenderer({ 
   content, 
@@ -31,6 +34,70 @@ export function MarkdownRenderer({
       ))}
     </div>
   )
+}
+
+function renderMath(text: string): React.ReactNode {
+  if (!text) return null
+  
+  // Handle block math $$...$$
+  const blockMathRegex = /\$\$([\s\S]*?)\$\$/g
+  // Handle inline math $...$
+  const inlineMathRegex = /\$([^$\n]+)\$/g
+  
+  const parts = text.split(blockMathRegex)
+  
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      // This is block math
+      return (
+        <div key={`block-math-${index}`} className="my-4 text-center">
+          <KatexFormula formula={part.trim()} displayMode={true} />
+        </div>
+      )
+    }
+    
+    // Process inline math in remaining text
+    const inlineParts = part.split(inlineMathRegex)
+    return inlineParts.map((inlinePart, inlineIndex) => {
+      if (inlineIndex % 2 === 1) {
+        return <KatexFormula key={`inline-math-${index}-${inlineIndex}`} formula={inlinePart.trim()} displayMode={false} />
+      }
+      return <span key={`text-${index}-${inlineIndex}`}>{inlinePart}</span>
+    })
+  })
+}
+
+function KatexFormula({ formula, displayMode }: { formula: string; displayMode: boolean }) {
+  const containerRef = React.useRef<HTMLSpanElement>(null)
+  const [error, setError] = React.useState<Error | null>(null)
+  
+  React.useEffect(() => {
+    if (!containerRef.current) return
+    try {
+      katex.render(formula, containerRef.current, {
+        displayMode,
+        throwOnError: false,
+        strict: false,
+        trust: true,
+        macros: {
+          '\\RR': '\\mathbb{R}',
+          '\\CC': '\\mathbb{C}',
+          '\\NN': '\\mathbb{N}',
+          '\\ZZ': '\\mathbb{Z}',
+          '\\QQ': '\\mathbb{Q}',
+        },
+      })
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Unknown KaTeX error'))
+    }
+  }, [formula, displayMode])
+  
+  if (error) {
+    return <span className="font-mono text-sm text-destructive" title={error.message}>{formula}</span>
+  }
+  
+  return <span ref={containerRef} className="katex-formula" />
 }
 
 interface MarkdownBlock {
@@ -438,24 +505,42 @@ function renderBlockquote(block: MarkdownBlock): React.ReactElement {
 }
 
 /**
- * Render inline markdown (bold, italic, code, links, etc.)
+ * Render inline markdown (bold, italic, code, links, math, etc.)
  */
 function renderInline(text: string): React.ReactNode {
   if (!text) return null
   
-  // Split by inline code first to protect code from other parsing
-  const codeRegex = /`([^`\n]+)`/g
-  const parts = text.split(codeRegex)
+  // First handle math expressions
+  const withMath = renderMath(text)
   
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      // This is inline code
-      return <code key={index} className="px-1.5 py-0.5 text-sm bg-muted rounded font-mono text-primary">{part}</code>
+  // Then process other inline formatting within the math-rendered parts
+  // We need to recursively process the React nodes
+  return processReactNodes(withMath)
+}
+
+function processReactNodes(node: React.ReactNode): React.ReactNode {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return node
+  }
+  
+  if (React.isValidElement(node)) {
+    const children = node.props.children
+    if (Array.isArray(children)) {
+      return React.cloneElement(node, {}, ...children.map(processReactNodes))
+    } else if (React.isValidElement(children)) {
+      return React.cloneElement(node, {}, processReactNodes(children))
+    } else if (typeof children === 'string' || typeof children === 'number') {
+      // Process inline formatting in text content
+      return React.cloneElement(node, {}, processInlineFormatting(children))
     }
-    
-    // Process bold, italic, links
-    return processInlineFormatting(part)
-  })
+    return node
+  }
+  
+  if (Array.isArray(node)) {
+    return node.map(processReactNodes)
+  }
+  
+  return node
 }
 
 function processInlineFormatting(text: string): React.ReactNode {

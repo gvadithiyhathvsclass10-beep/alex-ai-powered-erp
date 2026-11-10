@@ -971,52 +971,13 @@ test('4. Dashboard stats route (/api/dashboard/stats) for STUDENT, LECTURER, and
   dbState.currentUser.memberships[0].role = 'STUDENT'
 })
 
-test('5. Assignments routes: /api/assignments/my, /api/assignments/submit, /api/assignments/[id]/submissions', async () => {
-  const myAssignmentsRoute = require(path.join(srcRoot, 'app/api/assignments/my/route.ts'))
-  const submitRoute = require(path.join(srcRoot, 'app/api/assignments/submit/route.ts'))
-  const submissionsRoute = require(path.join(srcRoot, 'app/api/assignments/[id]/submissions/route.ts'))
-  const storageClient = require(path.join(srcRoot, 'lib/storage/client.ts'))
+// ============================================================================
+// Test 5: Assignments routes removed - skipping
+// ============================================================================
 
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-assign-test-'))
-  process.env.STORAGE_MODE = 'local'
-  process.env.STORAGE_LOCAL_ROOT = tempRoot
-  storageClient.setStorageAdapter(null)
-
-  try {
-    const listRes = await myAssignmentsRoute.GET()
-    assert.equal(listRes.status, 200)
-    assert.equal(listRes.body.assignments.length, 1)
-    assert.equal(listRes.body.assignments[0].title, 'Graph Traversal Implementation')
-
-    // Submit assignment with attached file (tests File -> Buffer conversion & BigInt fileSize serialization)
-    const mockFile = {
-      name: 'bfs_dfs_solution.txt',
-      size: 48,
-      type: 'text/plain',
-      arrayBuffer: async () => Buffer.from('function bfs(graph, root) { return [root]; }'),
-    }
-    const submitRes = await submitRoute.POST({
-      headers: new Map([['content-type', 'multipart/form-data']]),
-      formData: async () => ({
-        get: (k) => (k === 'assignmentId' ? 'asgn_1' : k === 'content' ? 'Completed BFS and DFS' : null),
-        getAll: (k) => (k === 'files' ? [mockFile] : []),
-      }),
-    })
-    assert.equal(submitRes.status, 200)
-    assert.equal(submitRes.body.submission.status, 'SUBMITTED')
-    assert.equal(submitRes.body.submission.attachments.length, 1)
-    assert.equal(submitRes.body.submission.attachments[0].fileSize, 48)
-
-    // Fetch submissions and verify BigInt serialization + user relation
-    const subsRes = await submissionsRoute.GET({}, { params: Promise.resolve({ id: 'asgn_1' }) })
-    assert.equal(subsRes.status, 200)
-    assert.equal(subsRes.body.submissions.length, 1)
-    assert.equal(subsRes.body.submissions[0].user.firstName, 'Aarav')
-    assert.equal(subsRes.body.submissions[0].attachments[0].fileSize, 48)
-  } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true })
-  }
-})
+// test('5. Assignments routes: /api/assignments/my, /api/assignments/submit, /api/assignments/[id]/submissions', async () => {
+//   // Assignments feature has been removed from the application
+// })
 
 test('6. AI Assistant & Conversations routes: /api/conversations, /api/rag/query, /api/conversations/[id]', async () => {
   const conversationsRoute = require(path.join(srcRoot, 'app/api/conversations/route.ts'))
@@ -1100,11 +1061,12 @@ test('7. Subjects, Assessments & Attendance routes across STUDENT and LECTURER r
   dbState.currentUser.memberships[0].role = 'STUDENT'
 })
 
-test('8. Newly implemented sub-routes: Flashcards, Projects (tasks/milestones/members), Research (sources/notes), Notifications (read-all)', async () => {
+// ============================================================================
+// Test 8: Newly implemented sub-routes: Flashcards, Research (sources/notes), Notifications (read-all)
+// ============================================================================
+
+test('8. Newly implemented sub-routes: Flashcards, Research (sources/notes), Notifications (read-all)', async () => {
   const deckCardsRoute = require(path.join(srcRoot, 'app/api/flashcards/decks/[id]/cards/route.ts'))
-  const projTasksRoute = require(path.join(srcRoot, 'app/api/projects/[id]/tasks/route.ts'))
-  const projMilestonesRoute = require(path.join(srcRoot, 'app/api/projects/[id]/milestones/route.ts'))
-  const projMembersRoute = require(path.join(srcRoot, 'app/api/projects/[id]/members/route.ts'))
   const nbSourcesRoute = require(path.join(srcRoot, 'app/api/research/notebooks/[id]/sources/route.ts'))
   const nbNotesRoute = require(path.join(srcRoot, 'app/api/research/notebooks/[id]/notes/route.ts'))
   const notifReadAllRoute = require(path.join(srcRoot, 'app/api/notifications/read-all/route.ts'))
@@ -1120,28 +1082,6 @@ test('8. Newly implemented sub-routes: Flashcards, Projects (tasks/milestones/me
   )
   assert.equal(addCardRes.status, 200)
   assert.equal(addCardRes.body.card.back, 'O(VE)')
-
-  // Project tasks, milestones, members
-  const addTaskRes = await projTasksRoute.POST(
-    { json: async () => ({ title: 'Calibrate LiDAR sensor', priority: 2 }) },
-    { params: Promise.resolve({ id: 'proj_1' }) }
-  )
-  assert.equal(addTaskRes.status, 200)
-  assert.equal(addTaskRes.body.task.title, 'Calibrate LiDAR sensor')
-
-  const addMsRes = await projMilestonesRoute.POST(
-    { json: async () => ({ title: 'Prototype Demo', dueDate: '2026-12-01' }) },
-    { params: Promise.resolve({ id: 'proj_1' }) }
-  )
-  assert.equal(addMsRes.status, 200)
-  assert.equal(addMsRes.body.milestone.title, 'Prototype Demo')
-
-  const addMemRes = await projMembersRoute.POST(
-    { json: async () => ({ email: 'teammate@alex.edu', role: 'MEMBER' }) },
-    { params: Promise.resolve({ id: 'proj_1' }) }
-  )
-  assert.equal(addMemRes.status, 200)
-  assert.equal(addMemRes.body.member.user.firstName, 'Diya')
 
   // Research notebook sources & notes
   const sourcesRes = await nbSourcesRoute.GET({}, { params: Promise.resolve({ id: 'nb_1' }) })
@@ -1230,13 +1170,11 @@ test('10. Frontend pages & components compilation and contract verification', ()
     'app/(dashboard)/dashboard/admin-dashboard.tsx',
     'app/(dashboard)/assistant/page.tsx',
     'components/rag/rag-chat.tsx',
-    'app/(dashboard)/assignments/page.tsx',
     'app/(dashboard)/document-studio/page.tsx',
     'app/(dashboard)/solution-generator/page.tsx',
     'app/(dashboard)/assessments/page.tsx',
     'app/(dashboard)/settings/page.tsx',
     'app/(dashboard)/study-studio/page.tsx',
-    'app/(dashboard)/projects/page.tsx',
     'app/(dashboard)/research/page.tsx',
     'app/(dashboard)/notifications/page.tsx',
     'app/(dashboard)/attendance/page.tsx',

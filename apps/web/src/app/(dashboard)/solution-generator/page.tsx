@@ -30,6 +30,7 @@ import {
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
+import { FormulaRenderer, FormulaList } from "@/components/FormulaRenderer"
 
 interface Document {
   id: string
@@ -509,11 +510,11 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
                             <h4 className="font-medium mb-2 flex items-center gap-1">
                               <LayoutTemplate className="h-4 w-4" /> Formulas
                             </h4>
-                            <ul className="list-disc list-inside space-y-1 text-sm font-mono">
-                              {generatedSolution.formulas.map((f, i) => (
-                                <li key={i}>{f}</li>
-                              ))}
-                            </ul>
+                            <FormulaList 
+                              formulas={generatedSolution.formulas} 
+                              displayMode={true}
+                              itemClassName="mb-2"
+                            />
                           </div>
                         )}
 

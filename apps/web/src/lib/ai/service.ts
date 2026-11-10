@@ -426,7 +426,7 @@ export function getAIRequestTimeoutMs(taskType: AITaskType = 'chat'): number {
   
   // Structured output tasks need more time
   if (taskType === 'structured') {
-    return Math.max(baseTimeout, 90000)
+    return Math.max(baseTimeout, 120000)
   }
   return baseTimeout
 }
@@ -434,16 +434,16 @@ export function getAIRequestTimeoutMs(taskType: AITaskType = 'chat'): number {
 /**
  * Returns the total deadline budget for an AI operation including retries.
  * Can be overridden by AI_TOTAL_TIMEOUT_MS environment variable.
- * Default: 120000ms (120 seconds) - allows multiple retries for slow providers.
+ * Default: 180000ms (180 seconds) - allows multiple retries for slow providers.
  * If set to 0 or negative, no total deadline is enforced (uses per-attempt only).
  */
 export function getAITotalTimeoutMs(taskType: AITaskType = 'chat'): number {
   const parsed = Number(process.env.AI_TOTAL_TIMEOUT_MS)
-  const baseTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 120000
+  const baseTimeout = Number.isFinite(parsed) && parsed > 0 ? parsed : 180000
   
   // Structured output tasks need more time
   if (taskType === 'structured') {
-    return Math.max(baseTimeout, 180000)
+    return Math.max(baseTimeout, 300000)
   }
   return baseTimeout
 }
@@ -1163,27 +1163,79 @@ export interface StructuredOutputInput<T> {
 
 export function extractJsonFromModelOutput(rawText: string): any {
   const trimmed = rawText.trim()
+  
   // Strip ```json ... ``` fences if present
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fencedMatch ? fencedMatch[1].trim() : trimmed
+  let candidate = fencedMatch ? fencedMatch[1].trim() : trimmed
 
+  // Try direct parse first
   try {
     return JSON.parse(candidate)
   } catch {
-    // Try locating the outermost JSON object or array
-    const objStart = candidate.indexOf('{')
-    const objEnd = candidate.lastIndexOf('}')
-    const arrStart = candidate.indexOf('[')
-    const arrEnd = candidate.lastIndexOf(']')
+    // Try to clean up common issues
+    candidate = cleanJsonCandidate(candidate)
+    
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      // Try locating the outermost JSON object or array
+      const objStart = candidate.indexOf('{')
+      const objEnd = candidate.lastIndexOf('}')
+      const arrStart = candidate.indexOf('[')
+      const arrEnd = candidate.lastIndexOf(']')
 
-    if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
-      return JSON.parse(candidate.slice(objStart, objEnd + 1))
+      if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
+        const jsonStr = candidate.slice(objStart, objEnd + 1)
+        try {
+          return JSON.parse(cleanJsonCandidate(jsonStr))
+        } catch {
+          // Continue to array attempt
+        }
+      }
+      if (arrStart !== -1 && arrEnd > arrStart) {
+        const jsonStr = candidate.slice(arrStart, arrEnd + 1)
+        try {
+          return JSON.parse(cleanJsonCandidate(jsonStr))
+        } catch {
+          // Continue to throw
+        }
+      }
+      throw new Error('Response did not contain valid JSON')
     }
-    if (arrStart !== -1 && arrEnd > arrStart) {
-      return JSON.parse(candidate.slice(arrStart, arrEnd + 1))
-    }
-    throw new Error('Response did not contain valid JSON')
   }
+}
+
+function cleanJsonCandidate(text: string): string {
+  let cleaned = text
+  
+  // Remove leading/trailing non-JSON text (explanatory text before/after JSON)
+  const firstBrace = cleaned.indexOf('{')
+  const firstBracket = cleaned.indexOf('[')
+  const firstJsonChar = firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket) ? firstBrace : firstBracket
+  if (firstJsonChar > 0) {
+    cleaned = cleaned.slice(firstJsonChar)
+  }
+  
+  const lastBrace = cleaned.lastIndexOf('}')
+  const lastBracket = cleaned.lastIndexOf(']')
+  const lastJsonChar = lastBrace !== -1 && (lastBracket === -1 || lastBrace > lastBracket) ? lastBrace : lastBracket
+  if (lastJsonChar !== -1 && lastJsonChar < cleaned.length - 1) {
+    cleaned = cleaned.slice(0, lastJsonChar + 1)
+  }
+  
+  // Fix common issues:
+  // 1. Unescaped control characters in strings
+  // 2. Trailing commas
+  // 3. Single quotes instead of double quotes (for simple cases)
+  cleaned = cleaned
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']')
+    // Fix newlines in strings
+    .replace(/"([^"]*)\n([^"]*)"/g, '"$1\\n$2"')
+    // Fix unescaped quotes in strings (basic attempt)
+    .replace(/:"([^"]*?)([^\\])"([^",}\]\s])/g, ':"$1$2\\"$3')
+  
+  return cleaned
 }
 
 export async function generateStructuredOutput<T = any>(
@@ -1198,6 +1250,13 @@ export async function generateStructuredOutput<T = any>(
 }> {
   const fullSystemPrompt = `${input.systemPrompt}\n\nYou MUST respond with valid JSON only (no markdown prose outside JSON) matching this schema:\n${input.schemaDescription}`
 
+  // Increase maxTokens for providers known to produce verbose output (Nemotron, etc.)
+  let maxTokens = input.maxTokens ?? 3000
+  const providerUpper = (input.provider || '').toUpperCase()
+  if (providerUpper === 'NVIDIA_NEMOTRON' || providerUpper === 'NEMOTRON') {
+    maxTokens = Math.max(maxTokens, 8000)
+  }
+
   const result = await generateText({
     userId: input.userId,
     prompt: input.prompt,
@@ -1208,17 +1267,33 @@ export async function generateStructuredOutput<T = any>(
     apiKey: input.apiKey,
     baseUrl: input.baseUrl,
     temperature: input.temperature ?? 0.2,
-    maxTokens: input.maxTokens ?? 3000,
+    maxTokens,
     taskType: 'structured',
     jsonMode: true,
   })
 
   let parsed: any
-  try {
-    parsed = extractJsonFromModelOutput(result.text)
-  } catch (err) {
+  let parseError: Error | null = null
+  
+  // Try parsing with retries for malformed JSON
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      parsed = extractJsonFromModelOutput(result.text)
+      parseError = null
+      break
+    } catch (err) {
+      parseError = err instanceof Error ? err : new Error(String(err))
+      if (attempt < 2) {
+        // On retry, we could try to fix the JSON, but for now just retry with same output
+        // In a more sophisticated version, we'd send the error back to the model
+        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)))
+      }
+    }
+  }
+  
+  if (parseError) {
     throw new AIServiceError(
-      `Failed to parse structured JSON output from ${result.provider} (${result.model}): ${err instanceof Error ? err.message : 'Invalid JSON'}`,
+      `Failed to parse structured JSON output from ${result.provider} (${result.model}) after retries: ${parseError.message}`,
       502,
       'INVALID_STRUCTURED_OUTPUT',
       result.provider,

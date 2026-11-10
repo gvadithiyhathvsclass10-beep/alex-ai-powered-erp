@@ -225,7 +225,6 @@ export function AssistantRightPanel({
                 <QuickLink icon={Brain} label="Study Studio" href="/dashboard/study-studio" onClick={() => handleNavigate("/dashboard/study-studio")} />
                 <QuickLink icon={FlaskConical} label="Research Lab" href="/dashboard/research" onClick={() => handleNavigate("/dashboard/research")} />
                 <QuickLink icon={Calendar} label="Smart Planner" href="/dashboard/planner" onClick={() => handleNavigate("/dashboard/planner")} />
-                <QuickLink icon={FolderKanban} label="Projects" href="/dashboard/projects" onClick={() => handleNavigate("/dashboard/projects")} />
                 <QuickLink icon={Book} label="Subjects" href="/dashboard/subjects" onClick={() => handleNavigate("/dashboard/subjects")} />
               </div>
             </div>
