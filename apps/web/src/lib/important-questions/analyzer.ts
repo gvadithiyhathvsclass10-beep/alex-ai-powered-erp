@@ -102,6 +102,7 @@ export async function analyzeQuestionPapers(
     subjectName?: string
     semester?: string
     academicYear?: string
+    additionalInstructions?: string
   } = {}
 ): Promise<AnalysisResult> {
   const allQuestions = papers.flatMap(p => p.questions)
@@ -276,6 +277,45 @@ export async function analyzeQuestionPapers(
     }
     return b.frequency - a.frequency
   })
+
+  // AI-powered analysis with additional instructions (if provided)
+  if (options.additionalInstructions && options.additionalInstructions.trim()) {
+    try {
+      const aiAnalysis = await performAIAnalysis({
+        papers,
+        allQuestions,
+        priorityItems: priorityItems.slice(0, 30), // Top 30 items
+        additionalInstructions: options.additionalInstructions,
+        subjectName: options.subjectName,
+      }, userId)
+      
+      // Merge AI-generated priority items with existing ones
+      if (aiAnalysis && aiAnalysis.enhancedItems.length > 0) {
+        // Add new items from AI analysis
+        for (const aiItem of aiAnalysis.enhancedItems) {
+          // Check if similar item already exists
+          const exists = priorityItems.some(p => 
+            normalizeQuestionText(p.questionText) === normalizeQuestionText(aiItem.questionText)
+          )
+          if (!exists) {
+            priorityItems.push(aiItem)
+          }
+        }
+        
+        // Re-sort after adding AI items
+        priorityItems.sort((a, b) => {
+          const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+          if (priorityOrder[b.priority] !== priorityOrder[a.priority]) {
+            return priorityOrder[b.priority] - priorityOrder[a.priority]
+          }
+          return b.frequency - a.frequency
+        })
+      }
+    } catch (aiError) {
+      console.warn('[ImportantQuestions] AI analysis with additional instructions failed:', aiError)
+      // Continue without AI enhancement
+    }
+  }
 
   // 5. Web Research Integration (if enabled)
   let webResearch: WebResearchResult | undefined
@@ -482,4 +522,166 @@ function cosineSimilarity(a: number[], b: number[]): number {
   }
   if (normA === 0 || normB === 0) return 0
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+/**
+ * Perform AI-powered analysis with additional user instructions
+ */
+async function performAIAnalysis(
+  params: {
+    papers: QuestionPaperWithQuestions[]
+    allQuestions: ExtractedQuestion[]
+    priorityItems: PriorityItem[]
+    additionalInstructions: string
+    subjectName?: string
+  },
+  userId: string
+): Promise<{ enhancedItems: PriorityItem[] } | null> {
+  try {
+    const { generateStructuredOutput } = await import('@/lib/ai/service')
+    
+    // Prepare context from papers and questions
+    const paperContext = params.papers.map(p => 
+      `${p.title} (${p.paperType}${p.examinationYear ? `, ${p.examinationYear}` : ''}${p.marks ? `, ${p.marks} marks` : ''}): ${p.questions.length} questions`
+    ).join('\n')
+    
+    const questionSummary = params.allQuestions
+      .slice(0, 50)
+      .map(q => `${q.questionNumber}: ${q.text.slice(0, 150)} (Marks: ${q.marks || '?'}, Unit: ${q.unit || '?'}, Topic: ${q.topic || '?'})`)
+      .join('\n')
+    
+    const priorityContext = params.priorityItems
+      .slice(0, 15)
+      .map(p => `[${p.priority}] ${p.concept} - ${p.reason} (Freq: ${p.frequency}, Papers: ${p.papersCount})`)
+      .join('\n')
+
+    const result = await generateStructuredOutput<{
+      enhancedItems: Array<{
+        questionId: string
+        questionText: string
+        concept: string
+        priority: 'HIGH' | 'MEDIUM' | 'LOW'
+        reason: string
+        frequency: number
+        papersCount: number
+        totalMarks: number
+        avgMarks: number
+        firstYear: number | null
+        lastYear: number | null
+        units: string[]
+        topics: string[]
+        concepts: string[]
+        questionTypes: string[]
+        isExactRepeat: boolean
+        matchedQuestionIds: string[]
+        recencyScore: number
+        marksWeight: number
+        unitRelevance: number
+        source: 'ai_enhanced'
+      }>
+    }>({
+      userId,
+      provider: undefined,
+      model: undefined,
+      systemPrompt: `You are ALEX, an expert academic question paper analyzer. You have access to:
+1. Uploaded question papers with extracted questions
+2. Statistical analysis of question patterns (frequency, repeats, distributions)
+3. User's additional instructions for focused analysis
+
+Your task: Generate ADDITIONAL important question concepts that address the user's specific instructions, based on the uploaded papers. Do NOT duplicate existing priority items.
+
+Guidelines:
+- Focus on the user's additional instructions (e.g., "focus on 10-mark questions", "prioritize Unit 3", "find repeated concepts")
+- Generate NEW concept entries that complement the statistical analysis
+- Each entry should have a clear question/concept text, priority, and reason
+- The reason should explain how the user's instructions influenced this finding
+- Use 'ai_enhanced' as source type
+- Limit to 5-10 high-quality new items`,
+      schemaDescription: `{
+  "enhancedItems": [
+    {
+      "questionId": "ai-1",
+      "questionText": "Detailed question or concept description",
+      "concept": "Concept name",
+      "priority": "HIGH",
+      "reason": "Explanation of why this matches user's instructions",
+      "frequency": 1,
+      "papersCount": 1,
+      "totalMarks": 10,
+      "avgMarks": 10,
+      "firstYear": 2023,
+      "lastYear": 2023,
+      "units": ["Unit 3"],
+      "topics": ["Topic name"],
+      "concepts": ["Concept name"],
+      "questionTypes": ["LONG_ANSWER"],
+      "isExactRepeat": false,
+      "matchedQuestionIds": [],
+      "recencyScore": 0.8,
+      "marksWeight": 0.5,
+      "unitRelevance": 1,
+      "source": "ai_enhanced"
+    }
+  ]
+}`,
+      prompt: `Subject: ${params.subjectName || 'General'}
+Papers Analyzed: ${params.papers.length}
+Total Questions: ${params.allQuestions.length}
+
+PAPERS:
+${paperContext}
+
+EXTRACTED QUESTIONS (sample):
+${questionSummary}
+
+EXISTING PRIORITY ITEMS (from statistical analysis):
+${priorityContext}
+
+USER'S ADDITIONAL INSTRUCTIONS:
+${params.additionalInstructions}
+
+Generate additional priority items that specifically address the user's instructions. For example:
+- If user wants "focus on 10-mark questions", identify high-mark concepts
+- If user wants "prioritize Unit 3", find Unit 3 concepts with evidence
+- If user wants "repeated concepts across papers", find cross-paper patterns
+- If user wants "likely next exam questions", identify trends and gaps
+
+Return up to 10 new items with source: "ai_enhanced"`,
+      validate: (parsed) => {
+        if (!parsed || !Array.isArray(parsed.enhancedItems)) {
+          throw new Error('Model did not return valid enhancedItems array')
+        }
+        return {
+          enhancedItems: parsed.enhancedItems.map((item: any) => ({
+            questionId: String(item.questionId || `ai-${Date.now()}-${Math.random()}`).trim(),
+            questionText: String(item.questionText || '').trim(),
+            concept: String(item.concept || '').trim(),
+            priority: ['HIGH', 'MEDIUM', 'LOW'].includes(item.priority) ? item.priority : 'MEDIUM',
+            reason: String(item.reason || '').trim(),
+            frequency: typeof item.frequency === 'number' ? item.frequency : 1,
+            papersCount: typeof item.papersCount === 'number' ? item.papersCount : 1,
+            totalMarks: typeof item.totalMarks === 'number' ? item.totalMarks : 0,
+            avgMarks: typeof item.avgMarks === 'number' ? item.avgMarks : 0,
+            firstYear: typeof item.firstYear === 'number' ? item.firstYear : null,
+            lastYear: typeof item.lastYear === 'number' ? item.lastYear : null,
+            units: Array.isArray(item.units) ? item.units.map(String) : [],
+            topics: Array.isArray(item.topics) ? item.topics.map(String) : [],
+            concepts: Array.isArray(item.concepts) ? item.concepts.map(String) : [],
+            questionTypes: Array.isArray(item.questionTypes) ? item.questionTypes.map(String) : [],
+            isExactRepeat: Boolean(item.isExactRepeat),
+            matchedQuestionIds: Array.isArray(item.matchedQuestionIds) ? item.matchedQuestionIds.map(String) : [],
+            recencyScore: typeof item.recencyScore === 'number' ? item.recencyScore : 0.5,
+            marksWeight: typeof item.marksWeight === 'number' ? item.marksWeight : 0.5,
+            unitRelevance: typeof item.unitRelevance === 'number' ? item.unitRelevance : 0.5,
+            source: 'ai_enhanced' as const,
+          })).filter((item: any) => item.questionText.length > 0 && item.concept.length > 0),
+        }
+      },
+    })
+    
+    return result.data
+  } catch (error) {
+    console.warn('[ImportantQuestions] AI analysis failed:', error)
+    return null
+  }
 }

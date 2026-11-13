@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/utils"
@@ -19,7 +20,7 @@ import {
   Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, ChevronRight, ChevronLeft, Settings, Search, FlaskConical, HelpCircle, Link, Trash2, Link2, ListMinus, Filter, Trophy, Archive, Trophy as TrophyIcon, ChevronDown, Upload, CheckCircle2 as CheckCircleIcon, Loader2, X, Paperclip, Eye, Download as DownloadIcon,
 } from "lucide-react"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { EmptyState, LoadingState } from "@/app/(dashboard)/study-studio/StudyStudioContent"
+import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 // Types
 interface QuestionPaper {
@@ -130,8 +131,6 @@ export function ImportantQuestionsTab({
   
   // Step 1: Subject
   const [iqSubjectId, setIqSubjectId] = React.useState("")
-  const [iqNewSubjectName, setIqNewSubjectName] = React.useState("")
-  const [iqNewSubjectCode, setIqNewSubjectCode] = React.useState("")
   const [iqSemester, setIqSemester] = React.useState("")
   const [iqAcademicYear, setIqAcademicYear] = React.useState("")
   
@@ -141,6 +140,7 @@ export function ImportantQuestionsTab({
   const [iqPaperType, setIqPaperType] = React.useState<'QB' | 'PYQ'>('PYQ')
   const [iqExaminationYear, setIqExaminationYear] = React.useState("")
   const [iqTotalMarks, setIqTotalMarks] = React.useState("")
+  const [iqAdditionalInstructions, setIqAdditionalInstructions] = React.useState("")
   const [iqUploadingFiles, setIqUploadingFiles] = React.useState(false)
   const [iqProcessingStatus, setIqProcessingStatus] = React.useState<ProcessingStatus[]>([])
   const [iqReadyPapers, setIqReadyPapers] = React.useState<QuestionPaper[]>([])
@@ -165,10 +165,9 @@ export function ImportantQuestionsTab({
 
   // Subject selection logic
   const handleIqStep1Next = () => {
-    if (!iqSubjectId && iqNewSubjectName && iqNewSubjectCode) {
-      const newSubjectId = `new-${Date.now()}`
-      setIqSubjectId(newSubjectId)
-      toast({ title: "Subject created (mock)", description: "In production, this would call the subject creation API" })
+    if (!iqSubjectId) {
+      toast({ title: "Please select a subject", description: "You must select an existing subject to continue", variant: 'destructive' })
+      return
     }
     setIqStep(2)
   }
@@ -227,6 +226,7 @@ export function ImportantQuestionsTab({
         if (iqAcademicYear) formData.append('academicYear', iqAcademicYear)
         if (iqExaminationYear) formData.append('examinationYear', iqExaminationYear)
         if (iqTotalMarks) formData.append('marks', iqTotalMarks)
+        if (iqAdditionalInstructions) formData.append('additionalInstructions', iqAdditionalInstructions)
         
         const res = await fetch('/api/important-questions/papers', {
           method: 'POST',
@@ -307,6 +307,7 @@ export function ImportantQuestionsTab({
           subjectName: subject?.name,
           semester: iqSemester || undefined,
           academicYear: iqAcademicYear || undefined,
+          additionalInstructions: iqAdditionalInstructions || undefined,
         }),
       })
       
@@ -409,7 +410,6 @@ export function ImportantQuestionsTab({
                 <Select value={iqSubjectId} onValueChange={setIqSubjectId}>
                   <SelectTrigger><SelectValue placeholder="Select an existing subject" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-- Create New Subject --</SelectItem>
                     {iqSubjects.map((subj: Subject) => (
                       <SelectItem key={subj.id} value={subj.id}>
                         {subj.code} - {subj.name} {subj.semester && `(${subj.semester})`}
@@ -417,6 +417,9 @@ export function ImportantQuestionsTab({
                     ))}
                   </SelectContent>
                 </Select>
+                {iqSubjects.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No subjects found. Please contact your lecturer to create subjects.</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Semester (optional)</Label>
@@ -428,33 +431,10 @@ export function ImportantQuestionsTab({
               </div>
             </div>
             
-            {/* New Subject Form */}
-            {!iqSubjectId && (
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Create New Subject</h4>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Subject Name *</Label>
-                    <Input placeholder="e.g., Engineering Physics" value={iqNewSubjectName} onChange={e => setIqNewSubjectName(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Subject Code *</Label>
-                    <Input placeholder="e.g., PHY101" value={iqNewSubjectCode} onChange={e => setIqNewSubjectCode(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Semester</Label>
-                    <Input placeholder="e.g., Semester 1" value={iqSemester} onChange={e => setIqSemester(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Academic Year</Label>
-                    <Input placeholder="e.g., 2023-2024" value={iqAcademicYear} onChange={e => setIqAcademicYear(e.target.value)} />
-                  </div>
-                </div>
-              )}
             <div className="flex justify-end pt-4">
               <Button 
                 onClick={handleIqStep1Next} 
-                disabled={!iqSubjectId && (!iqNewSubjectName || !iqNewSubjectCode)}
+                disabled={!iqSubjectId}
               >
                 Next: Upload Papers <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
@@ -557,6 +537,24 @@ export function ImportantQuestionsTab({
                   <Label>Total Marks</Label>
                   <Input type="number" placeholder="e.g., 100" value={iqTotalMarks} onChange={e => setIqTotalMarks(e.target.value)} />
                 </div>
+              </div>
+
+              {/* Additional Instructions (Optional) */}
+              <div className="pt-4 border-t">
+                <Label className="flex items-center gap-2">
+                  <span>Additional Instructions (Optional)</span>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </Label>
+                <Textarea
+                  placeholder="e.g., Focus primarily on questions that repeatedly appear in previous examinations. Give more importance to 10-mark and 15-mark questions. Prioritize Unit 3 and Unit 4. Identify questions that are likely to appear in the next examination."
+                  value={iqAdditionalInstructions}
+                  onChange={e => setIqAdditionalInstructions(e.target.value)}
+                  rows={3}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Guide the AI analysis with specific instructions. Examples: focus on repeated questions, prioritize high-mark questions, target specific units, etc.
+                </p>
               </div>
 
               <div className="flex justify-between pt-4 border-t">
@@ -1031,7 +1029,5 @@ export function ImportantQuestionsTab({
               </div>
             )}
         </div>
-      )}
-    </div>
   )
 }

@@ -25,6 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
 import { ImportantQuestionsTab } from "@/components/study-studio/ImportantQuestionsTab"
+import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
   id: string
@@ -330,50 +331,9 @@ function DocumentSelector({
   )
 }
 
-// Loading State Component
-function LoadingState({ message = "Processing...", subtitle }: { message?: string; subtitle?: string }) {
-  return (
-    <Card className="animate-in slide-in-from-bottom-2">
-      <CardContent className="flex flex-col items-center justify-center py-12">
-        <div className="text-center space-y-3">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-          <p className="font-medium">{message}</p>
-          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
-// Empty State Component
-function EmptyState({ 
-  icon: Icon, 
-  title, 
-  description, 
-  action,
-  className 
-}: { 
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  description: string
-  action?: React.ReactNode
-  className?: string
-}) {
-  return (
-    <Card className={cn("text-center py-12", className)}>
-      <CardContent className="flex flex-col items-center gap-4">
-        <div className="p-4 rounded-full bg-muted">
-          <Icon className="h-10 w-10 text-muted-foreground" />
-        </div>
-        <div>
-          <h3 className="font-semibold text-lg">{title}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{description}</p>
-        </div>
-        {action}
-      </CardContent>
-    </Card>
-  )
-}
+
+
 
 // Generation Card Component
 function GenerationCard({ 

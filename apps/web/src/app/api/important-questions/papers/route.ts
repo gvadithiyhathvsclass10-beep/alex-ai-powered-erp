@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { serializeBigInt } from '@/lib/prisma'
+import { uploadFile } from '@/lib/storage/client'
 
 export async function GET() {
   try {
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     const academicYear = formData.get('academicYear') as string | null
     const examinationYear = formData.get('examinationYear') as string | null
     const marks = formData.get('marks') as string | null
+    const additionalInstructions = formData.get('additionalInstructions') as string | null
 
     // For multiple files, use the first file's title as base or require individual titles
     // For now, we'll create papers with indexed titles if multiple files
@@ -69,6 +71,25 @@ export async function POST(request: Request) {
       )
     }
 
+    // Validate file types
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain', 'text/markdown']
+    for (const currentFile of allFiles) {
+      if (!allowedTypes.includes(currentFile.type)) {
+        return NextResponse.json(
+          { error: `Unsupported file type: ${currentFile.type}. Supported: PDF, DOCX, DOC, TXT, MD` },
+          { status: 400 }
+        )
+      }
+      // Check file size (50MB limit)
+      const maxSize = 50 * 1024 * 1024
+      if (currentFile.size > maxSize) {
+        return NextResponse.json(
+          { error: `File ${currentFile.name} exceeds 50MB limit` },
+          { status: 400 }
+        )
+      }
+    }
+
     const createdPapers = []
 
     for (let i = 0; i < allFiles.length; i++) {
@@ -80,7 +101,18 @@ export async function POST(request: Request) {
       const buffer = await currentFile.arrayBuffer()
       const fileName = `${Date.now()}-${i}-${currentFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
       const storagePath = `important-questions/${user.id}/${fileName}`
-      const base64Data = Buffer.from(buffer).toString('base64')
+      const fileBuffer = Buffer.from(buffer)
+
+      // Upload to storage (S3/R2 or local)
+      try {
+        await uploadFile('documents', storagePath, fileBuffer, { contentType: currentFile.type })
+      } catch (storageError) {
+        console.error('[ImportantQuestions] Storage upload error:', storageError)
+        return NextResponse.json(
+          { error: 'Failed to upload file to storage' },
+          { status: 500 }
+        )
+      }
 
       const paper = await prisma.questionPaper.create({
         data: {
@@ -100,8 +132,8 @@ export async function POST(request: Request) {
           status: 'UPLOADED',
           pageCount: null,
           metadata: {
-            base64Data,
             originalName: currentFile.name,
+            additionalInstructions: additionalInstructions || null,
           },
         },
         include: {

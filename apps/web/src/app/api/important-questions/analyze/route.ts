@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireAuth()
     const body = await request.json()
-    const { paperIds, subjectId, enableWebResearch, subjectName, semester, academicYear } = body
+    const { paperIds, subjectId, enableWebResearch, subjectName, semester, academicYear, additionalInstructions } = body
 
     if (!paperIds || !Array.isArray(paperIds) || paperIds.length === 0) {
       return NextResponse.json(
@@ -30,6 +30,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No valid papers found' }, { status: 404 })
     }
 
+    // Collect additional instructions from papers
+    const paperInstructions = papers
+      .map(p => p.metadata?.additionalInstructions)
+      .filter(Boolean)
+      .join('\n\n')
+    
+    const combinedInstructions = [additionalInstructions, paperInstructions]
+      .filter(Boolean)
+      .join('\n\n')
+
     // Perform comprehensive analysis
     const analysisResult = await analyzeQuestionPapers(
       papers as any,
@@ -40,6 +50,7 @@ export async function POST(request: Request) {
         subjectName: subjectName || papers[0]?.subject?.name,
         semester,
         academicYear,
+        additionalInstructions: combinedInstructions || undefined,
       }
     )
 
