@@ -29,8 +29,15 @@ export async function createAnalysis(
 
   console.log('[ImportantQuestionsV2] Starting analysis for', docs.length, 'documents');
 
-  // Extract text from each document
-  const extracted = await Promise.all(docs.map(async (d, index) => {
+  // Extract text from each document - handle failures independently
+  const extractionResults: Array<{
+    document: SourceDocument;
+    extracted?: ExtractedDocument;
+    error?: string;
+  }> = [];
+
+  for (let index = 0; index < docs.length; index++) {
+    const d = docs[index];
     console.log(`[ImportantQuestionsV2] Extracting document ${index + 1}/${docs.length}: ${d.fileName}`);
     try {
       const bytes = await deps.storage.get(d.storageKey);
@@ -38,37 +45,57 @@ export async function createAnalysis(
         bytes, 
         fileName: d.fileName, 
         mimeType: d.mimeType,
-        documentId: d.id  // Pass the actual document ID for provenance
+        documentId: d.id
       });
       console.log(`[ImportantQuestionsV2] Extracted ${extracted.pages.length} pages from ${d.fileName}`);
-      return extracted;
+      extractionResults.push({ document: d, extracted });
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[ImportantQuestionsV2] Failed to extract document ${d.fileName}:`, error);
-      throw new Error(`Failed to extract document ${d.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      extractionResults.push({ document: d, error: errorMsg });
     }
-  }));
-
-  // Parse questions from extracted text
-  const questions = extracted.flatMap(x => parseQuestions(x.pages, x.document));
-  console.log(`[ImportantQuestionsV2] Parsed ${questions.length} total questions`);
-
-  if (!questions.length) {
-    throw new Error('No questions could be extracted. Check document quality or OCR support, then try again.');
   }
 
-  // Run V2 analysis
-  console.log('[ImportantQuestionsV2] Running AI analysis...');
+  // Filter successful extractions
+  const successfulExtractions = extractionResults.filter(r => r.extracted);
+  const failedExtractions = extractionResults.filter(r => r.error);
+
+  if (failedExtractions.length > 0) {
+    console.warn('[ImportantQuestionsV2] Some documents failed extraction:', failedExtractions.map(f => `${f.document.fileName}: ${f.error}`));
+  }
+
+  if (!successfulExtractions.length) {
+    throw new Error('No documents could be extracted. Check document quality or OCR support, then try again.');
+  }
+
+  // Parse questions from successfully extracted text
+  const questions = successfulExtractions.flatMap(x => parseQuestions(x.extracted!.pages, x.extracted!.document));
+  console.log(`[ImportantQuestionsV2] Parsed ${questions.length} total questions from ${successfulExtractions.length} documents`);
+
+  if (!questions.length) {
+    throw new Error('No questions could be extracted from the uploaded documents. Check document quality or OCR support, then try again.');
+  }
+
+  // Run V2 analysis (deterministic + optional AI enrichment)
+  console.log('[ImportantQuestionsV2] Running analysis...');
   const result = await analyzeQuestions(
     {
       id: crypto.randomUUID(),
       title: request.title,
-      documents: extracted.map(x => x.document),
+      documents: successfulExtractions.map(x => x.extracted!.document),
       questions,
       instructions: request.instructions,
     },
     deps.ai,
     request
   );
+
+  // Add extraction warnings to limitations
+  if (failedExtractions.length > 0) {
+    result.limitations.push(
+      `${failedExtractions.length} document(s) could not be processed: ${failedExtractions.map(f => f.document.fileName).join(', ')}`
+    );
+  }
 
   console.log('[ImportantQuestionsV2] Analysis complete, saving...');
 
@@ -77,7 +104,7 @@ export async function createAnalysis(
     ownerId: user.id,
     title: result.title,
     result,
-    documentIds: request.documentIds,
+    documentIds: successfulExtractions.map(x => x.document.id),
   });
 
   console.log('[ImportantQuestionsV2] Analysis saved with ID:', saved.id);

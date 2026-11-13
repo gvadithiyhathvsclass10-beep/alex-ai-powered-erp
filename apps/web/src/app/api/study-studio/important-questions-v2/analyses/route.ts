@@ -16,7 +16,6 @@ export async function GET() {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Analyses GET error:', error);
-    // Log full error details for debugging
     if (error instanceof Error) {
       console.error('[ImportantQuestionsV2] Analyses GET error stack:', error.stack);
       console.error('[ImportantQuestionsV2] Analyses GET error name:', error.name);
@@ -64,6 +63,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: 'NO_QUESTIONS', message: error.message } },
         { status: 400 }
+      );
+    }
+    if (error instanceof Error && error.message.includes('could not be extracted')) {
+      return NextResponse.json(
+        { error: { code: 'EXTRACTION_FAILED', message: error.message } },
+        { status: 422 }
       );
     }
     console.error('[ImportantQuestionsV2] Analysis POST error:', error);

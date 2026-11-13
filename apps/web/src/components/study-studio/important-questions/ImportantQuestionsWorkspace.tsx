@@ -422,11 +422,10 @@ export function ImportantQuestionsWorkspace({
 
     setGeneratingAnalysis(true)
     setGenerationError(null)
-    setGenerationProgress({ stage: 'Uploading files...', progress: 10, message: 'Starting analysis' })
+    setGenerationProgress({ stage: 'Retrieving documents...', progress: 10, message: 'Starting analysis' })
 
     try {
       const documentIds = completedFiles.map(f => f.documentId!).filter(Boolean)
-      const subject = iqSubjects.find(s => s.id === "") // No subject required
 
       const res = await fetch('/api/study-studio/important-questions-v2/analyses', {
         method: 'POST',
@@ -438,11 +437,13 @@ export function ImportantQuestionsWorkspace({
         }),
       })
 
-      setGenerationProgress({ stage: 'Analyzing questions...', progress: 50, message: 'Running AI analysis' })
+      setGenerationProgress({ stage: 'Extracting & analyzing questions...', progress: 50, message: 'Processing documents' })
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error?.message || 'Analysis failed')
+        // Use detailed error message from API
+        const errorMessage = err.error?.detail || err.error?.message || 'Analysis failed'
+        throw new Error(errorMessage)
       }
 
       const data = await res.json()
@@ -456,10 +457,28 @@ export function ImportantQuestionsWorkspace({
       setSelectedAnalysis(newAnalysis)
       setView('results')
 
-      toast({ title: "Analysis complete", description: "Important questions report generated successfully" })
+      // Show warnings if any
+      if (newAnalysis.limitations && newAnalysis.limitations.length > 0) {
+        const warnings = newAnalysis.limitations.filter(l => 
+          l.includes('could not be processed') || l.includes('OCR') || l.includes('AI')
+        )
+        if (warnings.length > 0) {
+          toast({ 
+            title: "Analysis complete with warnings", 
+            description: warnings.join('; '),
+            variant: 'default'
+          })
+        } else {
+          toast({ title: "Analysis complete", description: "Important questions report generated successfully" })
+        }
+      } else {
+        toast({ title: "Analysis complete", description: "Important questions report generated successfully" })
+      }
     } catch (err) {
-      setGenerationError(err instanceof Error ? err.message : 'Analysis failed')
-      toast({ title: "Analysis failed", description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+      // Use the detailed error message from the API
+      const errorMessage = err instanceof Error ? err.message : 'Analysis failed'
+      setGenerationError(errorMessage)
+      toast({ title: "Analysis failed", description: errorMessage, variant: 'destructive' })
     } finally {
       setGeneratingAnalysis(false)
       setGenerationProgress(null)
