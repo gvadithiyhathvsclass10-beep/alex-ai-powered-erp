@@ -2,6 +2,56 @@ import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { createImportantQuestionsDependencies } from '@/lib/study-studio/important-questions-v2';
 import { validateUpload, MAX_FILE_BYTES } from '@/lib/study-studio/important-questions-v2/types';
+import { deleteFile } from '@/lib/storage/client';
+
+export async function GET() {
+  try {
+    const user = await requireAuth();
+
+    const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
+    const docs = await deps.repository.listDocuments(user.id, []);
+    
+    // Note: listDocuments requires IDs, but we want all. Let's use a different approach
+    const { prisma } = await import('@/lib/prisma');
+    const papers = await prisma.questionPaper.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        fileName: true,
+        fileSize: true,
+        mimeType: true,
+        storagePath: true,
+        paperType: true,
+        subjectId: true,
+        semester: true,
+        unit: true,
+        academicYear: true,
+        examinationYear: true,
+        marks: true,
+        status: true,
+        pageCount: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        subject: { select: { id: true, name: true, code: true } },
+        _count: { select: { questions: true } },
+      },
+    });
+
+    return NextResponse.json({ papers });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+    }
+    console.error('[ImportantQuestionsV2] Documents GET error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents' } },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -40,34 +90,65 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse optional metadata
-    const paperType = (formData.get('paperType') as string) || 'QB';
-    const subjectId = (formData.get('subjectId') as string) || null;
-    const semester = (formData.get('semester') as string) || null;
-    const unit = (formData.get('unit') as string) || null;
-    const academicYear = (formData.get('academicYear') as string) || null;
-    const examinationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
-    const marks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+    // Parse shared metadata (defaults for all files)
+    const sharedPaperType = (formData.get('paperType') as string) || 'QB';
+    const sharedSubjectId = (formData.get('subjectId') as string) || null;
+    const sharedSemester = (formData.get('semester') as string) || null;
+    const sharedUnit = (formData.get('unit') as string) || null;
+    const sharedAcademicYear = (formData.get('academicYear') as string) || null;
+    const sharedExaminationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
+    const sharedMarks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+
+    // Parse per-file metadata overrides (format: file_0_title, file_0_paperType, etc.)
+    const perFileMetadata: Map<number, Record<string, string>> = new Map();
+    for (const [key, value] of formData.entries()) {
+      const match = key.match(/^file_(\d+)_(.+)$/);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        const field = match[2];
+        if (!perFileMetadata.has(index)) {
+          perFileMetadata.set(index, {});
+        }
+        perFileMetadata.get(index)![field] = value as string;
+      }
+    }
 
     // Create dependencies
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
 
     const results: Array<{ id: string; fileName: string; status: string; error?: string }> = [];
+    const storageKeys: string[] = [];
 
     // Process each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      let storageKey: string | null = null;
+      
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
 
         // Upload to storage
-        const { storageKey } = await deps.storage.put({
+        const storageResult = await deps.storage.put({
           ownerId: user.id,
           fileName: file.name,
           mimeType: file.type,
           bytes,
         });
+        storageKey = storageResult.storageKey;
+        storageKeys.push(storageKey);
 
-        // Create document record
+        // Get per-file metadata overrides
+        const fileMeta = perFileMetadata.get(i) || {};
+        
+        // Create document record with per-file metadata (falls back to shared)
+        const paperType = (fileMeta.paperType === 'QB' || fileMeta.paperType === 'PYQ') ? fileMeta.paperType : sharedPaperType;
+        const subjectId = fileMeta.subjectId || sharedSubjectId;
+        const semester = fileMeta.semester || sharedSemester;
+        const unit = fileMeta.unit || sharedUnit;
+        const academicYear = fileMeta.academicYear || sharedAcademicYear;
+        const examinationYear = fileMeta.examinationYear ? parseInt(fileMeta.examinationYear) : sharedExaminationYear;
+        const marks = fileMeta.marks ? parseInt(fileMeta.marks) : sharedMarks;
+
         const doc = await deps.repository.createDocument({
           ownerId: user.id,
           fileName: file.name,
@@ -86,6 +167,16 @@ export async function POST(request: Request) {
         results.push({ id: doc.id, fileName: file.name, status: 'uploaded' });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);
+        
+        // Cleanup storage if DB record creation failed
+        if (storageKey) {
+          try {
+            await deleteFile('documents', storageKey);
+          } catch (cleanupError) {
+            console.warn('[ImportantQuestionsV2] Storage cleanup failed:', cleanupError);
+          }
+        }
+        
         results.push({
           id: '',
           fileName: file.name,

@@ -2,7 +2,7 @@ import { DocumentType } from '@prisma/client'
 import { inflateRawSync, inflateSync } from 'node:zlib'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, unlink } from 'node:fs/promises'
+import { writeFile, unlink, mkdir, readdir, readFile, rmdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -638,7 +638,122 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<ExtractedConte
     return nativeResult
   }
 
+  // 4. Try OCR for scanned/image-based PDFs using pdftoppm + Tesseract
+  // This handles PDFs that have no extractable text (scanned documents)
+  const ocrResult = await extractTextFromScannedPDF(buffer)
+  if (ocrResult && ocrResult.text.trim()) {
+    return ocrResult
+  }
+
   throw new Error('Failed to extract readable text from PDF')
+}
+
+/**
+ * Extract text from scanned/image-based PDF using pdftoppm + Tesseract OCR
+ * Renders each PDF page to an image, then runs OCR on the images
+ */
+async function extractTextFromScannedPDF(buffer: Buffer): Promise<ExtractedContent | null> {
+  const tmpDir = path.join(os.tmpdir(), `alex-pdf-ocr-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const tmpPdfPath = path.join(tmpDir, 'input.pdf')
+  
+  try {
+    await mkdir(tmpDir, { recursive: true })
+    await writeFile(tmpPdfPath, buffer)
+    
+    // Use pdftoppm to render PDF pages to PNG images
+    // pdftoppm is installed in the Docker image (poppler-utils)
+    const { stdout: ppmOutput } = await execFileAsync('pdftoppm', [
+      '-png',           // Output PNG format
+      '-r', '300',      // 300 DPI for good OCR quality
+      tmpPdfPath,       // Input PDF
+      path.join(tmpDir, 'page') // Output prefix (will create page-1.png, page-2.png, etc.)
+    ], {
+      timeout: 60000,   // Longer timeout for OCR
+      maxBuffer: 50 * 1024 * 1024,
+    })
+    
+    // Find all generated page images
+    const pagesDir = tmpDir
+    const pageFiles = (await readdir(pagesDir))
+      .filter(f => f.startsWith('page-') && f.endsWith('.png'))
+      .sort((a, b) => {
+        const aNum = parseInt(a.match(/page-(\d+)\.png/)?.[1] || '0', 10)
+        const bNum = parseInt(b.match(/page-(\d+)\.png/)?.[1] || '0', 10)
+        return aNum - bNum
+      })
+    
+    if (pageFiles.length === 0) {
+      return null
+    }
+    
+    // Run Tesseract OCR on each page image
+    const pages: PageContent[] = []
+    let fullText = ''
+    
+    for (let i = 0; i < pageFiles.length; i++) {
+      const pageFile = pageFiles[i]
+      const pagePath = path.join(pagesDir, pageFile)
+      const pageBuffer = await readFile(pagePath)
+      
+      // Try Tesseract CLI first
+      let ocrText = ''
+      try {
+        const { stdout } = await execFileAsync('tesseract', [pagePath, 'stdout', '-l', 'eng', '--psm', '3'], {
+          timeout: 30000,
+        })
+        ocrText = stdout.trim()
+      } catch {
+        // Fallback to tesseract.js if CLI fails
+        try {
+          const TesseractModule = await import('tesseract.js')
+          const Tesseract = TesseractModule.default || TesseractModule
+          const worker = await Tesseract.createWorker('eng')
+          try {
+            const { data: { text } } = await worker.recognize(pageBuffer)
+            ocrText = text.trim()
+          } finally {
+            await worker.terminate().catch(() => undefined)
+          }
+        } catch {
+          // Both failed - leave empty
+        }
+      }
+      
+      if (ocrText) {
+        pages.push({
+          pageNumber: i + 1,
+          text: ocrText,
+        })
+        fullText += ocrText + '\n\n'
+      }
+    }
+    
+    if (pages.length === 0) {
+      return null
+    }
+    
+    return {
+      text: fullText.trim(),
+      pages,
+      metadata: { 
+        pageCount: pages.length, 
+        extractor: 'pdftoppm-tesseract-ocr',
+        ocrUsed: true,
+      },
+    }
+  } catch (error) {
+    console.warn('[extractTextFromScannedPDF] OCR extraction failed:', error)
+    return null
+  } finally {
+    // Clean up temp directory
+    try {
+      const files = await readdir(tmpDir).catch(() => [])
+      for (const file of files) {
+        await unlink(path.join(tmpDir, file)).catch(() => undefined)
+      }
+      await rmdir(tmpDir).catch(() => undefined)
+    } catch {}
+  }
 }
 
 // ============================================================================

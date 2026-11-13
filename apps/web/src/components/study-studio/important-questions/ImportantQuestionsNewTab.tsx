@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { NumberInput } from "@/components/ui/number-input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -288,75 +289,122 @@ export function ImportantQuestionsNewTab({
     try {
       const pendingFiles = uploadedFiles.filter(f => f.status === 'pending' || f.status === 'error')
 
+      // Build a single FormData with all files and metadata
+      const formData = new FormData()
+      
+      // Add all files
+      for (const fileItem of pendingFiles) {
+        formData.append('files', fileItem.file)
+      }
+      
+      // Add shared metadata
+      formData.append('paperType', paperType)
+      formData.append('subjectId', subjectId)
+      if (semester) formData.append('semester', semester)
+      if (academicYear) formData.append('academicYear', academicYear)
+      if (examinationYear) formData.append('examinationYear', examinationYear)
+      if (totalMarks) formData.append('marks', totalMarks)
+      if (unit) formData.append('unit', unit)
+      
+      // Add per-file metadata overrides
       for (let i = 0; i < pendingFiles.length; i++) {
         const fileItem = pendingFiles[i]
         const metadata = getFileMetadata(fileItem.id)
-
-        setUploadedFiles(prev => prev.map(f =>
-          f.id === fileItem.id ? { ...f, status: 'uploading', message: 'Uploading...' } : f
-        ))
-
-        const singleFormData = new FormData()
-        singleFormData.append('files', fileItem.file)
-        singleFormData.append('title', metadata.title || fileItem.file.name.replace(/\.[^/.]+$/, ""))
-        singleFormData.append('paperType', metadata.paperType || paperType)
-        singleFormData.append('subjectId', subjectId)
-        if (semester) singleFormData.append('semester', semester)
-        if (academicYear) singleFormData.append('academicYear', academicYear)
-        if (metadata.examinationYear) singleFormData.append('examinationYear', metadata.examinationYear)
-        else if (examinationYear) singleFormData.append('examinationYear', examinationYear)
-        if (metadata.marks) singleFormData.append('marks', metadata.marks)
-        else if (totalMarks) singleFormData.append('marks', totalMarks)
-        if (metadata.unit) singleFormData.append('unit', metadata.unit)
-        else if (unit) singleFormData.append('unit', unit)
-        if (additionalInstructions) singleFormData.append('additionalInstructions', additionalInstructions)
-
-        try {
-          const res = await fetch('/api/study-studio/important-questions/upload', {
-            method: 'POST',
-            body: singleFormData,
-          })
-
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.error || 'Upload failed')
-          }
-
-          const data = await res.json()
-          const paper = data.papers?.[0] || data.results?.find((r: any) => r.uploadStatus === 'success')
-
-          if (paper) {
-            setUploadedFiles(prev => prev.map(f =>
-              f.id === fileItem.id
-                ? { ...f, status: 'completed', message: 'Uploaded successfully', paperId: paper.id }
-                : f
-            ))
-          } else {
-            throw new Error('No paper returned from server')
-          }
-        } catch (err) {
-          setUploadedFiles(prev => prev.map(f =>
-            f.id === fileItem.id
-              ? { ...f, status: 'error', message: err instanceof Error ? err.message : 'Upload failed' }
-              : f
-          ))
-        }
+        
+        if (metadata.title) formData.append(`file_${i}_title`, metadata.title)
+        if (metadata.paperType) formData.append(`file_${i}_paperType`, metadata.paperType)
+        if (metadata.examinationYear) formData.append(`file_${i}_examinationYear`, metadata.examinationYear)
+        if (metadata.marks) formData.append(`file_${i}_marks`, metadata.marks)
+        if (metadata.unit) formData.append(`file_${i}_unit`, metadata.unit)
       }
 
-      // Refresh papers list
-      queryClient.invalidateQueries({ queryKey: ["question-papers"] })
+      // Update all pending files to uploading status
+      setUploadedFiles(prev => prev.map(f => 
+        pendingFiles.some(p => p.id === f.id) 
+          ? { ...f, status: 'uploading', message: 'Uploading...' } 
+          : f
+      ))
 
-      // Get uploaded papers with questions
-      const papersRes = await fetch('/api/study-studio/important-questions/papers')
-      if (papersRes.ok) {
-        const papersData = await papersRes.json()
-        const uploadedPaperIds = uploadedFiles.filter(f => f.status === 'completed').map(f => f.paperId).filter(Boolean)
-        const newReadyPapers = papersData.papers.filter((p: QuestionPaper) => uploadedPaperIds.includes(p.id))
-        setReadyPapers(prev => [...prev, ...newReadyPapers])
+      try {
+        const res = await fetch('/api/study-studio/important-questions-v2/documents', {
+          method: 'POST',
+          body: formData,
+        })
 
-        if (newReadyPapers.length > 0) {
-          toast({ title: `${newReadyPapers.length} paper(s) uploaded`, description: "Ready for question extraction" })
+        const data = await res.json()
+        
+        if (!res.ok) {
+          // Handle partial failures
+          if (data.documents && Array.isArray(data.documents)) {
+            // Update each file based on its result
+            for (let i = 0; i < pendingFiles.length; i++) {
+              const result = data.documents[i]
+              const fileItem = pendingFiles[i]
+              
+              if (result.status === 'uploaded') {
+                setUploadedFiles(prev => prev.map(f =>
+                  f.id === fileItem.id
+                    ? { ...f, status: 'completed', message: 'Uploaded successfully', paperId: result.id }
+                    : f
+                ))
+              } else {
+                setUploadedFiles(prev => prev.map(f =>
+                  f.id === fileItem.id
+                    ? { ...f, status: 'error', message: result.error || 'Upload failed' }
+                    : f
+                ))
+              }
+            }
+            
+            const failedCount = data.documents.filter((d: any) => d.status === 'failed').length
+            if (failedCount > 0) {
+              toast({ title: `${failedCount} file(s) failed to upload`, variant: 'destructive' })
+            }
+          } else {
+            throw new Error(data.error?.message || 'Upload failed')
+          }
+        } else {
+          // All successful
+          for (let i = 0; i < pendingFiles.length; i++) {
+            const result = data.documents[i]
+            const fileItem = pendingFiles[i]
+            
+            setUploadedFiles(prev => prev.map(f =>
+              f.id === fileItem.id
+                ? { ...f, status: 'completed', message: 'Uploaded successfully', paperId: result.id }
+                : f
+            ))
+          }
+          toast({ title: `${pendingFiles.length} file(s) uploaded successfully` })
         }
+
+        // Refresh papers list
+        queryClient.invalidateQueries({ queryKey: ["question-papers"] })
+
+        // Get uploaded papers with questions
+        const papersRes = await fetch('/api/study-studio/important-questions-v2/documents')
+        if (papersRes.ok) {
+          const papersData = await papersRes.json()
+          const uploadedPaperIds = uploadedFiles
+            .filter(f => f.status === 'completed')
+            .map(f => f.paperId)
+            .filter(Boolean)
+          const newReadyPapers = papersData.papers.filter((p: QuestionPaper) => uploadedPaperIds.includes(p.id))
+          setReadyPapers(prev => [...prev, ...newReadyPapers])
+
+          if (newReadyPapers.length > 0) {
+            toast({ title: `${newReadyPapers.length} paper(s) ready`, description: "Ready for question extraction" })
+          }
+        }
+
+      } catch (err) {
+        // Mark all pending files as error
+        setUploadedFiles(prev => prev.map(f =>
+          pendingFiles.some(p => p.id === f.id)
+            ? { ...f, status: 'error', message: err instanceof Error ? err.message : 'Upload failed' }
+            : f
+        ))
+        toast({ title: "Upload failed", description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
       }
 
     } catch (err) {
@@ -372,7 +420,7 @@ export function ImportantQuestionsNewTab({
     ))
 
     try {
-      const res = await fetch(`/api/study-studio/important-questions/papers/${paperId}`, {
+      const res = await fetch(`/api/study-studio/important-questions-v2/documents/${paperId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'extract' }),
@@ -380,7 +428,7 @@ export function ImportantQuestionsNewTab({
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || 'Extraction failed')
+        throw new Error(err.error?.message || 'Extraction failed')
       }
 
       const data = await res.json()
@@ -395,7 +443,7 @@ export function ImportantQuestionsNewTab({
       queryClient.invalidateQueries({ queryKey: ["question-papers"] })
 
       // Update ready papers with question count
-      const papersRes = await fetch('/api/study-studio/important-questions/papers')
+      const papersRes = await fetch('/api/study-studio/important-questions-v2/documents')
       if (papersRes.ok) {
         const papersData = await papersRes.json()
         const updatedPaper = papersData.papers.find((p: QuestionPaper) => p.id === paperId)
@@ -470,18 +518,15 @@ export function ImportantQuestionsNewTab({
       const paperIds = papersWithQuestions.map(p => p.id)
       const subject = iqSubjects.find(s => s.id === subjectId)
 
-      const res = await fetch('/api/study-studio/important-questions/analyze', {
+      const res = await fetch('/api/study-studio/important-questions-v2/analyses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          paperIds,
-          subjectId: subjectId || undefined,
+          documentIds: paperIds,
           title: analysisTitle,
-          enableWebResearch: enableWebResearch,
-          subjectName: subject?.name,
-          semester: semester || undefined,
-          academicYear: academicYear || undefined,
-          additionalInstructions: additionalInstructions || undefined,
+          instructions: additionalInstructions,
+          focusUnits: semester ? [semester] : undefined,
+          prioritizeMarks: totalMarks ? [parseInt(totalMarks)] : undefined,
         }),
       })
 
@@ -489,7 +534,7 @@ export function ImportantQuestionsNewTab({
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || 'Analysis failed')
+        throw new Error(err.error?.message || 'Analysis failed')
       }
 
       const data = await res.json()
@@ -516,7 +561,7 @@ export function ImportantQuestionsNewTab({
 
   const deleteAnalysis = async (id: string) => {
     try {
-      const res = await fetch(`/api/study-studio/important-questions/analyses/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/study-studio/important-questions-v2/analyses/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       setAnalyses(prev => prev.filter(a => a.id !== id))
       if (selectedAnalysis?.id === id) setSelectedAnalysis(null)
@@ -532,7 +577,7 @@ export function ImportantQuestionsNewTab({
 
     setDownloadingPDF(true)
     try {
-      const res = await fetch(`/api/study-studio/important-questions/analyses/${selectedAnalysis.id}/export`)
+      const res = await fetch(`/api/study-studio/important-questions-v2/analyses/${selectedAnalysis.id}/export`)
       if (!res.ok) throw new Error('PDF generation failed')
 
       const blob = await res.blob()
@@ -869,23 +914,21 @@ export function ImportantQuestionsNewTab({
                                     </div>
                                     <div className="space-y-1">
                                       <Label className="text-xs">Exam Year</Label>
-                                      <Input
+                                      <NumberInput
                                         size="sm"
-                                        type="number"
                                         placeholder="2023"
-                                        value={getFileMetadata(fileItem.id).examinationYear || ''}
-                                        onChange={e => updateFileMetadata(fileItem.id, { examinationYear: e.target.value })}
+                                        defaultValue={getFileMetadata(fileItem.id).examinationYear || ''}
+                                        onChange={v => updateFileMetadata(fileItem.id, { examinationYear: v })}
                                         disabled={fileItem.status === 'uploading' || fileItem.status === 'extracting'}
                                       />
                                     </div>
                                     <div className="space-y-1">
                                       <Label className="text-xs">Marks</Label>
-                                      <Input
+                                      <NumberInput
                                         size="sm"
-                                        type="number"
                                         placeholder="100"
-                                        value={getFileMetadata(fileItem.id).marks || ''}
-                                        onChange={e => updateFileMetadata(fileItem.id, { marks: e.target.value })}
+                                        defaultValue={getFileMetadata(fileItem.id).marks || ''}
+                                        onChange={v => updateFileMetadata(fileItem.id, { marks: v })}
                                         disabled={fileItem.status === 'uploading' || fileItem.status === 'extracting'}
                                       />
                                     </div>
@@ -1430,7 +1473,7 @@ export function ImportantQuestionsNewTab({
                 <TabsContent value="unit-wise" className="mt-4 space-y-4">
                   {analysisData.unitDistribution && Object.keys(analysisData.unitDistribution).length > 0 ? (
                     <div className="space-y-4">
-                      {Object.entries(analysisData.unitDistribution)
+                      {Object.entries(analysisData.unitDistribution as Record<string, number>)
                         .sort(([,a], [,b]) => b - a)
                         .map(([unit, count]) => {
                           const items = priorityItems.filter(p => p.units.includes(unit))
@@ -1512,7 +1555,7 @@ export function ImportantQuestionsNewTab({
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
-                          {Object.entries(analysisData.unitDistribution || {})
+                          {Object.entries((analysisData.unitDistribution || {}) as Record<string, number>)
                             .sort(([,a], [,b]) => b - a)
                             .slice(0, 5)
                             .map(([unit, count]) => (
@@ -1538,7 +1581,7 @@ export function ImportantQuestionsNewTab({
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
-                          {Object.entries(analysisData.questionTypeDistribution || {}).map(([type, count]) => (
+                          {Object.entries((analysisData.questionTypeDistribution || {}) as Record<string, number>).map(([type, count]) => (
                             <div key={type} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                               <span className="font-medium capitalize">{type.replace('_', ' ')}</span>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
