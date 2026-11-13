@@ -207,57 +207,98 @@ export function ImportantQuestionsTab({
       message: 'Queued for upload'
     })))
     
-    const uploadedPapers: QuestionPaper[] = []
+    try {
+      const formData = new FormData()
+      iqUploadedFiles.forEach(({ file }) => {
+        formData.append('files', file)
+      })
+      // Use first file's name as title base
+      const firstFile = iqUploadedFiles[0].file
+      formData.append('title', `${firstFile.name.replace(/\.[^/.]+$/, "")}`)
+      formData.append('paperType', iqPaperType)
+      if (iqSubjectId) formData.append('subjectId', iqSubjectId)
+      if (iqSemester) formData.append('semester', iqSemester)
+      if (iqAcademicYear) formData.append('academicYear', iqAcademicYear)
+      if (iqExaminationYear) formData.append('examinationYear', iqExaminationYear)
+      if (iqTotalMarks) formData.append('marks', iqTotalMarks)
+      if (iqAdditionalInstructions) formData.append('additionalInstructions', iqAdditionalInstructions)
+      
+      // Update all to processing
+      setIqProcessingStatus(prev => prev.map(s => ({ ...s, state: 'processing', message: 'Uploading...' })))
+      
+      const res = await fetch('/api/important-questions/papers', {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Upload failed')
+      }
+      
+      const data = await res.json()
+      const papers = data.papers || []
+      
+      // Update all to completed
+      setIqProcessingStatus(prev => prev.map(s => ({ ...s, state: 'completed', message: 'Uploaded successfully' })))
+      
+      setIqReadyPapers(papers)
+      
+      toast({ title: `${papers.length} paper(s) uploaded`, description: "Starting question extraction..." })
+      
+      // Automatically extract questions from all uploaded papers
+      await handleAutoExtractQuestions(papers)
+      
+    } catch (err) {
+      setIqProcessingStatus(prev => prev.map(s => 
+        ({ ...s, state: 'error', message: err instanceof Error ? err.message : 'Upload failed' })
+      ))
+      toast({ title: "Upload failed", description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+    } finally {
+      setIqUploadingFiles(false)
+    }
+  }
+
+  const handleAutoExtractQuestions = async (papers: QuestionPaper[]) => {
+    const extractedPapers: QuestionPaper[] = []
     
-    for (let i = 0; i < iqUploadedFiles.length; i++) {
-      const { file } = iqUploadedFiles[i]
+    for (let i = 0; i < papers.length; i++) {
+      const paper = papers[i]
       
       setIqProcessingStatus(prev => prev.map((s, idx) => 
-        idx === i ? { ...s, state: 'processing', message: 'Uploading...' } : s
+        idx === i ? { ...s, state: 'processing', message: 'Extracting questions...' } : s
       ))
       
       try {
-        const formData = new FormData()
-        formData.append('files', file)
-        formData.append('title', `${file.name.replace(/\.[^/.]+$/, "")}`)
-        formData.append('paperType', iqPaperType)
-        if (iqSubjectId) formData.append('subjectId', iqSubjectId)
-        if (iqSemester) formData.append('semester', iqSemester)
-        if (iqAcademicYear) formData.append('academicYear', iqAcademicYear)
-        if (iqExaminationYear) formData.append('examinationYear', iqExaminationYear)
-        if (iqTotalMarks) formData.append('marks', iqTotalMarks)
-        if (iqAdditionalInstructions) formData.append('additionalInstructions', iqAdditionalInstructions)
-        
-        const res = await fetch('/api/important-questions/papers', {
+        const res = await fetch(`/api/important-questions/papers/${paper.id}`, {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'extract' }),
         })
         
-        if (!res.ok) throw new Error('Upload failed')
+        if (!res.ok) {
+          const err = await res.json()
+          throw new Error(err.error || 'Extraction failed')
+        }
         
         const data = await res.json()
-        const paper = data.papers?.[0] || data.paper
+        const extractedPaper = { ...paper, questions: data.questions, _count: { questions: data.extractedCount } }
+        extractedPapers.push(extractedPaper)
         
         setIqProcessingStatus(prev => prev.map((s, idx) => 
-          idx === i ? { ...s, state: 'completed', message: 'Uploaded successfully' } : s
+          idx === i ? { ...s, state: 'completed', message: `Extracted ${data.extractedCount} questions` } : s
         ))
-        
-        if (paper) uploadedPapers.push(paper)
       } catch (err) {
         setIqProcessingStatus(prev => prev.map((s, idx) => 
-          idx === i ? { ...s, state: 'error', message: err instanceof Error ? err.message : 'Upload failed' } : s
+          idx === i ? { ...s, state: 'error', message: err instanceof Error ? err.message : 'Extraction failed' } : s
         ))
       }
     }
     
-    setIqReadyPapers(uploadedPapers)
-    setIqUploadingFiles(false)
-    
-    toast({ title: `${uploadedPapers.length} paper(s) uploaded`, description: "Processing will continue in background" })
-  }
-
-  const retryIqFile = async (idx: number) => {
-    // Retry logic
+    if (extractedPapers.length > 0) {
+      setIqReadyPapers(extractedPapers)
+      toast({ title: "Extraction complete", description: "All papers processed. Ready for analysis." })
+    }
   }
 
   const handleIqStep2Next = () => {
@@ -276,23 +317,9 @@ export function ImportantQuestionsTab({
     
     setIqGeneratingAnalysis(true)
     setIqGenerationError(null)
-    setIqGenerationProgress({ stage: 'Preparing...', progress: 10, message: 'Starting analysis' })
+    setIqGenerationProgress({ stage: 'Analyzing...', progress: 50, message: 'AI is analyzing all question papers' })
     
     try {
-      const stages = [
-        { stage: 'Uploading papers...', progress: 20, message: 'Sending papers to analysis engine' },
-        { stage: 'Extracting questions...', progress: 40, message: 'AI is reading and extracting questions' },
-        { stage: 'Finding patterns...', progress: 60, message: 'Detecting repeats and topic distributions' },
-        { stage: 'Calculating priorities...', progress: 80, message: 'Scoring questions by importance' },
-        { stage: 'Web research...', progress: 90, message: 'Searching academic sources for additional concepts' },
-        { stage: 'Finalizing...', progress: 100, message: 'Generating complete report' },
-      ]
-      
-      for (const stage of stages) {
-        setIqGenerationProgress(stage)
-        await new Promise(r => setTimeout(r, 800))
-      }
-      
       const paperIds = iqReadyPapers.map(p => p.id)
       const subject = iqSubjects.find(s => s.id === iqSubjectId)
       
@@ -315,6 +342,8 @@ export function ImportantQuestionsTab({
         const err = await res.json()
         throw new Error(err.error || 'Analysis failed')
       }
+      
+      setIqGenerationProgress({ stage: 'Finalizing...', progress: 90, message: 'Generating report' })
       
       const data = await res.json()
       const newAnalysis = data.analysis
@@ -598,11 +627,7 @@ export function ImportantQuestionsTab({
                         <p className="font-medium text-sm">{status.fileName}</p>
                         <p className="text-xs text-muted-foreground">{status.message}</p>
                       </div>
-                      {status.state === 'error' && (
-                        <Button variant="ghost" size="sm" onClick={() => retryIqFile(idx)}>
-                          Retry
-                        </Button>
-                      )}
+                      
                     </div>
                   ))}
                 </div>

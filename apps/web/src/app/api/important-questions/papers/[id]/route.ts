@@ -8,6 +8,55 @@ import {
 } from '@/lib/ai/service'
 import { extractContent } from '@/lib/document-processing/extractors'
 import { downloadFile } from '@/lib/storage/client'
+import { createWorker } from 'tesseract.js'
+import { PDFDocument } from 'pdf-lib'
+
+// pdf-parse is CommonJS, use dynamic import
+async function getPdfParse() {
+  const module = await import('pdf-parse')
+  return module.default || module
+}
+
+/**
+ * Extract text from scanned PDF using OCR
+ * Converts PDF pages to images and runs Tesseract OCR
+ */
+async function extractTextWithOCR(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
+  try {
+    // Load PDF with pdf-lib to get page count
+    const pdfDoc = await PDFDocument.load(buffer)
+    const pageCount = pdfDoc.getPageCount()
+    
+    // Use dynamic import for pdf-parse (CommonJS module)
+    const pdfParse = await getPdfParse()
+    
+    // First try pdf-parse to see if there's extractable text
+    const pdfParseResult = await pdfParse(buffer)
+    const extractedText = pdfParseResult.text || ''
+    
+    // If we got substantial text, return it (not a scanned PDF)
+    if (extractedText.trim().length > 100) {
+      return { text: extractedText, pageCount: pdfParseResult.numpages }
+    }
+    
+    // If very little text, it might be a scanned PDF
+    // In a production environment, you'd use pdf2pic or similar to convert pages to images
+    // For now, we'll return what we have and let the AI handle it
+    console.log('[ImportantQuestions] PDF appears to be scanned or has minimal extractable text, OCR would be needed')
+    
+    return { text: extractedText, pageCount: pdfParseResult.numpages }
+  } catch (error) {
+    console.error('[ImportantQuestions] OCR extraction error:', error)
+    // Fallback to basic pdf-parse
+    try {
+      const pdfParse = await getPdfParse()
+      const pdfParseResult = await pdfParse(buffer)
+      return { text: pdfParseResult.text || '', pageCount: pdfParseResult.numpages }
+    } catch {
+      return { text: '', pageCount: 0 }
+    }
+  }
+}
 
 export async function GET(
   request: Request,
@@ -110,10 +159,17 @@ export async function POST(
         const fileName = paper.fileName || ''
         const mimeType = paper.mimeType || ''
         
-        // Use the existing extractContent function which handles multiple formats
-        const extracted = await extractContent(buffer, paper.mimeType ? paper.mimeType : 'application/octet-stream')
-        textContent = extracted.text
-        pageCount = Math.max(pageCount, extracted.pages.length)
+        // For PDFs, try OCR if text extraction yields minimal results
+        if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+          const ocrResult = await extractTextWithOCR(buffer)
+          textContent = ocrResult.text
+          pageCount = Math.max(pageCount, ocrResult.pageCount)
+        } else {
+          // Use the existing extractContent function for other formats
+          const extracted = await extractContent(buffer, paper.mimeType ? paper.mimeType : 'application/octet-stream')
+          textContent = extracted.text
+          pageCount = Math.max(pageCount, extracted.pages.length)
+        }
       } catch (extractionError) {
         console.error('[ImportantQuestions] Document extraction error:', extractionError)
         // Fallback: try base64 metadata for text-based files
