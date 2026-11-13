@@ -6,102 +6,12 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
-  LayoutDashboard,
-  Bot,
-  FolderOpen,
-  Cloud,
-  BookOpen,
-  Calendar,
-  Book,
-  FlaskConical,
-  FolderKanban,
-  UserCheck,
-  ClipboardCheck,
-  FileText,
-  Bell,
-  Settings,
-  GraduationCap,
-  Users,
-  Shield,
-  Plus,
   Sparkles,
   Brain,
-  Library,
-  Archive,
   ChevronUp,
   ChevronDown,
 } from "lucide-react"
-
-interface NavItem {
-  label: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  roles: string[]
-  badge?: string
-}
-
-const moreMenuItems: Array<NavItem & { badge?: string }> = [
-  { label: "Study Studio", href: "/dashboard/study-studio", icon: BookOpen, roles: ["STUDENT"] },
-  { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["STUDENT", "LECTURER", "ADMIN"] },
-  { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Personal Drive", href: "/dashboard/drive", icon: Cloud, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-]
-
-const lecturerOnlyMoreItems: NavItem[] = [
-  { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"] },
-  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
-  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"] },
-  { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"] },
-]
-
-const adminOnlyMoreItems: NavItem[] = [
-  { label: "User Management", href: "/dashboard/settings", icon: Users, roles: ["ADMIN"] },
-  { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"] },
-  { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"] },
-  { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"] },
-]
-
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "AI Assistant", href: "/dashboard/assistant", icon: Bot, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"], badge: "AI" },
-  { label: "Documents", href: "/dashboard/documents", icon: FolderOpen, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Personal Drive", href: "/dashboard/drive", icon: Cloud, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Study Studio", href: "/dashboard/study-studio", icon: BookOpen, roles: ["STUDENT"] },
-  { label: "Smart Planner", href: "/dashboard/planner", icon: Calendar, roles: ["STUDENT"] },
-  { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["STUDENT", "LECTURER", "ADMIN"] },
-  { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-]
-
-const lecturerOnlyItems = [
-  { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"] },
-  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
-  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"] },
-  { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"] },
-]
-
-const adminOnlyItems = [
-  { label: "User Management", href: "/dashboard/settings", icon: Users, roles: ["ADMIN"] },
-  { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"] },
-  { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"] },
-  { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"] },
-]
-
-// Main nav items for bottom nav (most frequently used)
-const bottomNavItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "AI Chat", href: "/dashboard/assistant", icon: Bot, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"], badge: "AI" },
-  { label: "Documents", href: "/dashboard/documents", icon: FolderOpen, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Planner", href: "/dashboard/planner", icon: Calendar, roles: ["STUDENT"] },
-  { label: "More", href: "#", icon: Sparkles, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-]
+import { getBottomNavItemsForRole, getMoreMenuItemsForRole } from "@/lib/navigation/config"
 
 interface MobileNavProps {
   userRole: string
@@ -112,21 +22,8 @@ export function MobileBottomNav({ userRole, onOpenMenu }: MobileNavProps) {
   const pathname = usePathname()
   const [showMore, setShowMore] = React.useState(false)
 
-  const filteredBottomItems = bottomNavItems.filter(item => item.roles.includes(userRole))
-
-  const moreItems = React.useMemo(() => {
-    const items: NavItem[] = moreMenuItems.filter(item => item.roles.includes(userRole))
-
-    if (userRole === "LECTURER" || userRole === "ADMIN") {
-      items.push(...lecturerOnlyMoreItems.filter(item => item.roles.includes(userRole)))
-    }
-
-    if (userRole === "ADMIN") {
-      items.push(...adminOnlyMoreItems.filter(item => item.roles.includes(userRole)))
-    }
-
-    return items
-  }, [userRole])
+  const bottomItems = getBottomNavItemsForRole(userRole)
+  const moreItems = getMoreMenuItemsForRole(userRole)
 
   function renderMoreButton() {
     return (
@@ -183,7 +80,7 @@ export function MobileBottomNav({ userRole, onOpenMenu }: MobileNavProps) {
     )
   }
 
-  function renderNavItem(item: { label: string; href: string; icon: React.ComponentType<{ className?: string }>; badge?: string }, isActive: boolean) {
+  function renderNavItem(item: typeof bottomItems[0], isActive: boolean) {
     return (
       <Link
         href={item.href}
@@ -210,7 +107,7 @@ export function MobileBottomNav({ userRole, onOpenMenu }: MobileNavProps) {
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="grid grid-cols-5 gap-1 px-2 py-1.5 pb-safe">
-        {filteredBottomItems.map((item, index) => {
+        {bottomItems.map((item, index) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + "/"))
           const isMore = item.label === "More"
           

@@ -6,71 +6,14 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
-  LayoutDashboard,
-  Bot,
-  FolderOpen,
-  BookOpen,
-  Calendar,
-  Book,
-  FlaskConical,
-  FolderKanban,
-  Users,
-  ClipboardCheck,
-  FileText,
-  Cloud,
-  Bell,
-  Settings,
   GraduationCap,
-  UserCheck,
-  Library,
-  Archive,
-  Shield,
   ChevronLeft,
-  Plus,
   Sparkles,
   Brain,
 } from "lucide-react"
+import { getNavItemsForRole, getSectionTitle } from "@/lib/navigation/config"
 
-interface NavItem {
-  label: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  roles: string[]
-  badge?: string
-}
-
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "AI Assistant", href: "/dashboard/assistant", icon: Bot, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"], badge: "AI" },
-  { label: "Documents", href: "/dashboard/documents", icon: FolderOpen, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Personal Drive", href: "/dashboard/drive", icon: Cloud, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Study Studio", href: "/dashboard/study-studio", icon: BookOpen, roles: ["STUDENT"] },
-  { label: "Smart Planner", href: "/dashboard/planner", icon: Calendar, roles: ["STUDENT"] },
-  { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["STUDENT", "LECTURER", "ADMIN"] },
-  { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
-  { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
-  { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
-]
-
-const lecturerOnlyItems: NavItem[] = [
-  { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"] },
-  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
-  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"] },
-  { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"] },
-]
-
-const adminOnlyItems: NavItem[] = [
-  { label: "User Management", href: "/dashboard/settings", icon: Users, roles: ["ADMIN"] },
-  { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"] },
-  { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"] },
-  { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"] },
-]
-
-function NavLink({ item, isActive, userRole, collapsed }: { item: NavItem; isActive: boolean; userRole: string; collapsed: boolean }) {
-  if (!item.roles.includes(userRole)) return null
-
+function NavLink({ item, isActive, collapsed }: { item: ReturnType<typeof getNavItemsForRole>[0]; isActive: boolean; collapsed: boolean }) {
   const baseClasses = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200"
   const activeClasses = "bg-primary/15 border-l-2 border-primary text-primary shadow-[inset_0_0_20px_-5px_rgba(0,212,255,0.15)]"
   const inactiveClasses = "text-muted-foreground hover:bg-secondary hover:text-foreground hover:border-primary/10"
@@ -118,9 +61,9 @@ interface AssistantSidebarProps {
 export function AssistantSidebar({ userRole, isOpen, collapsed, onToggleCollapse, onClose }: AssistantSidebarProps) {
   const pathname = usePathname()
 
-  const filteredItems = navItems.filter(item => item.roles.includes(userRole))
-  const filteredLecturerItems = lecturerOnlyItems.filter(item => item.roles.includes(userRole))
-  const filteredAdminItems = adminOnlyItems.filter(item => item.roles.includes(userRole))
+  const mainItems = getNavItemsForRole(userRole, false, false).filter(item => item.section === "main")
+  const lecturerItems = getNavItemsForRole(userRole, true, false).filter(item => item.section === "lecturer")
+  const adminItems = getNavItemsForRole(userRole, true, true).filter(item => item.section === "admin")
 
   return (
     <aside
@@ -167,30 +110,28 @@ export function AssistantSidebar({ userRole, isOpen, collapsed, onToggleCollapse
 
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1" aria-label="Main navigation">
-          <SectionHeader title="AI Assistant" collapsed={collapsed} />
+          <SectionHeader title={getSectionTitle("main")} collapsed={collapsed} />
           
           <div className="space-y-1">
-            {filteredItems.map((item) => (
+            {mainItems.map((item) => (
               <NavLink
                 key={item.href}
                 item={item}
                 isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
-                userRole={userRole}
                 collapsed={collapsed}
               />
             ))}
           </div>
 
-          {filteredLecturerItems.length > 0 && !collapsed && (
+          {lecturerItems.length > 0 && !collapsed && (
             <>
-              <SectionHeader title="Lecturer Tools" collapsed={collapsed} />
+              <SectionHeader title={getSectionTitle("lecturer")} collapsed={collapsed} />
               <div className="space-y-1 border-t border-sidebar-border pt-4">
-                {filteredLecturerItems.map((item) => (
+                {lecturerItems.map((item) => (
                   <NavLink
                     key={item.href}
                     item={item}
-                    isActive={pathname === item.href}
-                    userRole={userRole}
+                    isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                     collapsed={collapsed}
                   />
                 ))}
@@ -198,16 +139,15 @@ export function AssistantSidebar({ userRole, isOpen, collapsed, onToggleCollapse
             </>
           )}
 
-          {filteredAdminItems.length > 0 && !collapsed && (
+          {adminItems.length > 0 && !collapsed && (
             <>
-              <SectionHeader title="Administration" collapsed={collapsed} />
+              <SectionHeader title={getSectionTitle("admin")} collapsed={collapsed} />
               <div className="space-y-1 border-t border-sidebar-border pt-4">
-                {filteredAdminItems.map((item) => (
+                {adminItems.map((item) => (
                   <NavLink
                     key={item.href}
                     item={item}
-                    isActive={pathname === item.href}
-                    userRole={userRole}
+                    isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                     collapsed={collapsed}
                   />
                 ))}

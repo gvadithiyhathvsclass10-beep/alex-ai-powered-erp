@@ -8,95 +8,14 @@ import { cn } from "@/lib/utils"
 import { 
   Send, 
   Loader2, 
-  Mic, 
-  MicOff, 
   Paperclip, 
   X, 
   FileText, 
   Image, 
   Download,
-  AlertCircle,
-  RotateCcw,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-
-// SpeechRecognition types for browser compatibility
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-  message: string
-}
-
-interface SpeechRecognitionResultList {
-  length: number
-  item(index: number): SpeechRecognitionResult
-  [index: number]: SpeechRecognitionResult
-}
-
-interface SpeechRecognitionResult {
-  length: number
-  item(index: number): SpeechRecognitionAlternative
-  [index: number]: SpeechRecognitionAlternative
-  isFinal: boolean
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string
-  confidence: number
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  maxAlternatives: number
-  serviceURI: string
-  grammars: SpeechGrammarList
-  start(): void
-  stop(): void
-  abort(): void
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null
-  onnomatch: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null
-  onaudiostart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onaudioend: ((this: SpeechRecognition, ev: Event) => any) | null
-  onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null
-  onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null
-}
-
-interface SpeechGrammarList {
-  length: number
-  item(index: number): SpeechGrammar
-  [index: number]: SpeechGrammar
-  addFromURI(src: string, weight?: number): void
-  addFromString(string: string, weight?: number): void
-}
-
-interface SpeechGrammar {
-  src: string
-  weight: number
-}
-
-interface WindowWithSpeechRecognition extends Window {
-  SpeechRecognition?: { new(): SpeechRecognition }
-  webkitSpeechRecognition?: { new(): SpeechRecognition }
-  SpeechGrammarList?: { new(): SpeechGrammarList }
-  webkitSpeechGrammarList?: { new(): SpeechGrammarList }
-}
+import { VoiceInputButton } from "@/components/ui/voice-input-button"
 
 interface AttachedFile {
   id: string
@@ -149,276 +68,8 @@ export function ChatComposer({
   const [input, setInput] = React.useState("")
   const [attachments, setAttachments] = React.useState<AttachedFile[]>([])
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false)
-  const [isRecording, setIsRecording] = React.useState(false)
-  const [transcript, setTranscript] = React.useState("")
-  const [interimTranscript, setInterimTranscript] = React.useState("")
-  const [isSupported, setIsSupported] = React.useState(false)
-  const [recognitionError, setRecognitionError] = React.useState<string | null>(null)
-  const [audioLevel, setAudioLevel] = React.useState(0)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
-
-  // Refs for voice recognition (not state, to avoid re-renders during recognition)
-  const audioContextRef = React.useRef<AudioContext | null>(null)
-  const analyserRef = React.useRef<AnalyserNode | null>(null)
-  const audioStreamRef = React.useRef<MediaStream | null>(null)
-  const animationFrameRef = React.useRef<number | null>(null)
-  const cleanupRef = React.useRef(false)
-
-  // Check browser support on mount
-  React.useEffect(() => {
-    const win = window as Window & {
-      SpeechRecognition?: { new(): SpeechRecognition }
-      webkitSpeechRecognition?: { new(): SpeechRecognition }
-      SpeechGrammarList?: { new(): SpeechGrammarList }
-      webkitSpeechGrammarList?: { new(): SpeechGrammarList }
-    }
-    
-    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
-    setIsSupported(!!SpeechRecognition)
-  }, [])
-
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      cleanupRef.current = true
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach(track => track.stop())
-      }
-    }
-  }, [])
-
-  const updateAudioLevel = () => {
-    if (!analyserRef.current || cleanupRef.current) return
-    
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-    analyserRef.current.getByteFrequencyData(dataArray)
-    
-    // Calculate average volume
-    const sum = dataArray.reduce((a, b) => a + b, 0)
-    const average = sum / dataArray.length
-    const normalized = Math.min(average / 128, 1) // Normalize to 0-1
-    
-    setAudioLevel(normalized)
-    
-    if (!cleanupRef.current) {
-      animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
-    }
-  }
-
-  // Create a fresh SpeechRecognition instance for each session
-  const createRecognition = (): SpeechRecognition | null => {
-    const win = window as Window & {
-      SpeechRecognition?: { new(): SpeechRecognition }
-      webkitSpeechRecognition?: { new(): SpeechRecognition }
-      SpeechGrammarList?: { new(): SpeechGrammarList }
-      webkitSpeechGrammarList?: { new(): SpeechGrammarList }
-    }
-    
-    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition
-    if (!SpeechRecognition) return null
-    
-    const recognition = new SpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = "en-US"
-    recognition.maxAlternatives = 1
-    
-    // Add grammar if available
-    const SpeechGrammarList = win.SpeechGrammarList || win.webkitSpeechGrammarList
-    if (SpeechGrammarList) {
-      const grammar = new SpeechGrammarList()
-      grammar.addFromString('#JSGF V1.0; grammar punctuation; public <punc> = . | ? | ! | , | ; | : ;', 1)
-      recognition.grammars = grammar
-    }
-    
-    return recognition
-  }
-
-  const startListening = async () => {
-    if (isRecording || !isSupported) return
-    
-    setRecognitionError(null)
-    
-    try {
-      // Request microphone access directly - most reliable approach
-      // navigator.permissions.query is unreliable in many browsers
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      })
-      
-      audioStreamRef.current = stream
-      const audioContext = new AudioContext()
-      audioContextRef.current = audioContext
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      analyser.smoothingTimeConstant = 0.8
-      source.connect(analyser)
-      analyserRef.current = analyser
-      
-      // Create a fresh recognition instance for this session
-      const recognition = createRecognition()
-      if (!recognition) {
-        throw new Error("Speech recognition not supported")
-      }
-      
-      // Start audio level visualization
-      updateAudioLevel()
-      
-      // Set up recognition handlers
-      recognition.onstart = () => {
-        setIsRecording(true)
-        setRecognitionError(null)
-      }
-      
-      recognition.onend = () => {
-        setIsRecording(false)
-        // Stop audio visualization
-        if (audioStreamRef.current) {
-          audioStreamRef.current.getTracks().forEach(track => track.stop())
-          audioStreamRef.current = null
-        }
-        if (audioContextRef.current) {
-          audioContextRef.current.close()
-          audioContextRef.current = null
-        }
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current)
-          animationFrameRef.current = null
-        }
-        setAudioLevel(0)
-      }
-      
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interim = ""
-        let final = ""
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i]
-          if (result.isFinal) {
-            final += result[0].transcript
-          } else {
-            interim += result[0].transcript
-          }
-        }
-        setInterimTranscript(interim)
-        if (final) {
-          setTranscript(prev => prev + " " + final)
-          setInput(prev => prev + " " + final)
-        }
-      }
-      
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error("Speech recognition error:", event.error)
-        setIsRecording(false)
-        
-        const messages: Record<string, string> = {
-          'not-allowed': 'Microphone permission was denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar).',
-          'service-not-allowed': 'Speech recognition service is not available in this browser.',
-          'no-speech': 'No speech was detected. Please try speaking closer to the microphone.',
-          'audio-capture': 'No microphone found or microphone access failed. Please check your microphone.',
-          'network': 'Network error occurred during speech recognition. Please check your connection.',
-          'aborted': 'Voice input was cancelled.',
-          'language-not-supported': 'The selected language is not supported for speech recognition.',
-        }
-        
-        const errorMessage = messages[event.error] || `Speech recognition failed: ${event.error}`
-        setRecognitionError(errorMessage)
-        
-        toast({
-          title: "Voice input error",
-          description: errorMessage,
-          variant: "destructive",
-        })
-      }
-      
-      recognition.onnomatch = () => {
-        setRecognitionError("No speech matched. Please try again.")
-        toast({
-          title: "No match",
-          description: "Could not recognize speech. Please try again.",
-          variant: "destructive",
-        })
-      }
-      
-      // Store recognition instance in a ref for cleanup
-      recognitionRef.current = recognition
-      
-      recognition.start()
-      setTranscript("")
-      setInterimTranscript("")
-    } catch (error) {
-      console.error("Failed to start recognition:", error)
-      
-      let errorMessage = "Failed to start voice recognition."
-      if (error instanceof Error) {
-        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-          errorMessage = "Microphone permission denied. Please allow microphone access in browser settings (click 🔒 lock icon in address bar)."
-        } else if (error.name === "NotFoundError") {
-          errorMessage = "No microphone found. Please connect a microphone and try again."
-        } else if (error.name === "NotReadableError") {
-          errorMessage = "Microphone is in use by another application."
-        } else if (error.name === "SecurityError") {
-          errorMessage = "Security error: This page must be served over HTTPS (or localhost) for microphone access."
-        }
-      }
-      
-      setRecognitionError(errorMessage)
-      toast({
-        title: "Voice input error",
-        description: errorMessage,
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Ref to hold the current recognition instance
-  const recognitionRef = React.useRef<SpeechRecognition | null>(null)
-
-  const stopListening = () => {
-    // Stop recognition
-    if (recognitionRef.current) {
-      if (isRecording) {
-        recognitionRef.current.stop()
-      } else {
-        recognitionRef.current.abort()
-      }
-      recognitionRef.current = null
-    }
-    
-    // Cleanup audio resources
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach(track => track.stop())
-      audioStreamRef.current = null
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
-    setAudioLevel(0)
-    setIsRecording(false)
-  }
-
-  const retryListening = () => {
-    setRecognitionError(null)
-    stopListening()
-    // Small delay to ensure clean state
-    setTimeout(() => startListening(), 100)
-  }
 
   const handleFileSelect = async (files: FileList) => {
     const newAttachments: AttachedFile[] = []
@@ -492,7 +143,7 @@ export function ChatComposer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const content = input.trim() + (interimTranscript ? " " + interimTranscript : "")
+    const content = input.trim()
     if (!content.trim() && attachments.length === 0) return
     
     onSendMessage(content, attachments)
@@ -502,7 +153,6 @@ export function ChatComposer({
     })
     setAttachments([])
     if (fileInputRef.current) fileInputRef.current.value = ""
-    setTranscript("")
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -512,7 +162,10 @@ export function ChatComposer({
     }
   }
 
-  const displayInput = input + (interimTranscript ? " " + interimTranscript : "")
+  const handleVoiceTranscript = (transcript: string) => {
+    setInput(prev => prev + (prev ? " " : "") + transcript)
+    onVoiceInput?.(transcript)
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -599,82 +252,22 @@ export function ChatComposer({
               rows={1}
               style={{ minHeight: "60px", maxHeight: "200px" }}
             />
-            {transcript && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 p-2 bg-yellow-50/50 border border-yellow-200/50 rounded-lg text-xs text-yellow-800 dark:text-yellow-900">
-                <span className="font-medium">Voice input: </span>
-                <span>{transcript}</span>
-              </div>
-            )}
-            {recognitionError && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 p-2 bg-red-50/50 border border-red-200/50 rounded-lg text-xs text-red-800 dark:text-red-900 flex items-center justify-between gap-2">
-                <span>
-                  <AlertCircle className="h-3 w-3 inline mr-1" />
-                  {recognitionError}
-                </span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={retryListening} aria-label="Retry voice input">
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
           </div>
 
-          {/* Voice Input Button */}
-          <div className="relative">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={isRecording ? "default" : isSupported ? "outline" : "outline"}
-                    size="icon"
-                    className={cn(
-                      "h-10 w-10 rounded-xl transition-all",
-                      isRecording ? "bg-red-500 text-white animate-pulse" : "hover:bg-primary/10",
-                      !isSupported && "opacity-50 cursor-not-allowed"
-                    )}
-                    onClick={isRecording ? stopListening : isSupported ? startListening : undefined}
-                    disabled={disabled || isLoading || (!isSupported && !isRecording)}
-                    aria-label={isRecording ? "Stop listening" : isSupported ? "Start voice input" : "Speech recognition not supported"}
-                  >
-                    {isRecording ? (
-                      <MicOff className="h-5 w-5" />
-                    ) : isSupported ? (
-                      <Mic className="h-5 w-5" />
-                    ) : (
-                      <MicOff className="h-5 w-5 opacity-50" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  {isRecording ? "Stop listening" : isSupported ? "Voice input" : "Speech recognition not supported in this browser"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            {/* Audio level indicator when recording */}
-            {isRecording && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-lg shadow-lg">
-                <span className="text-xs text-muted-foreground font-mono">Level:</span>
-                <div className="flex items-end gap-1 h-8">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 rounded-t bg-primary/20 transition-all duration-75"
-                      style={{
-                        height: audioLevel > (i - 1) * 0.2 ? `${Math.max(8, audioLevel * 32)}px` : "8px",
-                        backgroundColor: audioLevel > i * 0.18 ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.2)"
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Voice Input Button - using shared component */}
+          <VoiceInputButton
+            onTranscript={handleVoiceTranscript}
+            inputValue={input}
+            setInputValue={setInput}
+            disabled={disabled}
+            isLoading={isLoading}
+            showAudioLevel={true}
+          />
 
           {/* Send Button */}
           <Button
             type="submit"
-            disabled={!displayInput.trim() && attachments.length === 0 || isLoading || disabled}
+            disabled={!input.trim() && attachments.length === 0 || isLoading || disabled}
             size="lg"
             className={cn(
               "h-10 w-10 rounded-xl btn-primary-gradient flex-shrink-0",

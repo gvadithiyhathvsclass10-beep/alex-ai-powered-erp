@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
+import { ImportantQuestionsTab } from "@/components/study-studio/ImportantQuestionsTab"
 
 interface StudyMaterial {
   id: string
@@ -157,6 +158,13 @@ interface ResearchNote {
   tags: string[]
   createdAt: string
   updatedAt: string
+}
+
+interface Subject {
+  id: string
+  name: string
+  code: string
+  semester: string | null
 }
 
 interface GeneratedQuizQuestion {
@@ -651,6 +659,18 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
       return res.json()
     },
   })
+
+  // Fetch subjects for Important Questions
+  const { data: subjectsData } = useQuery({
+    queryKey: ["subjects", "my"],
+    queryFn: async () => {
+      const res = await fetch("/api/subjects/my")
+      if (!res.ok) return { subjects: [] }
+      return res.json()
+    },
+  })
+
+  const iqSubjects: Subject[] = subjectsData?.subjects || []
 
   const questionPapers: QuestionPaper[] = papersData?.papers || []
   const questionAnalyses: QuestionAnalysis[] = analysesData?.analyses || []
@@ -1271,14 +1291,14 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="notes">Formula Sheet</TabsTrigger>
-          <TabsTrigger value="flashcards">Flashcards</TabsTrigger>
-          <TabsTrigger value="mindmaps">Mind Maps</TabsTrigger>
-          <TabsTrigger value="diagrams">Diagrams</TabsTrigger>
-          <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
-          <TabsTrigger value="research">Research Notebook</TabsTrigger>
-          <TabsTrigger value="important-questions">Important Questions</TabsTrigger>
+        <TabsList className="flex w-full overflow-x-auto gap-1 pb-2" style={{ scrollbarWidth: 'none' }}>
+          <TabsTrigger value="notes" className="whitespace-nowrap">Formula Sheet</TabsTrigger>
+          <TabsTrigger value="flashcards" className="whitespace-nowrap">Flashcards</TabsTrigger>
+          <TabsTrigger value="mindmaps" className="whitespace-nowrap">Mind Maps</TabsTrigger>
+          <TabsTrigger value="diagrams" className="whitespace-nowrap">Diagrams</TabsTrigger>
+          <TabsTrigger value="quizzes" className="whitespace-nowrap">Quizzes</TabsTrigger>
+          <TabsTrigger value="research" className="whitespace-nowrap">Research Notebook</TabsTrigger>
+          <TabsTrigger value="important-questions" className="whitespace-nowrap">Important Questions</TabsTrigger>
         </TabsList>
 
         {/* SMART NOTES TAB */}

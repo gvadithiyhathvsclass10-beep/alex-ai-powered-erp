@@ -22,7 +22,7 @@ import {
 import { formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
+import { useSpeechToText } from "@/hooks/use-speech-to-text"
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis"
 import { Message, Conversation } from "./types"
 
@@ -35,10 +35,8 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
   const [conversationId, setConversationId] = React.useState<string | null>(null)
   const [messages, setMessages] = React.useState<Message[]>([])
   const [isProcessing, setIsProcessing] = React.useState(false)
-  const [isListening, setIsListening] = React.useState(false)
   const [isSpeaking, setIsSpeaking] = React.useState(false)
   const [inputText, setInputText] = React.useState("")
-  const [transcript, setTranscript] = React.useState("")
   const [selectedVoice, setSelectedVoice] = React.useState<SpeechSynthesisVoice | null>(null)
   const [voices, setVoices] = React.useState<SpeechSynthesisVoice[]>([])
   const [inputMode, setInputMode] = React.useState<"voice" | "text">("voice")
@@ -60,16 +58,18 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
     return () => { window.speechSynthesis.onvoiceschanged = null }
   }, [selectedVoice])
 
-  // Speech Recognition Hook
+  // Shared Speech-to-Text Hook
   const {
-    transcript: recognizedText,
-    isListening: recognitionListening,
+    transcript,
+    interimTranscript,
+    isListening,
+    isSupported: isSpeechRecognitionSupported,
+    error: recognitionError,
+    audioLevel,
     startListening,
     stopListening,
     resetTranscript,
-    error: recognitionError,
-    isSupported: isSpeechRecognitionSupported
-  } = useSpeechRecognition({
+  } = useSpeechToText({
     onResult: (text) => setTranscript(text),
     onEnd: () => setIsListening(false),
     continuous: false,
@@ -85,8 +85,8 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
   } = useSpeechSynthesis()
 
   // Sync states
-  const isListening = recognitionListening
-  const isSpeaking = synthesisSpeaking
+  const isListeningSynced = isListening
+  const isSpeakingSynced = synthesisSpeaking
 
   // Load conversation history
   const { data: conversationsData } = useQuery({
@@ -180,14 +180,14 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
     setInputText("")
   }
 
-  // Handle voice input
+  // Handle voice input using shared hook
   const handleVoiceInput = async () => {
     if (!isSpeechRecognitionSupported) {
       toast({ title: "Not Supported", description: "Speech recognition is not supported in this browser", variant: "destructive" })
       return
     }
 
-    if (isListening) {
+    if (isListeningSynced) {
       stopListening()
       return
     }
@@ -199,7 +199,7 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
 
   // Handle transcript result
   useEffect(() => {
-    if (transcript && !isListening && !isProcessing) {
+    if (transcript && !isListeningSynced && !isProcessing) {
       const text = transcript.trim()
       if (text) {
         setInputText(text)
@@ -215,7 +215,8 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
         }
         resetTranscript()
       }
-    }, [transcript, isListening, isProcessing, conversationId]);
+    }
+  }, [transcript, isListeningSynced, isProcessing, conversationId]);
 
   // Handle speaking response
   const handleSpeakResponse = (text: string) => {
@@ -464,7 +465,7 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                           message={msg}
                           onCopy={() => copyToClipboard(msg.content)}
                           onSpeak={() => handleSpeakResponse(msg.content)}
-                          isSpeaking={isSpeaking}
+                          isSpeaking={isSpeakingSynced}
                           onStopSpeak={handleStopSpeaking}
                         />
                       ))}
@@ -500,14 +501,14 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
-                                variant={isListening ? "destructive" : "default"}
+                                variant={isListeningSynced ? "destructive" : "default"}
                                 size="lg"
-                                className={cn("h-12 w-12 rounded-full", isListening ? "animate-pulse bg-destructive/10 border-destructive/20" : "btn-primary-gradient")}
+                                className={cn("h-12 w-12 rounded-full", isListeningSynced ? "animate-pulse bg-destructive/10 border-destructive/20" : "btn-primary-gradient")}
                                 onClick={handleVoiceInput}
                                 disabled={!isSpeechRecognitionSupported || isProcessing}
-                                aria-label={isListening ? "Stop listening" : "Start listening"}
+                                aria-label={isListeningSynced ? "Stop listening" : "Start listening"}
                               >
-                                {isListening ? (
+                                {isListeningSynced ? (
                                   <MicOff className="h-6 w-6" />
                                 ) : (
                                   <Mic2 className="h-6 w-6" />
@@ -515,7 +516,7 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent side="top">
-                              {isListening ? "Stop listening" : "Start voice input"}
+                              {isListeningSynced ? "Stop listening" : "Start voice input"}
                               {!isSpeechRecognitionSupported && <span className="block text-xs">(Not supported in this browser)</span>}
                             </TooltipContent>
                           </Tooltip>
@@ -624,16 +625,17 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                         </CardContent>
                       </Card>
                     )
-                  )}
+                    )}
+                    </div>
                   </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </main>
+                </TabsContent>
+              </Tabs>
+            </main>
+          </div>
         </div>
       </div>
     )
-  }
+  )
 }
 
 function EmptyState({ icon: Icon, title, description, action }: {
