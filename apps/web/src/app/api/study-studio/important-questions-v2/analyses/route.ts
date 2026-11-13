@@ -67,8 +67,13 @@ export async function POST(request: Request) {
       );
     }
     console.error('[ImportantQuestionsV2] Analysis POST error:', error);
+    if (error instanceof Error) {
+      console.error('[ImportantQuestionsV2] Analysis POST error stack:', error.stack);
+      console.error('[ImportantQuestionsV2] Analysis POST error name:', error.name);
+      console.error('[ImportantQuestionsV2] Analysis POST error message:', error.message);
+    }
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to create analysis' } },
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to create analysis', detail: error instanceof Error ? error.message : 'Unknown error' } },
       { status: 500 }
     );
   }

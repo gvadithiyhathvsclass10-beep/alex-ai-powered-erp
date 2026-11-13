@@ -14,69 +14,75 @@ export async function createAnalysis(
   deps: ImportantQuestionsDependencies,
   request: AnalysisRequest
 ): Promise<AnalysisResult> {
-  try {
-    const user = await deps.requireUser();
-    
-    if (!request.documentIds.length) {
-      throw new Error('Upload at least one document before analysis.');
-    }
+  const user = await deps.requireUser();
+  
+  if (!request.documentIds.length) {
+    throw new Error('Upload at least one document before analysis.');
+  }
 
-    // Fetch document metadata
-    const docs = await deps.repository.listDocuments(user.id, request.documentIds);
-    
-    if (docs.length !== new Set(request.documentIds).size) {
-      throw new Error('One or more documents were not found or are not accessible.');
-    }
+  // Fetch document metadata
+  const docs = await deps.repository.listDocuments(user.id, request.documentIds);
+  
+  if (docs.length !== new Set(request.documentIds).size) {
+    throw new Error('One or more documents were not found or are not accessible.');
+  }
 
-    // Extract text from each document
-    const extracted = await Promise.all(docs.map(async (d) => {
+  console.log('[ImportantQuestionsV2] Starting analysis for', docs.length, 'documents');
+
+  // Extract text from each document
+  const extracted = await Promise.all(docs.map(async (d, index) => {
+    console.log(`[ImportantQuestionsV2] Extracting document ${index + 1}/${docs.length}: ${d.fileName}`);
+    try {
       const bytes = await deps.storage.get(d.storageKey);
-      return deps.extractor.extract({ 
+      const extracted = await deps.extractor.extract({ 
         bytes, 
         fileName: d.fileName, 
         mimeType: d.mimeType,
         documentId: d.id  // Pass the actual document ID for provenance
       });
-    }));
-
-    // Parse questions from extracted text
-    const questions = extracted.flatMap(x => parseQuestions(x.pages, x.document));
-
-    if (!questions.length) {
-      throw new Error('No questions could be extracted. Check document quality or OCR support, then try again.');
+      console.log(`[ImportantQuestionsV2] Extracted ${extracted.pages.length} pages from ${d.fileName}`);
+      return extracted;
+    } catch (error) {
+      console.error(`[ImportantQuestionsV2] Failed to extract document ${d.fileName}:`, error);
+      throw new Error(`Failed to extract document ${d.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }));
 
-    // Run V2 analysis
-    const result = await analyzeQuestions(
-      {
-        id: crypto.randomUUID(),
-        title: request.title,
-        documents: extracted.map(x => x.document),
-        questions,
-        instructions: request.instructions,
-      },
-      deps.ai,
-      request
-    );
+  // Parse questions from extracted text
+  const questions = extracted.flatMap(x => parseQuestions(x.pages, x.document));
+  console.log(`[ImportantQuestionsV2] Parsed ${questions.length} total questions`);
 
-    // Persist analysis
-    const saved = await deps.repository.saveAnalysis({
-      ownerId: user.id,
-      title: result.title,
-      result,
-      documentIds: request.documentIds,
-    });
-
-    return { ...result, id: saved.id };
-  } catch (error) {
-    console.error('[ImportantQuestionsV2] createAnalysis error:', error);
-    if (error instanceof Error) {
-      console.error('[ImportantQuestionsV2] createAnalysis error stack:', error.stack);
-      console.error('[ImportantQuestionsV2] createAnalysis error name:', error.name);
-      console.error('[ImportantQuestionsV2] createAnalysis error message:', error.message);
-    }
-    throw error;
+  if (!questions.length) {
+    throw new Error('No questions could be extracted. Check document quality or OCR support, then try again.');
   }
+
+  // Run V2 analysis
+  console.log('[ImportantQuestionsV2] Running AI analysis...');
+  const result = await analyzeQuestions(
+    {
+      id: crypto.randomUUID(),
+      title: request.title,
+      documents: extracted.map(x => x.document),
+      questions,
+      instructions: request.instructions,
+    },
+    deps.ai,
+    request
+  );
+
+  console.log('[ImportantQuestionsV2] Analysis complete, saving...');
+
+  // Persist analysis
+  const saved = await deps.repository.saveAnalysis({
+    ownerId: user.id,
+    title: result.title,
+    result,
+    documentIds: request.documentIds,
+  });
+
+  console.log('[ImportantQuestionsV2] Analysis saved with ID:', saved.id);
+
+  return { ...result, id: saved.id };
 }
 
 /**
