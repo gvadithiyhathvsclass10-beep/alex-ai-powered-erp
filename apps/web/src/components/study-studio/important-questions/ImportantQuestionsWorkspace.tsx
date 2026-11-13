@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/utils"
 import {
-  Plus, FileText, Sparkles, Brain, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Settings, Search, HelpCircle, Link, Trash2, ListMinus, Filter, Trophy, Archive, ChevronDown, Upload, CheckCircle2 as CheckCircleIcon, Loader2, X, Paperclip, Eye, Download as DownloadIcon, FilePlus, FileMinus, Settings2, BarChart3, ClipboardList, Lightbulb, Flag, Star, Layers, ArrowRight, ArrowLeft, MoreHorizontal, RefreshCw, AlertTriangle, Info, Send, FileQuestion,
+  Plus, FileText, Sparkles, Brain, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Settings, Search, HelpCircle, Link, Trash2, ListMinus, Filter, Trophy, Archive, ChevronDown, Upload, CheckCircle2 as CheckCircleIcon, Loader2, X, Paperclip, Eye, Download as DownloadIcon, FilePlus, FileMinus, Settings2, BarChart3, ClipboardList, Lightbulb, Flag, Star, Layers, ArrowRight, ArrowLeft, MoreHorizontal, RefreshCw, AlertTriangle, Info, Send, FileQuestion, BookOpen,
 } from "lucide-react"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 import { Separator } from "@/components/ui/separator"

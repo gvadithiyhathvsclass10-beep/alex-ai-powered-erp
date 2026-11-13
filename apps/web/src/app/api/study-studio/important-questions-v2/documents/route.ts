@@ -16,8 +16,14 @@ export async function GET() {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Documents GET error:', error);
+    // Log full error details for debugging
+    if (error instanceof Error) {
+      console.error('[ImportantQuestionsV2] Documents GET error stack:', error.stack);
+      console.error('[ImportantQuestionsV2] Documents GET error name:', error.name);
+      console.error('[ImportantQuestionsV2] Documents GET error message:', error.message);
+    }
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents' } },
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents', detail: error instanceof Error ? error.message : 'Unknown error' } },
       { status: 500 }
     );
   }
