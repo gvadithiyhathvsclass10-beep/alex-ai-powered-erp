@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2, ChevronRight, ChevronLeft, Settings, Search, FlaskConical, HelpCircle, Link, Trash2, Link2, ListMinus, Filter, Trophy, Archive } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2, ChevronRight, ChevronLeft, Settings, Search, FlaskConical, HelpCircle, Link, Trash2, Link2, ListMinus, Filter, Trophy, Archive, FolderOpen, FilePlus, X, Upload } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
@@ -429,8 +429,10 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     academicYear: '',
     examinationYear: '',
     marks: '',
-    file: null as File | null,
+    files: [] as File[],
   })
+  const [selectedExistingPaperIds, setSelectedExistingPaperIds] = React.useState<string[]>([])
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [iqAnalyses, setIqAnalyses] = React.useState<QuestionAnalysis[]>([])
   const [selectedIqAnalysis, setSelectedIqAnalysis] = React.useState<QuestionAnalysis | null>(null)
   const [showCreateAnalysis, setShowCreateAnalysis] = React.useState(false)
@@ -604,7 +606,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const { data: papersData, refetch: refetchPapers } = useQuery({
     queryKey: ["question-papers"],
     queryFn: async () => {
-      const res = await fetch("/api/study-studio/important-questions/papers")
+      const res = await fetch("/api/study-studio/important-questions-v2/documents")
       if (!res.ok) throw new Error("Failed to fetch question papers")
       return res.json()
     },
@@ -614,7 +616,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const { data: analysesData, refetch: refetchAnalyses } = useQuery({
     queryKey: ["question-analyses"],
     queryFn: async () => {
-      const res = await fetch("/api/study-studio/important-questions/analyses")
+      const res = await fetch("/api/study-studio/important-questions-v2/analyses")
       if (!res.ok) throw new Error("Failed to fetch analyses")
       return res.json()
     },
@@ -850,12 +852,12 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   // Important Questions mutations
   const uploadPaperMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await fetch("/api/important-questions/papers", {
+      const res = await fetch("/api/study-studio/important-questions-v2/documents", {
         method: "POST",
         body: formData,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || "Failed to upload paper")
+      if (!res.ok) throw new Error(data.error?.message || "Failed to upload paper")
       return data
     },
     onSuccess: () => {
@@ -870,7 +872,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
         academicYear: '',
         examinationYear: '',
         marks: '',
-        file: null,
+        files: [],
       })
       toast({ title: "Question paper uploaded successfully" })
     },
@@ -881,19 +883,19 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const extractQuestionsMutation = useMutation({
     mutationFn: async ({ paperId, provider, model }: { paperId: string; provider?: string; model?: string }) => {
       setExtractingPaper(paperId)
-      const res = await fetch(`/api/important-questions/papers/${paperId}`, {
+      const res = await fetch(`/api/study-studio/important-questions-v2/documents/${paperId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: 'extract', provider, model }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || "Failed to extract questions")
+      if (!res.ok) throw new Error(data.error?.message || "Failed to extract questions")
       return data
     },
     onSuccess: (data, variables) => {
       refetchPapers()
       setExtractingPaper(null)
-      toast({ title: `Extracted ${data.extractedCount} questions`, description: `Provider: ${data.provider} (${data.model})` })
+      toast({ title: `Extracted ${data.extractedCount} questions` })
       // Auto-select the paper to show extracted questions
       const paper = questionPapers.find(p => p.id === variables.paperId)
       if (paper) setSelectedIqPaper({ ...paper, questions: data.questions })
@@ -906,7 +908,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
 
   const deletePaperMutation = useMutation({
     mutationFn: async (paperId: string) => {
-      const res = await fetch(`/api/important-questions/papers/${paperId}`, { method: "DELETE" })
+      const res = await fetch(`/api/study-studio/important-questions-v2/documents/${paperId}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Failed to delete paper")
       return res.json()
     },
@@ -922,13 +924,19 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const createAnalysisMutation = useMutation({
     mutationFn: async (data: { title: string; subjectId: string; paperIds: string[]; filters: any }) => {
       setCreatingAnalysis(true)
-      const res = await fetch("/api/important-questions/analyses", {
+      const res = await fetch("/api/study-studio/important-questions-v2/analyses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          documentIds: data.paperIds,
+          title: data.title,
+          instructions: data.filters?.additionalInstructions,
+          focusUnits: data.filters?.focusUnits,
+          prioritizeMarks: data.filters?.prioritizeMarks,
+        }),
       })
       const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.error || "Failed to create analysis")
+      if (!res.ok) throw new Error(payload.error?.message || "Failed to create analysis")
       return payload
     },
     onSuccess: (data) => {
@@ -948,7 +956,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
 
   const deleteAnalysisMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/important-questions/analyses/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/study-studio/important-questions-v2/analyses/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Failed to delete analysis")
       return { id }
     },
@@ -2483,14 +2491,14 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
-                        Upload Question Paper
+                        Upload Question Papers
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <form
                         onSubmit={(e) => {
                           e.preventDefault()
-                          const fd = new FormData(e.currentTarget)
+                          const fd = new FormData()
                           fd.append('title', uploadPaperForm.title)
                           fd.append('paperType', uploadPaperForm.paperType)
                           if (uploadPaperForm.subjectId) fd.append('subjectId', uploadPaperForm.subjectId)
@@ -2499,102 +2507,224 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
                           if (uploadPaperForm.academicYear) fd.append('academicYear', uploadPaperForm.academicYear)
                           if (uploadPaperForm.examinationYear) fd.append('examinationYear', uploadPaperForm.examinationYear)
                           if (uploadPaperForm.marks) fd.append('marks', uploadPaperForm.marks)
-                          if (uploadPaperForm.file) fd.append('file', uploadPaperForm.file)
+                          uploadPaperForm.files.forEach(file => fd.append('files', file))
+                          // Also send selected existing paper IDs
+                          selectedExistingPaperIds.forEach(id => fd.append('existingPaperIds', id))
                           uploadPaperMutation.mutate(fd)
                         }}
-                        className="space-y-4"
+                        className="space-y-6"
                       >
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Title</Label>
-                            <Input
-                              placeholder="e.g., Physics PYQ 2023 - Semester 1"
-                              value={uploadPaperForm.title}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, title: e.target.value }))}
-                              required
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Paper Type</Label>
-                            <Select value={uploadPaperForm.paperType} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, paperType: v as 'QB' | 'PYQ' }))}>
-                              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="QB">Question Bank (QB)</SelectItem>
-                                <SelectItem value="PYQ">Previous Year Question Paper (PYQ)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Subject</Label>
-                            <Select value={uploadPaperForm.subjectId} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, subjectId: v }))}>
-                              <SelectTrigger><SelectValue placeholder="Select subject (optional)" /></SelectTrigger>
-                              <SelectContent>
-                                {(allUserDocuments?.documents || []).map((doc: any) => (
-                                  <SelectItem key={doc.id} value={doc.id}>{doc.title} ({doc.documentType})</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Semester</Label>
-                            <Input
-                              placeholder="e.g., Semester 3"
-                              value={uploadPaperForm.semester}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, semester: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Unit</Label>
-                            <Input
-                              placeholder="e.g., Unit 1: Mechanics"
-                              value={uploadPaperForm.unit}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, unit: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Academic Year</Label>
-                            <Input
-                              placeholder="e.g., 2023-2024"
-                              value={uploadPaperForm.academicYear}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, academicYear: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Examination Year</Label>
-                            <Input
-                              type="number"
-                              placeholder="e.g., 2023"
-                              value={uploadPaperForm.examinationYear}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, examinationYear: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Total Marks</Label>
-                            <Input
-                              type="number"
-                              placeholder="e.g., 100"
-                              value={uploadPaperForm.marks}
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, marks: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>File (PDF, DOCX, TXT)</Label>
-                            <Input
-                              type="file"
-                              accept=".pdf,.docx,.txt,.md"
-                              onChange={e => setUploadPaperForm(prev => ({ ...prev, file: e.target.files?.[0] || null }))}
-                              required
-                            />
-                            {uploadPaperForm.file && (
-                              <p className="text-xs text-muted-foreground">Selected: {uploadPaperForm.file.name}</p>
-                            )}
+                        {/* Upload New Files Section */}
+                        <div className="space-y-4">
+                          <h4 className="font-medium text-sm flex items-center gap-2">
+                            <Upload className="h-4 w-4" />
+                            Upload New Files
+                          </h4>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Title (optional for multiple files)</Label>
+                              <Input
+                                placeholder="e.g., Physics PYQ 2023 - Semester 1"
+                                value={uploadPaperForm.title}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, title: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Paper Type</Label>
+                              <Select value={uploadPaperForm.paperType} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, paperType: v as 'QB' | 'PYQ' }))}>
+                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="QB">Question Bank (QB)</SelectItem>
+                                  <SelectItem value="PYQ">Previous Year Question Paper (PYQ)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Subject</Label>
+                              <Select value={uploadPaperForm.subjectId} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, subjectId: v }))}>
+                                <SelectTrigger><SelectValue placeholder="Select subject (optional)" /></SelectTrigger>
+                                <SelectContent>
+                                  {iqSubjects.map((subj: Subject) => (
+                                    <SelectItem key={subj.id} value={subj.id}>{subj.code} - {subj.name} {subj.semester && `(${subj.semester})`}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Semester</Label>
+                              <Input
+                                placeholder="e.g., Semester 3"
+                                value={uploadPaperForm.semester}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, semester: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Unit</Label>
+                              <Input
+                                placeholder="e.g., Unit 1: Mechanics"
+                                value={uploadPaperForm.unit}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, unit: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Academic Year</Label>
+                              <Input
+                                placeholder="e.g., 2023-2024"
+                                value={uploadPaperForm.academicYear}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, academicYear: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Examination Year</Label>
+                              <Input
+                                type="number"
+                                placeholder="e.g., 2023"
+                                value={uploadPaperForm.examinationYear}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, examinationYear: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Total Marks</Label>
+                              <Input
+                                type="number"
+                                placeholder="e.g., 100"
+                                value={uploadPaperForm.marks}
+                                onChange={e => setUploadPaperForm(prev => ({ ...prev, marks: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                              <Label>Files (PDF, DOCX, TXT, MD) - Max 10 files, 50MB each</Label>
+                              <div
+                                className="border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer hover:border-primary/50"
+                                onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
+                                onDragLeave={e => { e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); }}
+                                onDrop={e => {
+                                  e.preventDefault()
+                                  e.currentTarget.classList.remove('border-primary', 'bg-primary/5')
+                                  const files = Array.from(e.dataTransfer.files)
+                                  setUploadPaperForm(prev => ({ ...prev, files: [...prev.files, ...files].slice(0, 10) }))
+                                }}
+                              >
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept=".pdf,.docx,.doc,.txt,.md"
+                                  multiple
+                                  onChange={e => setUploadPaperForm(prev => ({ ...prev, files: [...prev.files, ...Array.from(e.target.files || [])].slice(0, 10) }))}
+                                  className="hidden"
+                                  id="iq-file-input"
+                                />
+                                <div className="flex flex-col items-center gap-4">
+                                  <div className="p-3 rounded-full bg-primary/10 text-primary">
+                                    <Upload className="h-6 w-6" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">Drag & drop files here, or</p>
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => fileInputRef.current?.click()}
+                                      className="mt-2"
+                                    >
+                                      <FilePlus className="mr-2 h-4 w-4" />
+                                      Browse Files
+                                    </Button>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Supported: PDF, DOCX, DOC, TXT, MD • Max 50MB each • Max 10 files
+                                  </p>
+                                </div>
+                              </div>
+                              {uploadPaperForm.files.length > 0 && (
+                                <div className="mt-3 space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
+                                  <p className="text-xs font-medium text-muted-foreground">Selected files ({uploadPaperForm.files.length}/10)</p>
+                                  {uploadPaperForm.files.map((file, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                        <span className="truncate">{file.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-destructive hover:text-destructive"
+                                          onClick={() => setUploadPaperForm(prev => ({
+                                            ...prev,
+                                            files: prev.files.filter((_, i) => i !== idx)
+                                          }))}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
+
+                        {/* Select Existing Papers Section */}
+                        <div className="space-y-4 pt-4 border-t">
+                          <h4 className="font-medium text-sm flex items-center gap-2">
+                            <FolderOpen className="h-4 w-4" />
+                            Or Select Already-Uploaded Papers
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            Choose from papers that already have questions extracted (status: READY)
+                          </p>
+                          {questionPapers.filter(p => p.status === 'READY' && p._count?.questions && p._count.questions > 0).length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">No papers with extracted questions available.</p>
+                          ) : (
+                            <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
+                              {questionPapers
+                                .filter(p => p.status === 'READY' && p._count?.questions && p._count.questions > 0)
+                                .map((paper: QuestionPaper) => (
+                                  <label key={paper.id} className="flex items-center gap-3 p-2 hover:bg-accent/50 rounded cursor-pointer transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedExistingPaperIds.includes(paper.id)}
+                                      onChange={e => setSelectedExistingPaperIds(prev =>
+                                        e.target.checked
+                                          ? [...prev, paper.id]
+                                          : prev.filter(id => id !== paper.id)
+                                      )}
+                                      className="h-4 w-4 rounded border-primary"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-sm truncate">{paper.title}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {paper.paperType} • {paper._count?.questions || 0} questions • {paper.subject?.code || 'No subject'}
+                                      </p>
+                                    </div>
+                                    <Badge variant="outline" className="text-xs">{paper._count?.questions || 0} Qs</Badge>
+                                  </label>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+
                         <div className="flex gap-2 pt-4 border-t">
-                          <Button type="submit" disabled={uploadPaperMutation.isPending || !uploadPaperForm.file}>
-                            {uploadPaperMutation.isPending ? "Uploading..." : "Upload Paper"}
+                          <Button type="submit" disabled={uploadPaperMutation.isPending || (uploadPaperForm.files.length === 0 && selectedExistingPaperIds.length === 0)}>
+                            {uploadPaperMutation.isPending ? "Uploading..." : 
+                              `Add ${uploadPaperForm.files.length + selectedExistingPaperIds.length} Paper${uploadPaperForm.files.length + selectedExistingPaperIds.length > 1 ? 's' : ''}`}
                           </Button>
-                          <Button type="button" variant="outline" onClick={() => setShowUploadPaper(false)}>
+                          <Button type="button" variant="outline" onClick={() => {
+                            setShowUploadPaper(false)
+                            setUploadPaperForm({
+                              title: '',
+                              paperType: 'PYQ',
+                              subjectId: '',
+                              semester: '',
+                              unit: '',
+                              academicYear: '',
+                              examinationYear: '',
+                              marks: '',
+                              files: [],
+                            })
+                            setSelectedExistingPaperIds([])
+                          }}>
                             Cancel
                           </Button>
                         </div>
