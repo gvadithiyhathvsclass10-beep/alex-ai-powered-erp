@@ -8,8 +8,11 @@ import {
 } from '@/lib/ai/service'
 import { extractContent } from '@/lib/document-processing/extractors'
 import { downloadFile } from '@/lib/storage/client'
-import { createWorker } from 'tesseract.js'
 import { PDFDocument } from 'pdf-lib'
+import { createWorker } from 'tesseract.js'
+import { writeFile, unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 // pdf-parse is CommonJS, use dynamic import
 async function getPdfParse() {
@@ -39,10 +42,72 @@ async function extractTextWithOCR(buffer: Buffer): Promise<{ text: string; pageC
       return { text: extractedText, pageCount: pdfParseResult.numpages }
     }
     
-    // If very little text, it might be a scanned PDF
-    // In a production environment, you'd use pdf2pic or similar to convert pages to images
-    // For now, we'll return what we have and let the AI handle it
-    console.log('[ImportantQuestions] PDF appears to be scanned or has minimal extractable text, OCR would be needed')
+    // If very little text, it might be a scanned PDF - use OCR
+    console.log('[ImportantQuestions] PDF appears to be scanned, attempting OCR...')
+    
+    // Use a single timestamp for all temp files to avoid mismatch
+    const timestamp = Date.now()
+    const randomSuffix = Math.random().toString(36).substring(7)
+    const tempPdfPath = join(tmpdir(), `iq-ocr-${timestamp}-${randomSuffix}.pdf`)
+    const tempImagePrefix = join(tmpdir(), `iq-ocr-${timestamp}-${randomSuffix}`)
+    
+    try {
+      await writeFile(tempPdfPath, buffer)
+      
+      // Convert PDF pages to PNG images using pdftoppm
+      const { execFile } = await import('node:child_process')
+      const { promisify } = await import('node:util')
+      const execFileAsync = promisify(execFile)
+      
+      // Convert PDF to PNG images (one per page)
+      await execFileAsync('pdftoppm', ['-png', '-r', '300', tempPdfPath, tempImagePrefix], {
+        timeout: 60000,
+      })
+      
+      // Get list of generated image files
+      const { readdir } = await import('node:fs/promises')
+      const files = await readdir(tmpdir())
+      const imageFiles = files
+        .filter(f => f.startsWith(`iq-ocr-${timestamp}-${randomSuffix}`) && f.endsWith('.png'))
+        .sort()
+      
+      if (imageFiles.length === 0) {
+        console.warn('[ImportantQuestions] No images generated from PDF')
+        return { text: extractedText, pageCount: pdfParseResult.numpages }
+      }
+      
+      // Run OCR on each image
+      const worker = await createWorker('eng')
+      let fullText = ''
+      
+      for (const imageFile of imageFiles) {
+        const imagePath = join(tmpdir(), imageFile)
+        try {
+          const { data: { text } } = await worker.recognize(imagePath)
+          fullText += `\n\n--- Page ${imageFile} ---\n\n${text}`
+        } catch (ocrError) {
+          console.error(`[ImportantQuestions] OCR failed for ${imageFile}:`, ocrError)
+        }
+      }
+      
+      await worker.terminate()
+      
+      // Clean up temp files
+      for (const imageFile of imageFiles) {
+        await unlink(join(tmpdir(), imageFile)).catch(() => {})
+      }
+      await unlink(tempPdfPath).catch(() => {})
+      
+      if (fullText.trim().length > 0) {
+        console.log(`[ImportantQuestions] OCR extracted ${fullText.length} characters from ${imageFiles.length} pages`)
+        return { text: fullText.trim(), pageCount: imageFiles.length }
+      }
+    } catch (ocrError) {
+      console.error('[ImportantQuestions] OCR process failed:', ocrError)
+    } finally {
+      // Cleanup
+      await unlink(tempPdfPath).catch(() => {})
+    }
     
     return { text: extractedText, pageCount: pdfParseResult.numpages }
   } catch (error) {

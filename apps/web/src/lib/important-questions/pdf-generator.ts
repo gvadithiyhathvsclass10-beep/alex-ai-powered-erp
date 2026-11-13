@@ -305,7 +305,7 @@ function addExecutiveSummary(
   }
 }
 
-function addHighPriorityQuestions(doc: PDFKit.PDFDocument, priorityItems: PriorityItem[]) {
+function addHighPriorityQuestions(doc: PDFKit.PDFDocument, priorityItems: any[]) {
   const highPriority = priorityItems.filter(p => p.priority === 'HIGH')
   
   doc.fontSize(20).fillColor('#0f172a').font('Helvetica-Bold').text('High-Priority Questions', 50, 50)
@@ -350,7 +350,7 @@ function addHighPriorityQuestions(doc: PDFKit.PDFDocument, priorityItems: Priori
   })
 }
 
-function addMediumPriorityQuestions(doc: PDFKit.PDFDocument, priorityItems: PriorityItem[]) {
+function addMediumPriorityQuestions(doc: PDFKit.PDFDocument, priorityItems: any[]) {
   const mediumPriority = priorityItems.filter(p => p.priority === 'MEDIUM')
   
   doc.fontSize(20).fillColor('#0f172a').font('Helvetica-Bold').text('Medium-Priority Questions', 50, 50)
@@ -390,10 +390,10 @@ function addUnitWiseQuestions(doc: PDFKit.PDFDocument, analysis: any) {
   doc.moveDown(1)
   
   const unitDist = analysis.analysisData?.unitDistribution || {}
-  const priorityByUnit: Record<string, PriorityItem[]> = {}
+  const priorityByUnit: Record<string, any[]> = {}
   
-  analysis.priorityItems.forEach((item: PriorityItem) => {
-    item.units.forEach(unit => {
+  analysis.priorityItems.forEach((item: any) => {
+    item.units.forEach((unit: string) => {
       if (!priorityByUnit[unit]) priorityByUnit[unit] = []
       priorityByUnit[unit].push(item)
     })
@@ -430,7 +430,7 @@ function addRepeatedQuestions(doc: PDFKit.PDFDocument, analysis: any) {
   doc.moveDown(1)
   
   // Show exact repeat items
-  const exactRepeats = analysis.priorityItems.filter((p: PriorityItem) => p.isExactRepeat)
+  const exactRepeats = analysis.priorityItems.filter((p: any) => p.isExactRepeat)
   if (exactRepeats.length > 0) {
     doc.fontSize(14).fillColor('#dc2626').font('Helvetica-Bold').text('Exact Repeats (Identical Questions)')
     doc.moveDown(0.5)
@@ -460,7 +460,7 @@ function addRepeatedQuestions(doc: PDFKit.PDFDocument, analysis: any) {
     doc.fontSize(9).fillColor('#64748b').text('Questions with >85% semantic similarity (identified via embeddings)')
     doc.moveDown(0.5)
     
-    const semanticItems = analysis.priorityItems.filter((p: PriorityItem) => !p.isExactRepeat && p.frequency > 1)
+    const semanticItems = analysis.priorityItems.filter((p: any) => !p.isExactRepeat && p.frequency > 1)
     semanticItems.slice(0, 10).forEach((item, index) => {
       if (doc.y > doc.page.height - 100) doc.addPage()
       
@@ -485,7 +485,7 @@ function addImportantConcepts(doc: PDFKit.PDFDocument, analysis: any) {
   // Collect unique concepts from priority items
   const concepts = new Map<string, { frequency: number; priority: string; units: string[]; topics: string[] }>()
   
-  analysis.priorityItems.forEach((item: PriorityItem) => {
+  analysis.priorityItems.forEach((item: any) => {
     const key = item.concept
     if (!concepts.has(key)) {
       concepts.set(key, { frequency: 0, priority: item.priority, units: [], topics: [] })

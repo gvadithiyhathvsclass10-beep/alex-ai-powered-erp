@@ -90,6 +90,20 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validate subject ownership if provided
+    if (subjectId) {
+      const subject = await prisma.subject.findFirst({
+        where: { id: subjectId },
+        select: { id: true }
+      })
+      if (!subject) {
+        return NextResponse.json(
+          { error: 'Subject not found' },
+          { status: 404 }
+        )
+      }
+    }
+
     const createdPapers = []
 
     for (let i = 0; i < allFiles.length; i++) {
@@ -108,6 +122,13 @@ export async function POST(request: Request) {
         await uploadFile('documents', storagePath, fileBuffer, { contentType: currentFile.type })
       } catch (storageError) {
         console.error('[ImportantQuestions] Storage upload error:', storageError)
+        // Clean up any already uploaded files
+        for (const created of createdPapers) {
+          try {
+            const { deleteFile } = await import('@/lib/storage/client')
+            await deleteFile('documents', created.storagePath)
+          } catch {}
+        }
         return NextResponse.json(
           { error: 'Failed to upload file to storage' },
           { status: 500 }
@@ -122,6 +143,7 @@ export async function POST(request: Request) {
           fileSize: BigInt(currentFile.size),
           mimeType: currentFile.type,
           storagePath,
+          storageBucket: 'documents',
           paperType,
           subjectId: subjectId || null,
           semester: semester || null,
