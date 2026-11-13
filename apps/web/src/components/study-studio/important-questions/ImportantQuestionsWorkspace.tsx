@@ -160,6 +160,7 @@ interface AnalysisResult {
 interface UploadedFile {
   file: File
   id: string
+  uploadId: string // Stable client-side ID for matching server responses
   status: 'pending' | 'uploading' | 'completed' | 'error'
   message: string
   documentId?: string
@@ -271,6 +272,7 @@ export function ImportantQuestionsWorkspace({
     const newFiles = validFiles.map(f => ({
       file: f,
       id: `${Date.now()}-${Math.random()}`,
+      uploadId: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       status: 'pending' as const,
       message: 'Ready to upload'
     }))
@@ -285,18 +287,62 @@ export function ImportantQuestionsWorkspace({
     setUploadedFiles([])
   }
 
+  const retryFailedUploads = async () => {
+    const failedFiles = uploadedFiles.filter(f => f.status === 'error')
+    if (failedFiles.length === 0) return
+    
+    // Reset failed files to pending and trigger upload
+    setUploadedFiles(prev => prev.map(f =>
+      f.status === 'error' ? { ...f, status: 'pending', message: 'Ready to retry' } : f
+    ))
+    // Trigger upload for the reset files
+    await handleUploadFiles()
+  }
+
+  const clearAllFilesWithRetry = () => {
+    setUploadedFiles([])
+  }
+
   const handleUploadFiles = async () => {
     if (uploadedFiles.length === 0) return
 
+    // Mark pending files as uploading
+    const pendingFiles = uploadedFiles.filter(f => f.status === 'pending' || f.status === 'error')
+    if (pendingFiles.length === 0) return
+
+    setUploadedFiles(prev => prev.map(f =>
+      (f.status === 'pending' || f.status === 'error') ? { ...f, status: 'uploading', message: 'Uploading...' } : f
+    ))
     setUploadingFiles(true)
 
     try {
-      const pendingFiles = uploadedFiles.filter(f => f.status === 'pending' || f.status === 'error')
-
       const formData = new FormData()
       pendingFiles.forEach(f => {
         formData.append('files', f.file)
+        formData.append('uploadIds', f.uploadId) // Include client upload IDs for reliable matching
       })
+
+      // Include global metadata
+      formData.append('paperType', paperType)
+      if (subjectId) formData.append('subjectId', subjectId)
+      if (semester) formData.append('semester', semester)
+      if (unit) formData.append('unit', unit)
+      if (academicYear) formData.append('academicYear', academicYear)
+      if (examinationYear) formData.append('examinationYear', examinationYear.toString())
+      if (marks) formData.append('marks', marks.toString())
+      if (additionalInstructions) formData.append('additionalInstructions', additionalInstructions)
+
+      // Include per-file metadata
+      const fileMetadataToSend: Record<string, any> = {}
+      pendingFiles.forEach(f => {
+        const meta = fileMetadata[f.uploadId]
+        if (meta && Object.keys(meta).length > 0) {
+          fileMetadataToSend[f.uploadId] = meta
+        }
+      })
+      if (Object.keys(fileMetadataToSend).length > 0) {
+        formData.append('fileMetadata', JSON.stringify(fileMetadataToSend))
+      }
 
       const res = await fetch('/api/study-studio/important-questions-v2/documents', {
         method: 'POST',
@@ -305,29 +351,34 @@ export function ImportantQuestionsWorkspace({
 
       const data = await res.json()
 
-      if (!res.ok) {
-        throw new Error(data.error?.message || 'Upload failed')
-      }
-
-      // Update file statuses
+      // Always process individual file results, even on non-2xx responses
       const uploadedDocs = data.documents || []
       let successCount = 0
       let failCount = 0
 
-      uploadedDocs.forEach((doc: { id: string; fileName: string; status: string; error?: string }, index: number) => {
-        if (index < pendingFiles.length) {
-          const fileItem = pendingFiles[index]
+      // Create a map for O(1) lookup by uploadId
+      const docMap = new Map(uploadedDocs.map(doc => [doc.uploadId, doc]))
+
+      pendingFiles.forEach(fileItem => {
+        const doc = docMap.get(fileItem.uploadId)
+        if (doc) {
           if (doc.status === 'uploaded') {
             setUploadedFiles(prev => prev.map(f =>
-              f.id === fileItem.id ? { ...f, status: 'completed', message: 'Uploaded successfully', documentId: doc.id } : f
+              f.uploadId === fileItem.uploadId ? { ...f, status: 'completed', message: 'Uploaded successfully', documentId: doc.id } : f
             ))
             successCount++
           } else {
             setUploadedFiles(prev => prev.map(f =>
-              f.id === fileItem.id ? { ...f, status: 'error', message: doc.error || 'Upload failed' } : f
+              f.uploadId === fileItem.uploadId ? { ...f, status: 'error', message: doc.error || 'Upload failed' } : f
             ))
             failCount++
           }
+        } else {
+          // No response for this file - mark as error
+          setUploadedFiles(prev => prev.map(f =>
+            f.uploadId === fileItem.uploadId ? { ...f, status: 'error', message: 'No server response' } : f
+          ))
+          failCount++
         }
       })
 
@@ -342,6 +393,10 @@ export function ImportantQuestionsWorkspace({
       }
 
     } catch (err) {
+      // Network or catastrophic failure - mark all pending files as error
+      setUploadedFiles(prev => prev.map(f =>
+        (f.status === 'uploading' || f.status === 'pending') ? { ...f, status: 'error', message: err instanceof Error ? err.message : 'Upload failed' } : f
+      ))
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
     } finally {
       setUploadingFiles(false)
@@ -584,7 +639,13 @@ export function ImportantQuestionsWorkspace({
                   Uploaded Files ({uploadedFiles.length})
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={clearAllFiles} disabled={uploadingFiles}>
+                  {uploadedFiles.some(f => f.status === 'error') && (
+                    <Button variant="outline" size="sm" onClick={retryFailedUploads} disabled={uploadingFiles}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Retry Failed
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={clearAllFilesWithRetry} disabled={uploadingFiles}>
                     <Trash2 className="mr-2 h-4 w-4" />
                     Clear All
                   </Button>
@@ -627,15 +688,22 @@ export function ImportantQuestionsWorkspace({
                                 </p>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:text-destructive flex-shrink-0"
-                              onClick={() => removeFile(idx)}
-                              disabled={fileItem.status === 'uploading'}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive flex-shrink-0"
+                                onClick={() => removeFile(idx)}
+                                disabled={fileItem.status === 'uploading'}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                              {fileItem.status === 'error' && (
+                                <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-600 flex-shrink-0" onClick={retryFailedUploads} disabled={uploadingFiles} title="Retry this file">
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
 
                           <div className="mt-2 flex items-center gap-3">

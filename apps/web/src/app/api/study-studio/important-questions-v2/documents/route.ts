@@ -49,6 +49,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get client upload IDs for reliable matching
+    const uploadIds = formData.getAll('uploadIds') as string[];
+
     // Validate each file
     const validationErrors: string[] = [];
     for (const file of files) {
@@ -66,22 +69,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse optional metadata
-    const paperType = (formData.get('paperType') as string) || 'QB';
-    const subjectId = (formData.get('subjectId') as string) || null;
-    const semester = (formData.get('semester') as string) || null;
-    const unit = (formData.get('unit') as string) || null;
-    const academicYear = (formData.get('academicYear') as string) || null;
-    const examinationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
-    const marks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+    // Parse optional metadata (can be global or per-file)
+    const globalPaperType = (formData.get('paperType') as string) || 'QB';
+    const globalSubjectId = (formData.get('subjectId') as string) || null;
+    const globalSemester = (formData.get('semester') as string) || null;
+    const globalUnit = (formData.get('unit') as string) || null;
+    const globalAcademicYear = (formData.get('academicYear') as string) || null;
+    const globalExaminationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
+    const globalMarks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+    const additionalInstructions = (formData.get('additionalInstructions') as string) || null;
+
+    // Parse per-file metadata if provided
+    const perFileMetadata: Record<string, { paperType?: string; subjectId?: string; semester?: string; unit?: string; academicYear?: string; examinationYear?: number; marks?: number }> = {}
+    try {
+      const metadataJson = formData.get('fileMetadata') as string
+      if (metadataJson) {
+        Object.assign(perFileMetadata, JSON.parse(metadataJson))
+      }
+    } catch {
+      // Ignore metadata parse errors
+    }
 
     // Create dependencies
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
 
-    const results: Array<{ id: string; fileName: string; status: string; error?: string }> = [];
+    const results: Array<{ id: string; uploadId: string; fileName: string; status: string; error?: string }> = [];
 
     // Process each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const uploadId = uploadIds[i] || `upload-${Date.now()}-${i}`;
+      const fileMetadata = perFileMetadata[uploadId] || {}
+
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
 
@@ -93,27 +112,28 @@ export async function POST(request: Request) {
           bytes,
         });
 
-        // Create document record
+        // Create document record with per-file metadata
         const doc = await deps.repository.createDocument({
           ownerId: user.id,
           fileName: file.name,
           mimeType: file.type,
           sizeBytes: file.size,
           storageKey,
-          paperType: paperType as 'QB' | 'PYQ',
-          subjectId,
-          semester,
-          unit,
-          academicYear,
-          examinationYear,
-          marks,
+          paperType: (fileMetadata.paperType || globalPaperType) as 'QB' | 'PYQ',
+          subjectId: fileMetadata.subjectId || globalSubjectId,
+          semester: fileMetadata.semester || globalSemester,
+          unit: fileMetadata.unit || globalUnit,
+          academicYear: fileMetadata.academicYear || globalAcademicYear,
+          examinationYear: fileMetadata.examinationYear ?? globalExaminationYear,
+          marks: fileMetadata.marks ?? globalMarks,
         });
 
-        results.push({ id: doc.id, fileName: file.name, status: 'uploaded' });
+        results.push({ id: doc.id, uploadId, fileName: file.name, status: 'uploaded' });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);
         results.push({
           id: '',
+          uploadId,
           fileName: file.name,
           status: 'failed',
           error: error instanceof Error ? error.message : 'Upload failed',
@@ -133,8 +153,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Documents POST error:', error);
+    if (error instanceof Error) {
+      console.error('[ImportantQuestionsV2] Documents POST error stack:', error.stack);
+      console.error('[ImportantQuestionsV2] Documents POST error name:', error.name);
+      console.error('[ImportantQuestionsV2] Documents POST error message:', error.message);
+    }
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to upload documents' } },
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to upload documents', detail: error instanceof Error ? error.message : 'Unknown error' } },
       { status: 500 }
     );
   }
