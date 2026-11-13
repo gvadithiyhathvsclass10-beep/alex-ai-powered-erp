@@ -1,6 +1,10 @@
 /**
  * Database Readiness Utility for Important Questions V2
- * Shared utility to check database schema readiness
+ * Checks for the actual infrastructure used:
+ * - Document model (for uploads)
+ * - DocumentChunk model (for retrieval)
+ * - StudyMaterialJob model (for analysis persistence)
+ * - DocumentStatus enum
  */
 
 import { prisma } from '@/lib/prisma'
@@ -20,56 +24,38 @@ export interface DatabaseReadinessResult {
 }
 
 /**
- * Required tables for Important Questions feature
+ * Required tables for Important Questions V2 feature (using existing infrastructure)
  */
 const REQUIRED_TABLES = [
-  'question_analyses',
-  'question_priority_items',
-  'question_analysis_items',
-  'question_papers',
-  'extracted_questions',
-  'generated_practice_papers',
+  'documents',
+  'document_chunks',
+  'study_material_jobs',
 ] as const
 
 /**
  * Required columns per table (based on Prisma schema)
  */
 const REQUIRED_COLUMNS: Record<string, string[]> = {
-  question_analyses: [
-    'id', 'userId', 'title', 'subjectId', 'paperIds', 'totalQuestions',
-    'exactRepeats', 'semanticRepeats', 'analysisData', 'createdAt', 'updatedAt'
+  documents: [
+    'id', 'title', 'description', 'fileName', 'fileSize', 'mimeType',
+    'documentType', 'storagePath', 'storageBucket', 'checksum',
+    'ownerId', 'subjectId', 'projectId', 'notebookId',
+    'status', 'errorMessage', 'pageCount', 'metadata',
+    'processorId', 'processedAt', 'createdAt', 'updatedAt'
   ],
-  question_priority_items: [
-    'id', 'analysisId', 'questionId', 'priority', 'reason', 'frequency',
-    'recencyScore', 'marksWeight', 'unitRelevance', 'papersCount', 'createdAt'
+  document_chunks: [
+    'id', 'documentId', 'content', 'chunkIndex', 'pageNumber',
+    'sectionTitle', 'tokenCount', 'embedding', 'metadata', 'createdAt'
   ],
-  question_analysis_items: [
-    'id', 'analysisId', 'questionId', 'questionText', 'frequency',
-    'papersCount', 'totalMarks', 'avgMarks', 'firstYear', 'lastYear',
-    'units', 'topics', 'concepts', 'questionTypes', 'priority',
-    'priorityReason', 'isExactRepeat', 'matchedQuestionIds', 'createdAt'
-  ],
-  question_papers: [
-    'id', 'userId', 'title', 'fileName', 'fileSize', 'mimeType',
-    'storagePath', 'storageBucket', 'paperType', 'subjectId', 'semester',
-    'unit', 'academicYear', 'examinationYear', 'marks', 'status',
-    'pageCount', 'metadata', 'createdAt', 'updatedAt'
-  ],
-  extracted_questions: [
-    'id', 'questionPaperId', 'questionNumber', 'text', 'subQuestions',
-    'marks', 'unit', 'topic', 'concept', 'questionType', 'difficulty',
-    'year', 'pageReference', 'extractionConfidence', 'flags',
-    'createdAt', 'updatedAt'
-  ],
-  generated_practice_papers: [
-    'id', 'userId', 'title', 'sourceAnalysisId', 'paperType', 'subjectId',
-    'unit', 'questions', 'totalMarks', 'durationMinutes', 'metadata',
+  study_material_jobs: [
+    'id', 'userId', 'type', 'status', 'sourceDocId', 'subjectId',
+    'input', 'result', 'errorMessage', 'startedAt', 'completedAt',
     'createdAt', 'updatedAt'
   ],
 }
 
 /**
- * Check database readiness for Important Questions feature
+ * Check database readiness for Important Questions V2 feature
  */
 export async function checkDatabaseReadiness(): Promise<DatabaseReadinessResult> {
   const result: DatabaseReadinessResult = {
@@ -108,8 +94,7 @@ export async function checkDatabaseReadiness(): Promise<DatabaseReadinessResult>
       SELECT table_name FROM information_schema.tables 
       WHERE table_schema = 'public' 
       AND table_name IN (
-        'question_analyses', 'question_priority_items', 'question_analysis_items',
-        'question_papers', 'extracted_questions', 'generated_practice_papers',
+        'documents', 'document_chunks', 'study_material_jobs',
         'users', 'subjects'
       )
       ORDER BY table_name
@@ -139,12 +124,12 @@ export async function checkDatabaseReadiness(): Promise<DatabaseReadinessResult>
       }
     }
 
-    // 5. Check migration history
+    // 5. Check migration history (for reference)
     try {
       result.migrationStatus = await prisma.$queryRaw<Array<{ migration_name: string; finished_at: Date | null }>>`
         SELECT migration_name, finished_at FROM _prisma_migrations 
-        WHERE migration_name LIKE '%important_questions%' OR migration_name LIKE '%20251113%'
         ORDER BY finished_at DESC
+        LIMIT 10
       `
     } catch {
       // _prisma_migrations might not exist or be accessible
@@ -173,7 +158,7 @@ export async function quickDatabaseCheck(): Promise<{ ready: boolean; missingTab
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
       SELECT table_name FROM information_schema.tables 
       WHERE table_schema = 'public' 
-      AND table_name IN ('question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers')
+      AND table_name IN ('documents', 'document_chunks', 'study_material_jobs')
     `
     
     const existingTables = new Set(tables.map(t => t.table_name))

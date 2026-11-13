@@ -1,14 +1,17 @@
 /**
  * Analysis Service for V2 Important Questions
  * Orchestrates the full analysis pipeline using V2 modules and existing services
+ * Uses Document chunks from processed documents (Research Notebook pipeline)
  */
 
+import { prisma } from '@/lib/prisma';
 import { analyzeQuestions } from './analysis-engine';
 import { parseQuestions } from './question-parser';
 import type { AnalysisRequest, AnalysisResult, ImportantQuestionsDependencies, ExtractedDocument, SourceDocument } from './types';
 
 /**
  * Create a new analysis from uploaded documents
+ * Uses existing Document chunks from processed documents
  */
 export async function createAnalysis(
   deps: ImportantQuestionsDependencies,
@@ -29,7 +32,7 @@ export async function createAnalysis(
 
   console.log('[ImportantQuestionsV2] Starting analysis for', docs.length, 'documents');
 
-  // Extract text from each document - handle failures independently
+  // For each document, get the chunks from the processed Document
   const extractionResults: Array<{
     document: SourceDocument;
     extracted?: ExtractedDocument;
@@ -38,20 +41,59 @@ export async function createAnalysis(
 
   for (let index = 0; index < docs.length; index++) {
     const d = docs[index];
-    console.log(`[ImportantQuestionsV2] Extracting document ${index + 1}/${docs.length}: ${d.fileName}`);
+    console.log(`[ImportantQuestionsV2] Retrieving chunks for document ${index + 1}/${docs.length}: ${d.fileName}`);
     try {
-      const bytes = await deps.storage.get(d.storageKey);
-      const extracted = await deps.extractor.extract({ 
-        bytes, 
-        fileName: d.fileName, 
-        mimeType: d.mimeType,
-        documentId: d.id
+      // Get chunks from the processed Document
+      const docChunks = await prisma.documentChunk.findMany({
+        where: { documentId: d.id },
+        orderBy: { chunkIndex: 'asc' },
+        select: {
+          content: true,
+          chunkIndex: true,
+          pageNumber: true,
+          sectionTitle: true,
+        },
       });
-      console.log(`[ImportantQuestionsV2] Extracted ${extracted.pages.length} pages from ${d.fileName}`);
+
+      if (!docChunks.length) {
+        throw new Error(`Document ${d.fileName} has no processed chunks. Please wait for processing to complete.`);
+      }
+
+      // Build ExtractedDocument from chunks
+      const pages: Array<{ page: number; text: string; ocrUsed?: boolean }> = [];
+      const pageMap = new Map<number, string[]>();
+      
+      for (const chunk of docChunks) {
+        const pageNum = chunk.pageNumber || 1;
+        const existing = pageMap.get(pageNum) || [];
+        existing.push(chunk.content);
+        pageMap.set(pageNum, existing);
+      }
+
+      for (const [pageNum, texts] of pageMap.entries()) {
+        pages.push({
+          page: pageNum,
+          text: texts.join('\n\n'),
+          ocrUsed: false,
+        });
+      }
+
+      const extracted: ExtractedDocument = {
+        document: {
+          id: d.id,
+          fileName: d.fileName,
+          mimeType: d.mimeType,
+          pageCount: pages.length,
+        },
+        text: docChunks.map(c => c.content).join('\n\n'),
+        pages,
+      };
+
+      console.log(`[ImportantQuestionsV2] Retrieved ${pages.length} pages with ${docChunks.length} chunks from ${d.fileName}`);
       extractionResults.push({ document: d, extracted });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[ImportantQuestionsV2] Failed to extract document ${d.fileName}:`, error);
+      console.error(`[ImportantQuestionsV2] Failed to retrieve chunks for document ${d.fileName}:`, error);
       extractionResults.push({ document: d, error: errorMsg });
     }
   }
@@ -65,7 +107,7 @@ export async function createAnalysis(
   }
 
   if (!successfulExtractions.length) {
-    throw new Error('No documents could be extracted. Check document quality or OCR support, then try again.');
+    throw new Error('No documents could be processed. Ensure documents are fully processed (READY status) before analysis.');
   }
 
   // Parse questions from successfully extracted text

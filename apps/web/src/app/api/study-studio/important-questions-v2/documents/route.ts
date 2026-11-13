@@ -2,6 +2,9 @@ import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { createImportantQuestionsDependencies } from '@/lib/study-studio/important-questions-v2';
 import { validateUpload, MAX_FILE_BYTES } from '@/lib/study-studio/important-questions-v2/types';
+import { createDocumentRecord, processDocument } from '@/lib/document-processing/pipeline';
+import { DocumentStatus } from '@prisma/client';
+import { uploadFile } from '@/lib/storage/client';
 
 export async function GET() {
   try {
@@ -16,7 +19,6 @@ export async function GET() {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Documents GET error:', error);
-    // Log full error details for debugging
     if (error instanceof Error) {
       console.error('[ImportantQuestionsV2] Documents GET error stack:', error.stack);
       console.error('[ImportantQuestionsV2] Documents GET error name:', error.name);
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
 
     const results: Array<{ id: string; uploadId: string; fileName: string; status: string; error?: string }> = [];
 
-    // Process each file
+    // Process each file through the Research Notebook pipeline
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const uploadId = uploadIds[i] || `upload-${Date.now()}-${i}`;
@@ -104,30 +106,82 @@ export async function POST(request: Request) {
 
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
+        const buffer = Buffer.from(bytes);
 
-        // Upload to storage
-        const uploadResult = await deps.storage.put({
-          ownerId: user.id,
-          fileName: file.name,
-          mimeType: file.type,
-          bytes,
+        // Upload to storage using the existing pipeline
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storageKeyPath = `documents/${user.id}/${Date.now()}-${safeFileName}`;
+        const bucket = process.env.STORAGE_BUCKET_DOCUMENTS || 'documents';
+
+        const uploadResult = await uploadFile(bucket, storageKeyPath, buffer, {
+          contentType: file.type,
         });
-        storageKey = uploadResult.storageKey;
+        storageKey = uploadResult.path || storageKeyPath;
 
-        // Create document record with per-file metadata
-        const doc = await deps.repository.createDocument({
-          ownerId: user.id,
+        // Verify the file was actually persisted in storage
+        const { fileExists } = await import('@/lib/storage/client');
+        const storedExists = await fileExists(bucket, uploadResult.path || storageKeyPath);
+        if (!storedExists) {
+          throw new Error('Failed to verify stored file after upload');
+        }
+
+        // Create Document record using the existing pipeline
+        const crypto = await import('crypto');
+        const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
+
+        // Determine document type from file
+        const { resolveDocumentType } = await import('@/lib/document-processing/extractors');
+        const documentType = resolveDocumentType(file.name, file.type);
+
+        const doc = await prisma.document.create({
+          data: {
+            title: file.name.replace(/\.[^/.]+$/, ''),
+            fileName: file.name,
+            fileSize: BigInt(buffer.byteLength),
+            mimeType: file.type,
+            documentType,
+            storagePath: uploadResult.path || storageKeyPath,
+            storageBucket: bucket,
+            checksum,
+            ownerId: user.id,
+            subjectId: fileMetadata.subjectId || globalSubjectId || undefined,
+            status: DocumentStatus.UPLOADED,
+            metadata: {
+              v2StorageKey: uploadResult.path || storageKeyPath,
+              v2CreatedAt: new Date().toISOString(),
+              paperType: (fileMetadata.paperType || globalPaperType) as 'QB' | 'PYQ',
+              subjectId: fileMetadata.subjectId || globalSubjectId || null,
+              semester: fileMetadata.semester || globalSemester || null,
+              unit: fileMetadata.unit || globalUnit || null,
+              academicYear: fileMetadata.academicYear || globalAcademicYear || null,
+              examinationYear: (fileMetadata.examinationYear ?? globalExaminationYear) ?? null,
+              marks: (fileMetadata.marks ?? globalMarks) ?? null,
+            },
+          },
+          select: { id: true },
+        });
+
+        // Run the full document processing pipeline (extraction, chunking, embedding, indexing)
+        // This ensures the document is READY and has chunks for retrieval
+        const processingStats = await processDocument({
+          documentId: doc.id,
+          userId: user.id,
+          fileBuffer: buffer,
           fileName: file.name,
           mimeType: file.type,
-          sizeBytes: file.size,
-          storageKey,
-          paperType: (fileMetadata.paperType || globalPaperType) as 'QB' | 'PYQ',
-          subjectId: fileMetadata.subjectId || globalSubjectId,
-          semester: fileMetadata.semester || globalSemester,
-          unit: fileMetadata.unit || globalUnit,
-          academicYear: fileMetadata.academicYear || globalAcademicYear,
-          examinationYear: fileMetadata.examinationYear ?? globalExaminationYear,
-          marks: fileMetadata.marks ?? globalMarks,
+          documentType: resolveDocumentType(file.name, file.type),
+          subjectId: fileMetadata.subjectId || globalSubjectId || undefined,
+        });
+
+        // Update document with processing stats
+        await prisma.document.update({
+          where: { id: doc.id },
+          data: {
+            pageCount: processingStats.pageCount,
+            status: processingStats.status,
+            processedAt: new Date(),
+            processorId: user.id,
+          },
         });
 
         results.push({ id: doc.id, uploadId, fileName: file.name, status: 'uploaded' });
@@ -136,7 +190,9 @@ export async function POST(request: Request) {
         // Clean up storage if database operation failed
         if (storageKey) {
           try {
-            await deps.storage.remove(storageKey);
+            const { deleteFile } = await import('@/lib/storage/client');
+            const bucket = process.env.STORAGE_BUCKET_DOCUMENTS || 'documents';
+            await deleteFile(bucket, storageKey);
             console.log('[ImportantQuestionsV2] Cleaned up orphaned storage object:', storageKey);
           } catch (cleanupError) {
             console.error('[ImportantQuestionsV2] Failed to cleanup storage:', cleanupError);

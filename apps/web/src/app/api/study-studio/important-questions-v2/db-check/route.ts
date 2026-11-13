@@ -14,16 +14,16 @@ export async function GET() {
         documentStatusEnum: result.documentStatusEnum,
       },
       tables: {
-        required: Array.from(['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers']),
+        required: Array.from(['documents', 'document_chunks', 'study_material_jobs']),
         existing: Array.from(new Set([
           ...Object.keys(result.missingColumns),
-          ...(['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'].filter(t => !result.missingTables.includes(t)))
+          ...(['documents', 'document_chunks', 'study_material_jobs'].filter(t => !result.missingTables.includes(t)))
         ])),
         missing: result.missingTables,
         missingColumns: result.missingColumns,
       },
       migrations: {
-        importantQuestions: result.migrationStatus,
+        recent: result.migrationStatus,
       },
       errors: result.errors,
       ready: result.ready,

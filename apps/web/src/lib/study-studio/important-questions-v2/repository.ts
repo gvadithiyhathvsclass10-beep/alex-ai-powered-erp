@@ -1,6 +1,7 @@
 /**
  * Repository Adapter for V2 Important Questions
- * Uses existing Prisma Document model (like Research Notebook)
+ * Uses existing Prisma Document model (like Research Notebook) for uploads
+ * Uses StudyMaterialJob for analysis persistence (avoids legacy question tables)
  * Stores Important Questions metadata in the Document's metadata JSON field
  */
 
@@ -26,8 +27,12 @@ function resolveDocumentTypeFromMime(mimeType: string) {
   return (mimeToType[normalized] as any) || 'OTHER';
 }
 
+/** Type for study material jobs - important_questions */
+const IQ_JOB_TYPE = 'important_questions';
+
 /**
- * Create repository adapter using existing Prisma Document model
+ * Create repository adapter using existing Prisma Document model for uploads
+ * and StudyMaterialJob for analysis persistence
  */
 export function createRepositoryAdapter(): RepositoryAdapter {
   return {
@@ -108,108 +113,146 @@ export function createRepositoryAdapter(): RepositoryAdapter {
       const exactRepeats = result.summary.exactRepeatGroups;
       const semanticRepeats = result.summary.semanticRepeatGroups;
 
-      const analysis = await prisma.questionAnalysis.create({
+      // Prepare result JSON for StudyMaterialJob
+      const jobResult = {
+        ...result,
+        // Ensure the result is serializable (remove circular references)
+        questions: result.questions.map(q => ({
+          ...q,
+          occurrences: q.occurrences?.map(o => ({
+            id: o.id,
+            sourceDocumentId: o.sourceDocumentId,
+            sourceFileName: o.sourceFileName,
+            page: o.page,
+            questionNumber: o.questionNumber,
+            text: o.text,
+            normalizedText: o.normalizedText,
+            marks: o.marks,
+            unit: o.unit,
+            topic: o.topic,
+            concept: o.concept,
+            questionType: o.questionType,
+            difficulty: o.difficulty,
+            academicYear: o.academicYear,
+            examYear: o.examYear,
+            subQuestions: o.subQuestions,
+            extractionConfidence: o.extractionConfidence,
+            flags: o.flags,
+          })) || [],
+        })),
+        repeatGroups: result.repeatGroups,
+        rankedQuestions: result.rankedQuestions.map(rq => ({
+          ...rq,
+          occurrences: rq.occurrences?.map(o => ({
+            id: o.id,
+            sourceDocumentId: o.sourceDocumentId,
+            sourceFileName: o.sourceFileName,
+            page: o.page,
+            questionNumber: o.questionNumber,
+            text: o.text,
+            normalizedText: o.normalizedText,
+            marks: o.marks,
+            unit: o.unit,
+            topic: o.topic,
+            concept: o.concept,
+            questionType: o.questionType,
+            difficulty: o.difficulty,
+            academicYear: o.academicYear,
+            examYear: o.examYear,
+            subQuestions: o.subQuestions,
+            extractionConfidence: o.extractionConfidence,
+            flags: o.flags,
+          })) || [],
+        })),
+      };
+
+      // Create StudyMaterialJob for analysis persistence
+      const job = await prisma.studyMaterialJob.create({
         data: {
           userId: ownerId,
-          title,
-          subjectId: null, // Could be derived from papers
-          paperIds: documentIds,
-          totalQuestions,
-          exactRepeats,
-          semanticRepeats,
-          analysisData: result as any,
-          priorityItems: {
-            create: result.rankedQuestions.map(item => ({
-              questionId: item.id,
-              priority: item.priority,
-              reason: item.rationale.join('; '),
-              frequency: item.occurrences[0] ? result.repeatGroups
-                .filter(g => g.occurrenceIds.includes(item.occurrences[0].id))
-                .reduce((sum, g) => sum + g.frequency, 1) : 1,
-              recencyScore: 0.5, // Could be calculated
-              marksWeight: 0.5,
-              unitRelevance: 0.5,
-              papersCount: new Set(item.occurrences.map(o => o.sourceDocumentId)).size,
-            })),
-          },
+          type: IQ_JOB_TYPE,
+          status: 'completed',
+          sourceDocId: documentIds[0] || null,
+          subjectId: null,
+          input: {
+            documentIds,
+            title,
+          } as any,
+          result: jobResult as any,
+          errorMessage: null,
+          startedAt: new Date(),
+          completedAt: new Date(),
         },
         select: { id: true },
       });
 
-      return { id: analysis.id };
+      return { id: job.id };
     },
 
     async getAnalysis(ownerId, id) {
-      const analysis = await prisma.questionAnalysis.findFirst({
-        where: { id, userId: ownerId },
-        include: {
-          priorityItems: true,
-          // analysisData is JSON, already included
+      const job = await prisma.studyMaterialJob.findFirst({
+        where: { 
+          id, 
+          userId: ownerId,
+          type: IQ_JOB_TYPE,
         },
       });
 
-      if (!analysis) return null;
+      if (!job) return null;
 
-      // Convert stored analysis to V2 AnalysisResult format
-      const analysisData = analysis.analysisData as any;
-      if (analysisData && analysisData.rankedQuestions) {
-        return analysisData as AnalysisResult;
+      // Convert stored job to V2 AnalysisResult format
+      const jobResult = job.result as any;
+      if (jobResult && jobResult.rankedQuestions) {
+        return {
+          ...jobResult,
+          id: job.id,
+          createdAt: job.createdAt.toISOString(),
+        } as AnalysisResult;
       }
 
       // Fallback: reconstruct from stored data
       return {
-        id: analysis.id,
-        title: analysis.title,
-        createdAt: analysis.createdAt.toISOString(),
+        id: job.id,
+        title: job.input?.title as string || 'Important Questions Analysis',
+        createdAt: job.createdAt.toISOString(),
         documents: [],
         questions: [],
         repeatGroups: [],
-        rankedQuestions: analysis.priorityItems.map(item => ({
-          id: item.questionId,
-          question: '', // Would need to fetch from ExtractedQuestion
-          priority: item.priority as any,
-          score: 0,
-          rationale: [item.reason],
-          marks: null,
-          unit: null,
-          topic: null,
-          occurrences: [],
-          repeatGroupIds: [],
-        })),
+        rankedQuestions: [],
         unitCoverage: [],
         topicFrequency: [],
         studyOrder: [],
         summary: {
-          papersAnalyzed: analysis.paperIds.length,
-          totalQuestions: analysis.totalQuestions,
-          exactRepeatGroups: analysis.exactRepeats,
-          semanticRepeatGroups: analysis.semanticRepeats,
+          papersAnalyzed: 0,
+          totalQuestions: 0,
+          exactRepeatGroups: 0,
+          semanticRepeatGroups: 0,
           conceptGroups: 0,
         },
-        limitations: [],
+        limitations: ['Analysis data incomplete'],
       };
     },
 
     async listAnalyses(ownerId) {
-      const analyses = await prisma.questionAnalysis.findMany({
-        where: { userId: ownerId },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          priorityItems: true,
+      const jobs = await prisma.studyMaterialJob.findMany({
+        where: { 
+          userId: ownerId,
+          type: IQ_JOB_TYPE,
         },
+        orderBy: { createdAt: 'desc' },
       });
 
-      return analyses.map(a => {
-        const analysisData = a.analysisData as any;
+      return jobs.map(job => {
+        const jobResult = job.result as any;
         return {
-          id: a.id,
-          title: a.title,
-          createdAt: a.createdAt.toISOString(),
-          summary: analysisData?.summary ?? {
-            papersAnalyzed: a.paperIds.length,
-            totalQuestions: a.totalQuestions,
-            exactRepeatGroups: a.exactRepeats,
-            semanticRepeatGroups: a.semanticRepeats,
+          id: job.id,
+          title: job.input?.title as string || jobResult?.title || 'Important Questions Analysis',
+          createdAt: job.createdAt.toISOString(),
+          summary: jobResult?.summary ?? {
+            papersAnalyzed: 0,
+            totalQuestions: 0,
+            exactRepeats: 0,
+            semanticRepeats: 0,
             conceptGroups: 0,
           },
         };
@@ -238,15 +281,19 @@ export function createRepositoryAdapter(): RepositoryAdapter {
     },
 
     async deleteAnalysis(ownerId, id) {
-      const analysis = await prisma.questionAnalysis.findFirst({
-        where: { id, userId: ownerId },
+      const job = await prisma.studyMaterialJob.findFirst({
+        where: { 
+          id, 
+          userId: ownerId,
+          type: IQ_JOB_TYPE,
+        },
       });
 
-      if (!analysis) {
+      if (!job) {
         throw new Error('Analysis not found or access denied');
       }
 
-      await prisma.questionAnalysis.delete({ where: { id } });
+      await prisma.studyMaterialJob.delete({ where: { id } });
     },
   };
 }
