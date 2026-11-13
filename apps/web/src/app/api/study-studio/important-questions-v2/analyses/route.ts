@@ -2,6 +2,34 @@ import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { createImportantQuestionsDependencies, createAnalysis } from '@/lib/study-studio/important-questions-v2';
 import type { AnalysisRequest } from '@/lib/study-studio/important-questions-v2/types';
+import { prisma } from '@/lib/prisma';
+
+async function checkDatabaseReady(): Promise<{ ready: boolean; missingTables: string[]; error?: string }> {
+  try {
+    // Check if the required tables exist
+    const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers')
+    `;
+    
+    const existingTables = new Set(tables.map(t => t.table_name));
+    const requiredTables = ['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'];
+    const missingTables = requiredTables.filter(t => !existingTables.has(t));
+    
+    return { 
+      ready: missingTables.length === 0, 
+      missingTables,
+      error: missingTables.length > 0 ? `Missing tables: ${missingTables.join(', ')}` : undefined
+    };
+  } catch (error) {
+    return { 
+      ready: false, 
+      missingTables: [], 
+      error: error instanceof Error ? error.message : 'Database connection failed' 
+    };
+  }
+}
 
 export async function GET() {
   try {
@@ -14,6 +42,21 @@ export async function GET() {
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+    }
+    // Check if it's a missing table error
+    if (error instanceof Error && (error.message.includes('question_analyses') || error.message.includes('relation') || error.message.includes('does not exist'))) {
+      const dbCheck = await checkDatabaseReady();
+      return NextResponse.json(
+        { 
+          error: { 
+            code: 'DATABASE_NOT_READY', 
+            message: 'Database schema not ready. Required tables are missing.',
+            detail: dbCheck.error,
+            missingTables: dbCheck.missingTables
+          } 
+        },
+        { status: 503 }
+      );
     }
     console.error('[ImportantQuestionsV2] Analyses GET error:', error);
     if (error instanceof Error) {
@@ -48,6 +91,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check database readiness before attempting analysis
+    const dbCheck = await checkDatabaseReady();
+    if (!dbCheck.ready) {
+      console.error('[ImportantQuestionsV2] Database not ready:', dbCheck);
+      return NextResponse.json(
+        { 
+          error: { 
+            code: 'DATABASE_NOT_READY', 
+            message: 'Database schema not ready. Required tables are missing.',
+            detail: dbCheck.error,
+            missingTables: dbCheck.missingTables
+          } 
+        },
+        { status: 503 }
+      );
+    }
+
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
     const result = await createAnalysis(deps, analysisRequest);
 
@@ -69,6 +129,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: 'EXTRACTION_FAILED', message: error.message } },
         { status: 422 }
+      );
+    }
+    // Check for missing table errors
+    if (error instanceof Error && (error.message.includes('question_analyses') || error.message.includes('question_priority_items') || error.message.includes('relation') || error.message.includes('does not exist'))) {
+      const dbCheck = await checkDatabaseReady();
+      return NextResponse.json(
+        { 
+          error: { 
+            code: 'DATABASE_NOT_READY', 
+            message: 'Database schema not ready. Required tables are missing.',
+            detail: dbCheck.error,
+            missingTables: dbCheck.missingTables
+          } 
+        },
+        { status: 503 }
       );
     }
     console.error('[ImportantQuestionsV2] Analysis POST error:', error);

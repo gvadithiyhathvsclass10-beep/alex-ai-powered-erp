@@ -103,12 +103,48 @@ jobs:
           NODE_ENV: test
 
   # ---------------------------------------------------------------------------
+  # Run Prisma Migrations (before deployment)
+  # ---------------------------------------------------------------------------
+  migrate:
+    name: Run Prisma Migrations
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @alex/web run db:generate
+
+      - name: Run Prisma migrations against Neon
+        run: |
+          cd apps/web
+          pnpm run db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+
+  # ---------------------------------------------------------------------------
   # Build Docker Image
   # ---------------------------------------------------------------------------
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: test
+    needs: migrate
     outputs:
       image-digest: ${{ steps.build-api.outputs.digest }}
     steps:
@@ -195,16 +231,6 @@ jobs:
           waitForDeployment: true
           # Optional: specify branch or commit
           # branch: main
-
-      - name: Run Prisma Migrations
-        run: |
-          # Run migrations against Neon using DIRECT_URL
-          # This runs from the workspace root with the web app's Prisma schema
-          cd apps/web
-          pnpm run db:migrate:deploy
-        env:
-          DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
-          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
 
       - name: Deploy Cloudflare Worker
         uses: cloudflare/wrangler-action@v3
