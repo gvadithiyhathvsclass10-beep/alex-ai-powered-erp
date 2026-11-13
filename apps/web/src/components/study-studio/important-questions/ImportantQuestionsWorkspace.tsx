@@ -204,9 +204,19 @@ export function ImportantQuestionsWorkspace({
   // Upload state
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadedFile[]>([])
   const [dragActive, setDragActive] = React.useState(false)
-  const [additionalInstructions, setAdditionalInstructions] = React.useState("")
   const [uploadingFiles, setUploadingFiles] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Metadata state (with safe defaults)
+  const [paperType, setPaperType] = React.useState<'QB' | 'PYQ'>('QB')
+  const [subjectId, setSubjectId] = React.useState("")
+  const [semester, setSemester] = React.useState("")
+  const [unit, setUnit] = React.useState("")
+  const [academicYear, setAcademicYear] = React.useState("")
+  const [examinationYear, setExaminationYear] = React.useState("")
+  const [marks, setMarks] = React.useState("")
+  const [additionalInstructions, setAdditionalInstructions] = React.useState("")
+  const [fileMetadata, setFileMetadata] = React.useState<Record<string, { paperType?: string; subjectId?: string; semester?: string; unit?: string; academicYear?: string; examinationYear?: number; marks?: number }>>({})
 
   // Analysis state
   const [analysisTitle, setAnalysisTitle] = React.useState("")
