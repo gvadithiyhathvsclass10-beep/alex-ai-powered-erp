@@ -2,34 +2,7 @@ import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { createImportantQuestionsDependencies, createAnalysis } from '@/lib/study-studio/important-questions-v2';
 import type { AnalysisRequest } from '@/lib/study-studio/important-questions-v2/types';
-import { prisma } from '@/lib/prisma';
-
-async function checkDatabaseReady(): Promise<{ ready: boolean; missingTables: string[]; error?: string }> {
-  try {
-    // Check if the required tables exist
-    const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
-      SELECT table_name FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-      AND table_name IN ('question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers')
-    `;
-    
-    const existingTables = new Set(tables.map(t => t.table_name));
-    const requiredTables = ['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'];
-    const missingTables = requiredTables.filter(t => !existingTables.has(t));
-    
-    return { 
-      ready: missingTables.length === 0, 
-      missingTables,
-      error: missingTables.length > 0 ? `Missing tables: ${missingTables.join(', ')}` : undefined
-    };
-  } catch (error) {
-    return { 
-      ready: false, 
-      missingTables: [], 
-      error: error instanceof Error ? error.message : 'Database connection failed' 
-    };
-  }
-}
+import { quickDatabaseCheck } from '@/lib/study-studio/important-questions-v2/db-readiness';
 
 export async function GET() {
   try {
@@ -45,7 +18,7 @@ export async function GET() {
     }
     // Check if it's a missing table error
     if (error instanceof Error && (error.message.includes('question_analyses') || error.message.includes('relation') || error.message.includes('does not exist'))) {
-      const dbCheck = await checkDatabaseReady();
+      const dbCheck = await quickDatabaseCheck();
       return NextResponse.json(
         { 
           error: { 
@@ -92,7 +65,7 @@ export async function POST(request: Request) {
     }
 
     // Check database readiness before attempting analysis
-    const dbCheck = await checkDatabaseReady();
+    const dbCheck = await quickDatabaseCheck();
     if (!dbCheck.ready) {
       console.error('[ImportantQuestionsV2] Database not ready:', dbCheck);
       return NextResponse.json(
@@ -133,7 +106,7 @@ export async function POST(request: Request) {
     }
     // Check for missing table errors
     if (error instanceof Error && (error.message.includes('question_analyses') || error.message.includes('question_priority_items') || error.message.includes('relation') || error.message.includes('does not exist'))) {
-      const dbCheck = await checkDatabaseReady();
+      const dbCheck = await quickDatabaseCheck();
       return NextResponse.json(
         { 
           error: { 

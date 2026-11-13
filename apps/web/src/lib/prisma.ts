@@ -35,10 +35,6 @@ export function serializeBigInt<T>(value: T): T {
   return value
 }
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'postgresql://alex:alex@localhost:5432/alex'
-}
-
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
@@ -59,6 +55,12 @@ export async function checkDatabaseConnection(): Promise<{ ok: boolean; latencyM
     console.error('[Prisma] Database health check failed:', message)
     return { ok: false, latencyMs: Date.now() - start, error: message }
   }
+}
+
+// Fail fast in production if DATABASE_URL is not set
+// This check runs at runtime, not during build
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL && !process.env.NEXT_PHASE?.includes('build')) {
+  throw new Error('DATABASE_URL environment variable is required in production')
 }
 
 export default prisma

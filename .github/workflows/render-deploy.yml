@@ -103,7 +103,7 @@ jobs:
           NODE_ENV: test
 
   # ---------------------------------------------------------------------------
-  # Run Prisma Migrations (before deployment)
+  # Run Prisma Migrations (before deployment) - AUTHORITATIVE MIGRATION RUNNER
   # ---------------------------------------------------------------------------
   migrate:
     name: Run Prisma Migrations
@@ -130,10 +130,53 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @alex/web run db:generate
 
+      - name: Validate NEON_DIRECT_URL secret
+        run: |
+          if [ -z "${{ secrets.NEON_DIRECT_URL }}" ]; then
+            echo "::error::NEON_DIRECT_URL secret is not set"
+            exit 1
+          fi
+          echo "NEON_DIRECT_URL is configured"
+
       - name: Run Prisma migrations against Neon
+        id: migrate
         run: |
           cd apps/web
           pnpm run db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+
+      - name: Verify required tables exist after migration
+        run: |
+          cd apps/web
+          node -e "
+          const { PrismaClient } = require('@prisma/client');
+          const prisma = new PrismaClient();
+          async function verify() {
+            try {
+              const tables = await prisma.\$queryRaw\`
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers')
+              \`;
+              const existing = new Set(tables.map(t => t.table_name));
+              const required = ['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'];
+              const missing = required.filter(t => !existing.has(t));
+              if (missing.length > 0) {
+                console.error('MISSING TABLES:', missing.join(', '));
+                process.exit(1);
+              }
+              console.log('All required tables exist:', required.join(', '));
+            } catch (e) {
+              console.error('Verification failed:', e.message);
+              process.exit(1);
+            } finally {
+              await prisma.\$disconnect();
+            }
+          }
+          verify();
+          "
         env:
           DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
           DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
