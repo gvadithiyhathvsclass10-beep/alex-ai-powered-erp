@@ -11,8 +11,8 @@ import type { DocumentExtractor, ExtractedDocument, SourceDocument } from './typ
  */
 export function createDocumentExtractor(): DocumentExtractor {
   return {
-    async extract(input: { bytes: Uint8Array; fileName: string; mimeType: string }): Promise<ExtractedDocument> {
-      const { bytes, fileName, mimeType } = input;
+    async extract(input: { bytes: Uint8Array; fileName: string; mimeType: string; documentId?: string }): Promise<ExtractedDocument> {
+      const { bytes, fileName, mimeType, documentId } = input;
 
       // Validate file
       const maxSize = getMaxUploadSizeBytes();
@@ -24,7 +24,7 @@ export function createDocumentExtractor(): DocumentExtractor {
 
       // Build source document metadata
       const document: SourceDocument = {
-        id: '', // Will be filled after DB insert
+        id: documentId || crypto.randomUUID(),
         fileName,
         mimeType,
         pageCount: extracted.pages.length,
@@ -70,9 +70,10 @@ export async function extractFromStorage(
   storageBucket: string,
   storagePath: string,
   mimeType: string,
-  fileName: string
+  fileName: string,
+  documentId?: string
 ): Promise<ExtractedDocument> {
   const { downloadFile } = await import('@/lib/storage/client');
   const buffer = await downloadFile(storageBucket, storagePath);
-  return createDocumentExtractor().extract({ bytes: new Uint8Array(buffer), fileName, mimeType });
+  return createDocumentExtractor().extract({ bytes: new Uint8Array(buffer), fileName, mimeType, documentId });
 }

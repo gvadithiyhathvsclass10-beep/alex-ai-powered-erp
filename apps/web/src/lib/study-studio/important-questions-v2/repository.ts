@@ -47,11 +47,12 @@ export function createRepositoryAdapter(): RepositoryAdapter {
     },
 
     async listDocuments(ownerId, ids) {
+      const whereClause = ids.length > 0 
+        ? { id: { in: ids }, userId: ownerId }
+        : { userId: ownerId };
+      
       const papers = await prisma.questionPaper.findMany({
-        where: {
-          id: { in: ids },
-          userId: ownerId,
-        },
+        where: whereClause,
         select: {
           id: true,
           fileName: true,

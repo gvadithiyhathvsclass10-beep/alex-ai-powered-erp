@@ -137,7 +137,7 @@ export interface ExtractedDocument {
  * Document extractor port
  */
 export interface DocumentExtractor {
-  extract(input: { bytes: Uint8Array; fileName: string; mimeType: string }): Promise<ExtractedDocument>;
+  extract(input: { bytes: Uint8Array; fileName: string; mimeType: string; documentId?: string }): Promise<ExtractedDocument>;
 }
 
 /**

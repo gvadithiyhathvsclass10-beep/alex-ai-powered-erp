@@ -30,7 +30,12 @@ export async function createAnalysis(
   // Extract text from each document
   const extracted = await Promise.all(docs.map(async (d) => {
     const bytes = await deps.storage.get(d.storageKey);
-    return deps.extractor.extract({ bytes, fileName: d.fileName, mimeType: d.mimeType });
+    return deps.extractor.extract({ 
+      bytes, 
+      fileName: d.fileName, 
+      mimeType: d.mimeType,
+      documentId: d.id  // Pass the actual document ID for provenance
+    });
   }));
 
   // Parse questions from extracted text
