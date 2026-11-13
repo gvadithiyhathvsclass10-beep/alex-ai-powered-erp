@@ -18,6 +18,54 @@ import {
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 import { Separator } from "@/components/ui/separator"
 
+// Error Boundary for the workspace
+class WorkspaceErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ImportantQuestionsWorkspace] Error caught by boundary:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
+}
+
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error | null; resetErrorBoundary: () => void }) {
+  return (
+    <Card className="border-destructive bg-destructive/5">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-6 w-6 text-destructive flex-shrink-0" />
+          <div>
+            <p className="font-medium text-destructive">Something went wrong</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {error?.message || 'An unexpected error occurred in the Important Questions workspace.'}
+            </p>
+            <Button variant="outline" className="mt-4" onClick={resetErrorBoundary}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // Types matching V2 API
 interface SourceDocument {
   id: string
@@ -403,6 +451,13 @@ export function ImportantQuestionsWorkspace({
     }
   }
 
+  // Reset error boundary
+  const resetErrorBoundary = React.useCallback(() => {
+    // Force re-render by updating a key or state
+    setSelectedAnalysis(null)
+    setView('workspace')
+  }, [])
+
   // Helper functions
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -433,11 +488,33 @@ export function ImportantQuestionsWorkspace({
   const hasCompletedFiles = uploadedFiles.some(f => f.status === 'completed')
   const canGenerate = hasCompletedFiles && !generatingAnalysis
 
+  // Safe accessors for selectedAnalysis
+  const safeAnalysis = selectedAnalysis ?? {
+    id: '',
+    title: '',
+    createdAt: new Date().toISOString(),
+    documents: [],
+    questions: [],
+    repeatGroups: [],
+    rankedQuestions: [],
+    unitCoverage: [],
+    topicFrequency: [],
+    studyOrder: [],
+    summary: {
+      papersAnalyzed: 0,
+      totalQuestions: 0,
+      exactRepeatGroups: 0,
+      semanticRepeatGroups: 0,
+      conceptGroups: 0,
+    },
+    limitations: [],
+  }
+
   // Derived data for results view
-  const highPriority = selectedAnalysis?.rankedQuestions.filter(q => q.priority === 'HIGH') || []
-  const mediumPriority = selectedAnalysis?.rankedQuestions.filter(q => q.priority === 'MEDIUM') || []
-  const lowPriority = selectedAnalysis?.rankedQuestions.filter(q => q.priority === 'LOW') || []
-  const repeatGroups = selectedAnalysis?.repeatGroups || []
+  const highPriority = safeAnalysis.rankedQuestions.filter(q => q.priority === 'HIGH')
+  const mediumPriority = safeAnalysis.rankedQuestions.filter(q => q.priority === 'MEDIUM')
+  const lowPriority = safeAnalysis.rankedQuestions.filter(q => q.priority === 'LOW')
+  const repeatGroups = safeAnalysis.repeatGroups
 
   // Render
   return (
@@ -1054,7 +1131,7 @@ export function ImportantQuestionsWorkspace({
                     </Card>
 
                     {/* Topic Frequency */}
-                    {selectedAnalysis.topicFrequency.length > 0 && (
+                    {safeAnalysis.topicFrequency.length > 0 && (
                       <Card>
                         <CardHeader>
                           <CardTitle>Topic Frequency</CardTitle>
@@ -1073,7 +1150,7 @@ export function ImportantQuestionsWorkspace({
                     )}
 
                     {/* Study Order */}
-                    {selectedAnalysis.studyOrder.length > 0 && (
+                    {safeAnalysis.studyOrder.length > 0 && (
                       <Card>
                         <CardHeader>
                           <CardTitle>Suggested Study Order</CardTitle>
@@ -1095,7 +1172,7 @@ export function ImportantQuestionsWorkspace({
                     )}
 
                     {/* Limitations */}
-                    {selectedAnalysis.limitations.length > 0 && (
+                    {safeAnalysis.limitations.length > 0 && (
                       <Card className="border-destructive/20 bg-destructive/5">
                         <CardContent className="p-4">
                           <div className="flex items-start gap-3">
@@ -1120,7 +1197,7 @@ export function ImportantQuestionsWorkspace({
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
-                          {selectedAnalysis.documents.map((doc) => (
+                          {safeAnalysis.documents.map((doc) => (
                             <div key={doc.id} className="flex items-center justify-between text-sm p-2 bg-muted/30 rounded">
                               <span className="font-medium">{doc.fileName}</span>
                               <div className="flex items-center gap-2 text-muted-foreground">

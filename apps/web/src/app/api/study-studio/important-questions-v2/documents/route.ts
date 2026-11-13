@@ -3,6 +3,26 @@ import { NextResponse } from 'next/server';
 import { createImportantQuestionsDependencies } from '@/lib/study-studio/important-questions-v2';
 import { validateUpload, MAX_FILE_BYTES } from '@/lib/study-studio/important-questions-v2/types';
 
+export async function GET() {
+  try {
+    const user = await requireAuth();
+
+    const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
+    const documents = await deps.repository.listDocuments(user.id, []);
+
+    return NextResponse.json({ documents });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+    }
+    console.error('[ImportantQuestionsV2] Documents GET error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents' } },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
