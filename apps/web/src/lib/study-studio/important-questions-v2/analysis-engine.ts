@@ -284,8 +284,13 @@ async function rankQuestions(
   const result: RankedQuestion[] = [];
 
   // First pass: deterministic scoring for ALL questions
+  // Store related groups for each question for later use
+  const questionRelatedGroups = new Map<string, RepeatGroup[]>();
+  
   for (const q of questions) {
     const related = groups.filter(g => g.occurrenceIds.includes(q.id));
+    questionRelatedGroups.set(q.id, related);
+    
     const exact = related.filter(g => g.kind === 'EXACT').reduce((n, g) => Math.max(n, g.frequency), 1);
     const semantic = related.some(g => g.kind === 'SEMANTIC');
     const concept = related.some(g => g.kind === 'CONCEPT');
@@ -344,7 +349,8 @@ async function rankQuestions(
       const enrichmentPromises = topQuestions.map(rq => {
         const q = questions.find(x => x.id === rq.id);
         if (!q) return Promise.resolve({ id: rq.id, rationale: [] as string[] });
-        return ai.explainPriority({ question: q, frequency: rq.repeatGroupIds.length > 0 ? 1 : 1, repeatKind: related[0]?.kind, instructions })
+        const related = questionRelatedGroups.get(q.id) || [];
+        return ai.explainPriority({ question: q, frequency: rq.repeatGroupIds.length > 0 ? related.filter(g => g.kind === 'EXACT').reduce((n, g) => Math.max(n, g.frequency), 1) : 1, repeatKind: related[0]?.kind, instructions })
           .catch(err => {
             console.warn('[ImportantQuestionsV2] AI enrichment failed for question', q.id, ':', err);
             return [];
@@ -356,9 +362,14 @@ async function rankQuestions(
       for (let i = 0; i < enrichmentResults.length; i++) {
         const rq = topQuestions[i];
         const enrichmentResult = enrichmentResults[i];
-        if (enrichmentResult.status === 'fulfilled' && enrichmentResult.value.length > 0) {
-          rq.rationale.push(...enrichmentResult.value);
-          rq.source = 'ai_enhanced';
+        if (enrichmentResult.status === 'fulfilled') {
+          const value = enrichmentResult.value;
+          // Handle both string[] and { id: string; rationale: string[] } formats
+          const rationaleItems = Array.isArray(value) ? value : (value && 'rationale' in value ? value.rationale : []);
+          if (rationaleItems.length > 0) {
+            rq.rationale.push(...rationaleItems);
+            rq.source = 'ai_enhanced';
+          }
         }
       }
     } catch (error) {

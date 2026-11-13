@@ -200,7 +200,7 @@ export interface RepositoryAdapter {
     storageKey: string;
     academicYear?: string | null;
     examYear?: number | null;
-    paperType?: string | null;
+    paperType?: 'QB' | 'PYQ' | null;
     marks?: number | null;
     unit?: string | null;
     semester?: string | null;

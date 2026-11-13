@@ -84,7 +84,8 @@ export async function createAnalysis(
           fileName: d.fileName,
           mimeType: d.mimeType,
           pageCount: pages.length,
-        },
+          paperType: (d.paperType === 'PYQ' ? 'PYQ' : 'QB') as 'QB' | 'PYQ',
+        } as SourceDocument,
         text: docChunks.map(c => c.content).join('\n\n'),
         pages,
       };

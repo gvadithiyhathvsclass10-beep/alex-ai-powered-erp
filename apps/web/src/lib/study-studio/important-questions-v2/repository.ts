@@ -97,7 +97,7 @@ export function createRepositoryAdapter(): RepositoryAdapter {
         storageKey: d.storagePath,
         academicYear: (d.metadata as any)?.academicYear ?? null,
         examYear: null,
-        paperType: (d.metadata as any)?.paperType || 'QB',
+        paperType: ((d.metadata as any)?.paperType === 'PYQ' ? 'PYQ' : 'QB') as 'QB' | 'PYQ',
         marks: (d.metadata as any)?.marks ?? null,
         unit: (d.metadata as any)?.unit ?? null,
         semester: (d.metadata as any)?.semester ?? null,
@@ -119,26 +119,7 @@ export function createRepositoryAdapter(): RepositoryAdapter {
         // Ensure the result is serializable (remove circular references)
         questions: result.questions.map(q => ({
           ...q,
-          occurrences: q.occurrences?.map(o => ({
-            id: o.id,
-            sourceDocumentId: o.sourceDocumentId,
-            sourceFileName: o.sourceFileName,
-            page: o.page,
-            questionNumber: o.questionNumber,
-            text: o.text,
-            normalizedText: o.normalizedText,
-            marks: o.marks,
-            unit: o.unit,
-            topic: o.topic,
-            concept: o.concept,
-            questionType: o.questionType,
-            difficulty: o.difficulty,
-            academicYear: o.academicYear,
-            examYear: o.examYear,
-            subQuestions: o.subQuestions,
-            extractionConfidence: o.extractionConfidence,
-            flags: o.flags,
-          })) || [],
+          // QuestionOccurrence doesn't have occurrences field, so we don't include it
         })),
         repeatGroups: result.repeatGroups,
         rankedQuestions: result.rankedQuestions.map(rq => ({
@@ -211,9 +192,10 @@ export function createRepositoryAdapter(): RepositoryAdapter {
       }
 
       // Fallback: reconstruct from stored data
+      const input = job.input as Record<string, any> | null;
       return {
         id: job.id,
-        title: job.input?.title as string || 'Important Questions Analysis',
+        title: (input?.title as string) || 'Important Questions Analysis',
         createdAt: job.createdAt.toISOString(),
         documents: [],
         questions: [],
@@ -243,10 +225,11 @@ export function createRepositoryAdapter(): RepositoryAdapter {
       });
 
       return jobs.map(job => {
-        const jobResult = job.result as any;
+        const jobResult = job.result as Record<string, any> | null;
+        const input = job.input as Record<string, any> | null;
         return {
           id: job.id,
-          title: job.input?.title as string || jobResult?.title || 'Important Questions Analysis',
+          title: (input?.title as string) || (jobResult?.title as string) || 'Important Questions Analysis',
           createdAt: job.createdAt.toISOString(),
           summary: jobResult?.summary ?? {
             papersAnalyzed: 0,

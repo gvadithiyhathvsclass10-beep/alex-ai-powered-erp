@@ -68,11 +68,21 @@ export async function processDocument(
     }
     const pageCount = Math.max(1, extracted.pages.length)
 
+    // Merge extracted metadata with existing document metadata (preserve Important Questions metadata)
+    const existingDoc = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: { metadata: true },
+    });
+    const mergedMetadata = {
+      ...(existingDoc?.metadata as Record<string, any> || {}),
+      ...extracted.metadata,
+    };
+
     await prisma.document.update({
       where: { id: documentId },
       data: {
         pageCount,
-        metadata: extracted.metadata as Prisma.InputJsonValue,
+        metadata: mergedMetadata as Prisma.InputJsonValue,
         status: DocumentStatus.CHUNKING,
       },
     })

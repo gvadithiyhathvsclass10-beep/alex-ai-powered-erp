@@ -101,10 +101,13 @@ export function parseQuestions(
       // Filter out too-short matches and headers/page numbers
       if (body.length > 15 && !isLikelyHeader(body)) {
         const normalized = normalizeQuestion(body);
-        const dedupeKey = `${page.page}-${normalized.slice(0, 100)}`;
+        // Generate globally unique ID incorporating document ID
+        const dedupeKey = `${doc.id}-${page.page}-${normalized.slice(0, 100)}`;
         if (!seenTexts.has(dedupeKey)) {
           seenTexts.add(dedupeKey);
-          out.push(makeQuestion(body, `${page.page}-${current.label}`, page.page, doc, page.ocrUsed, current.label));
+          // Generate globally unique ID incorporating document ID and page
+          const uniqueId = `${doc.id}-${page.page}-${current.label}`;
+          out.push(makeQuestion(body, uniqueId, page.page, doc, page.ocrUsed, current.label));
         }
       }
     }
@@ -139,10 +142,13 @@ function parseWithFallback(
     
     if (isQuestion || (block.length > 50 && hasAcademicContent)) {
       const normalized = normalizeQuestion(block);
-      const dedupeKey = `${page.page}-b-${normalized.slice(0, 100)}`;
+      // Generate globally unique ID incorporating document ID
+      const dedupeKey = `${doc.id}-${page.page}-b-${normalized.slice(0, 100)}`;
       if (!seenTexts.has(dedupeKey)) {
         seenTexts.add(dedupeKey);
-        out.push(makeQuestion(block, `${page.page}-b${i + 1}`, page.page, doc, page.ocrUsed));
+        // Generate globally unique ID incorporating document ID
+        const uniqueId = `${doc.id}-${page.page}-b${i + 1}`;
+        out.push(makeQuestion(block, uniqueId, page.page, doc, page.ocrUsed));
       }
     }
   }
