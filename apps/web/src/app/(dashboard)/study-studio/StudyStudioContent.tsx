@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { ImportantQuestionsTab } from "@/components/study-studio/ImportantQuestionsTab"
+import { ImportantQuestionsNewTab } from "@/components/study-studio/important-questions/ImportantQuestionsNewTab"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
@@ -604,7 +604,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const { data: papersData, refetch: refetchPapers } = useQuery({
     queryKey: ["question-papers"],
     queryFn: async () => {
-      const res = await fetch("/api/important-questions/papers")
+      const res = await fetch("/api/study-studio/important-questions/papers")
       if (!res.ok) throw new Error("Failed to fetch question papers")
       return res.json()
     },
@@ -614,7 +614,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const { data: analysesData, refetch: refetchAnalyses } = useQuery({
     queryKey: ["question-analyses"],
     queryFn: async () => {
-      const res = await fetch("/api/important-questions/analyses")
+      const res = await fetch("/api/study-studio/important-questions/analyses")
       if (!res.ok) throw new Error("Failed to fetch analyses")
       return res.json()
     },

@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import * as React from "react"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,12 +19,104 @@ import {
   Trash2, Settings, History, Brain, Sparkles, Volume2 as Volume2Icon,
   X, Minimize2, Maximize2, ChevronDown, Plus
 } from "lucide-react"
-import { formatRelativeTime } from "@/lib/utils"
+import { formatRelativeTime as formatRelativeTimeUtil } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { useSpeechToText } from "@/hooks/use-speech-to-text"
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis"
-import { Message, Conversation } from "./types"
+import type { Message, Conversation } from "./types"
+
+function EmptyState({ icon: Icon, title, description, action }: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[300px] p-8 text-center">
+      <div className="p-4 rounded-full bg-muted mb-4">
+        <Icon className="h-10 w-10 text-muted-foreground" />
+      </div>
+      <h3 className="font-semibold text-lg mb-2">{title}</h3>
+      <p className="text-muted-foreground text-sm mb-6 max-w-sm">{description}</p>
+      {action}
+    </div>
+  )
+}
+
+function MessageBubble({ message, onCopy, onSpeak, isSpeaking, onStopSpeak, isStreaming }: {
+  message: Message
+  onCopy: () => void
+  onSpeak: (text: string) => void
+  isSpeaking: boolean
+  onStopSpeak: () => void
+  isStreaming?: boolean
+}) {
+  const isUser = message.role === "user"
+
+  return (
+    <div className={cn("flex gap-3 animate-in", isUser ? "flex-row-reverse" : "")}>
+      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium bg-muted">
+        {isUser ? <MessageSquare className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
+      </div>
+      <div className={cn("flex-1 max-w-[70%] space-y-2", isUser ? "text-right" : "")}>
+        <div className={cn(
+          "relative px-4 py-2 rounded-2xl",
+          isUser
+            ? "bg-primary text-primary-foreground rounded-tr-none"
+            : "bg-secondary text-secondary-foreground rounded-tl-none"
+        )}>
+          {isStreaming ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Thinking...</span>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap">{message.content || ""}</p>
+          )}
+          <div className="absolute bottom-1 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onCopy} aria-label="Copy">
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Copy</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {message.role === "assistant" && !isStreaming && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={isSpeaking ? onStopSpeak : () => onSpeak(message.content)}
+                      disabled={!message.content}
+                      aria-label={isSpeaking ? "Stop speaking" : "Speak response"}
+                    >
+                      {isSpeaking ? (
+                        <StopCircle className="h-3.5 w-3.5" />
+                      ) : (
+                        <Volume2Icon className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isSpeaking ? "Stop speaking" : "Speak response"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{formatRelativeTimeUtil(message.timestamp)}</p>
+      </div>
+    </div>
+  )
+}
 
 interface VoiceAssistantProps {
   onNavigate?: (href: string) => void
@@ -70,8 +162,6 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
     stopListening,
     resetTranscript,
   } = useSpeechToText({
-    onResult: (text) => setTranscript(text),
-    onEnd: () => setIsListening(false),
     continuous: false,
     interimResults: true
   })
@@ -193,7 +283,6 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
     }
 
     resetTranscript()
-    setIsListening(true)
     startListening()
   };  
 
@@ -422,6 +511,8 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
           </div>
         )}
 
+      </div>
+
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-h-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
@@ -473,6 +564,10 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                         <MessageBubble
                           message={{ role: "assistant", content: "", timestamp: new Date().toISOString() }}
                           isStreaming
+                          onCopy={() => {}}
+                          onSpeak={() => {}}
+                          isSpeaking={false}
+                          onStopSpeak={() => {}}
                         />
                       )}
                     </>
@@ -588,7 +683,9 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                     </div>
                   </div>
                 </div>
-              </TabsContent>
+              {/* Closes Conversation Area wrapper (flex-1 flex flex-col min-h-0) */}
+              </div>
+            </TabsContent>
 
               <TabsContent value="history" className="flex-1 overflow-auto p-4">
                 <div className="space-y-3">
@@ -610,7 +707,7 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">{conv.title}</p>
                               <p className="text-sm text-muted-foreground mt-1">
-                                {conv.messageCount || 0} messages · {formatRelativeTime(conv.updatedAt)}
+                                {conv.messageCount || 0} messages · {formatRelativeTimeUtil(conv.updatedAt)}
                               </p>
                             </div>
                             <Button
@@ -625,135 +722,12 @@ export function VoiceAssistant({ onNavigate }: VoiceAssistantProps) {
                         </CardContent>
                       </Card>
                     )
-                    )}
-                    </div>
+                    )
+                  )}
                   </div>
                 </TabsContent>
               </Tabs>
             </main>
-          </div>
         </div>
-      </div>
     )
-  )
-}
-
-function EmptyState({ icon: Icon, title, description, action }: {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  description: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[300px] p-8 text-center">
-      <div className="p-4 rounded-full bg-muted mb-4">
-        <Icon className="h-10 w-10 text-muted-foreground" />
-      </div>
-      <h3 className="font-semibold text-lg mb-2">{title}</h3>
-      <p className="text-muted-foreground text-sm mb-6 max-w-sm">{description}</p>
-      {action}
-    </div>
-  )
-}
-
-function MessageBubble({ message, onCopy, onSpeak, isSpeaking, onStopSpeak, isStreaming }: {
-  message: Message
-  onCopy: () => void
-  onSpeak: (text: string) => void
-  isSpeaking: boolean
-  onStopSpeak: () => void
-  isStreaming?: boolean
-}) {
-  const isUser = message.role === "user"
-
-  return (
-    <div className={cn("flex gap-3 animate-in", isUser ? "flex-row-reverse" : "")}>
-      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium bg-muted">
-        {isUser ? <MessageSquare className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
-      </div>
-      <div className={cn("flex-1 max-w-[70%] space-y-2", isUser ? "text-right" : "")}>
-        <div className={cn(
-          "relative px-4 py-2 rounded-2xl",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-tr-none"
-            : "bg-secondary text-secondary-foreground rounded-tl-none"
-        )}>
-          {isStreaming ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Thinking...</span>
-            </div>
-          ) : (
-            <p className="whitespace-pre-wrap">{message.content || ""}</p>
-          )}
-          <div className="absolute bottom-1 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onCopy} aria-label="Copy">
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Copy</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {message.role === "assistant" && !isStreaming && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={isSpeaking ? onStopSpeak : () => onSpeak(message.content)}
-                      disabled={!message.content}
-                      aria-label={isSpeaking ? "Stop speaking" : "Speak response"}
-                    >
-                      {isSpeaking ? (
-                        <StopCircle className="h-3.5 w-3.5" />
-                      ) : (
-                        <Volume2Icon className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isSpeaking ? "Stop speaking" : "Speak response"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">{formatRelativeTime(message.timestamp)}</p>
-      </div>
-    </div>
-  )
-}
-
-export type Message = {
-  role: "user" | "assistant"
-  content: string
-  timestamp: string
-}
-
-export type Conversation = {
-  id: string
-  title: string
-  createdAt: string
-  updatedAt: string
-  messageCount: number
-}
-
-function formatRelativeTime(date: string): string {
-  const d = new Date(date)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  
-  if (diffSecs < 60) return `${diffSecs}s ago`
-  const diffMins = Math.floor(diffSecs / 60)
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  return d.toLocaleDateString()
-}
+  }
