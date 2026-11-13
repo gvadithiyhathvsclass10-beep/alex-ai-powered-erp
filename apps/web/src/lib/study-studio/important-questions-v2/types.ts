@@ -3,7 +3,7 @@
  * Adapted to align with existing Prisma models and repository conventions
  */
 
-export type Priority = 'HIGH' | 'MEDIUM' | 'ADDITIONAL';
+export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
 export type RepeatKind = 'EXACT' | 'SEMANTIC' | 'CONCEPT';
 export type DocumentStatus = 'QUEUED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'FAILED';
 

@@ -276,7 +276,7 @@ async function rankQuestions(
       )
     );
 
-    const priority: Priority = score >= 65 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'ADDITIONAL';
+    const priority: Priority = score >= 65 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'LOW';
 
     const rationale: string[] = [];
     if (exact > 1) rationale.push(`Exact normalized match found ${exact} times across the uploaded material.`);
@@ -305,7 +305,7 @@ async function rankQuestions(
   }
 
   // Sort by priority then score
-  const priorityOrder: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, ADDITIONAL: 2 };
+  const priorityOrder: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
   return result.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || b.score - a.score);
 }
 
