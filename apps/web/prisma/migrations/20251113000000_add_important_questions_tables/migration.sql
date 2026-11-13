@@ -1,8 +1,9 @@
 -- Add Important Questions tables
 -- This migration adds the tables required for the Important Questions feature
+-- DocumentStatus enum already exists in the database (created by earlier migrations)
 
--- CreateTable
-CREATE TABLE "question_papers" (
+-- CreateTable: question_papers
+CREATE TABLE IF NOT EXISTS "question_papers" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -27,8 +28,8 @@ CREATE TABLE "question_papers" (
     CONSTRAINT "question_papers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "extracted_questions" (
+-- CreateTable: extracted_questions
+CREATE TABLE IF NOT EXISTS "extracted_questions" (
     "id" TEXT NOT NULL,
     "questionPaperId" TEXT NOT NULL,
     "questionNumber" TEXT NOT NULL,
@@ -50,8 +51,8 @@ CREATE TABLE "extracted_questions" (
     CONSTRAINT "extracted_questions_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "question_analyses" (
+-- CreateTable: question_analyses
+CREATE TABLE IF NOT EXISTS "question_analyses" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -67,8 +68,8 @@ CREATE TABLE "question_analyses" (
     CONSTRAINT "question_analyses_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "question_analysis_items" (
+-- CreateTable: question_analysis_items
+CREATE TABLE IF NOT EXISTS "question_analysis_items" (
     "id" TEXT NOT NULL,
     "analysisId" TEXT NOT NULL,
     "questionId" TEXT NOT NULL,
@@ -92,8 +93,8 @@ CREATE TABLE "question_analysis_items" (
     CONSTRAINT "question_analysis_items_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "question_priority_items" (
+-- CreateTable: question_priority_items
+CREATE TABLE IF NOT EXISTS "question_priority_items" (
     "id" TEXT NOT NULL,
     "analysisId" TEXT NOT NULL,
     "questionId" TEXT NOT NULL,
@@ -109,8 +110,8 @@ CREATE TABLE "question_priority_items" (
     CONSTRAINT "question_priority_items_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "generated_practice_papers" (
+-- CreateTable: generated_practice_papers
+CREATE TABLE IF NOT EXISTS "generated_practice_papers" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -128,44 +129,67 @@ CREATE TABLE "generated_practice_papers" (
     CONSTRAINT "generated_practice_papers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateEnum
-CREATE TYPE "DocumentStatus" AS ENUM ('UPLOADED', 'QUEUED', 'EXTRACTING', 'CHUNKING', 'EMBEDDING', 'INDEXING', 'READY', 'FAILED');
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "question_papers_userId_idx" ON "question_papers"("userId");
+CREATE INDEX IF NOT EXISTS "question_papers_subjectId_idx" ON "question_papers"("subjectId");
+CREATE INDEX IF NOT EXISTS "question_papers_paperType_idx" ON "question_papers"("paperType");
 
 -- CreateIndex
-CREATE INDEX "question_papers_userId_idx" ON "question_papers"("userId");
-CREATE INDEX "question_papers_subjectId_idx" ON "question_papers"("subjectId");
-CREATE INDEX "question_papers_paperType_idx" ON "question_papers"("paperType");
+CREATE INDEX IF NOT EXISTS "extracted_questions_questionPaperId_idx" ON "extracted_questions"("questionPaperId");
+CREATE INDEX IF NOT EXISTS "extracted_questions_topic_idx" ON "extracted_questions"("topic");
+CREATE INDEX IF NOT EXISTS "extracted_questions_concept_idx" ON "extracted_questions"("concept");
+CREATE INDEX IF NOT EXISTS "extracted_questions_unit_idx" ON "extracted_questions"("unit");
+CREATE INDEX IF NOT EXISTS "extracted_questions_year_idx" ON "extracted_questions"("year");
 
 -- CreateIndex
-CREATE INDEX "extracted_questions_questionPaperId_idx" ON "extracted_questions"("questionPaperId");
-CREATE INDEX "extracted_questions_topic_idx" ON "extracted_questions"("topic");
-CREATE INDEX "extracted_questions_concept_idx" ON "extracted_questions"("concept");
-CREATE INDEX "extracted_questions_unit_idx" ON "extracted_questions"("unit");
-CREATE INDEX "extracted_questions_year_idx" ON "extracted_questions"("year");
+CREATE INDEX IF NOT EXISTS "question_analyses_userId_idx" ON "question_analyses"("userId");
+CREATE INDEX IF NOT EXISTS "question_analyses_subjectId_idx" ON "question_analyses"("subjectId");
 
 -- CreateIndex
-CREATE INDEX "question_analyses_userId_idx" ON "question_analyses"("userId");
-CREATE INDEX "question_analyses_subjectId_idx" ON "question_analyses"("subjectId");
+CREATE INDEX IF NOT EXISTS "question_analysis_items_analysisId_idx" ON "question_analysis_items"("analysisId");
+CREATE INDEX IF NOT EXISTS "question_analysis_items_priority_idx" ON "question_analysis_items"("priority");
 
 -- CreateIndex
-CREATE INDEX "question_analysis_items_analysisId_idx" ON "question_analysis_items"("analysisId");
-CREATE INDEX "question_analysis_items_priority_idx" ON "question_analysis_items"("priority");
+CREATE INDEX IF NOT EXISTS "question_priority_items_analysisId_idx" ON "question_priority_items"("analysisId");
+CREATE INDEX IF NOT EXISTS "question_priority_items_priority_idx" ON "question_priority_items"("priority");
 
 -- CreateIndex
-CREATE INDEX "question_priority_items_analysisId_idx" ON "question_priority_items"("analysisId");
-CREATE INDEX "question_priority_items_priority_idx" ON "question_priority_items"("priority");
-
--- CreateIndex
-CREATE INDEX "generated_practice_papers_userId_idx" ON "generated_practice_papers"("userId");
-CREATE INDEX "generated_practice_papers_sourceAnalysisId_idx" ON "generated_practice_papers"("sourceAnalysisId");
+CREATE INDEX IF NOT EXISTS "generated_practice_papers_userId_idx" ON "generated_practice_papers"("userId");
+CREATE INDEX IF NOT EXISTS "generated_practice_papers_sourceAnalysisId_idx" ON "generated_practice_papers"("sourceAnalysisId");
 
 -- AddForeignKey
-ALTER TABLE "question_papers" ADD CONSTRAINT "question_papers_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "question_papers" ADD CONSTRAINT "question_papers_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "extracted_questions" ADD CONSTRAINT "extracted_questions_questionPaperId_fkey" FOREIGN KEY ("questionPaperId") REFERENCES "question_papers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "question_analyses" ADD CONSTRAINT "question_analyses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "question_analyses" ADD CONSTRAINT "question_analyses_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "question_analysis_items" ADD CONSTRAINT "question_analysis_items_analysisId_fkey" FOREIGN KEY ("analysisId") REFERENCES "question_analyses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "question_priority_items" ADD CONSTRAINT "question_priority_items_analysisId_fkey" FOREIGN KEY ("analysisId") REFERENCES "question_analyses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "generated_practice_papers" ADD CONSTRAINT "generated_practice_papers_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "generated_practice_papers" ADD CONSTRAINT "generated_practice_papers_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "question_papers" ADD CONSTRAINT "question_papers_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "question_papers" ADD CONSTRAINT "question_papers_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "extracted_questions" ADD CONSTRAINT "extracted_questions_questionPaperId_fkey" FOREIGN KEY ("questionPaperId") REFERENCES "question_papers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "question_analyses" ADD CONSTRAINT "question_analyses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "question_analyses" ADD CONSTRAINT "question_analyses_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "question_analysis_items" ADD CONSTRAINT "question_analysis_items_analysisId_fkey" FOREIGN KEY ("analysisId") REFERENCES "question_analyses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "question_priority_items" ADD CONSTRAINT "question_priority_items_analysisId_fkey" FOREIGN KEY ("analysisId") REFERENCES "question_analyses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "generated_practice_papers" ADD CONSTRAINT "generated_practice_papers_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "generated_practice_papers" ADD CONSTRAINT "generated_practice_papers_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

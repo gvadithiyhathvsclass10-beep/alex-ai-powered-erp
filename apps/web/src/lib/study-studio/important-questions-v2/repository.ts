@@ -1,85 +1,102 @@
 /**
  * Repository Adapter for V2 Important Questions
- * Wraps existing Prisma models (QuestionPaper, ExtractedQuestion, QuestionAnalysis, etc.)
- * Uses existing models instead of creating new V2 tables
+ * Uses existing Prisma Document model (like Research Notebook)
+ * Stores Important Questions metadata in the Document's metadata JSON field
  */
 
 import { prisma } from '@/lib/prisma';
 import { serializeBigInt } from '@/lib/prisma';
 import { deleteFile } from '@/lib/storage/client';
+import crypto from 'node:crypto';
 import type { RepositoryAdapter, AnalysisResult, SourceDocument } from './types';
 
+/** Map MIME type to Prisma DocumentType */
+function resolveDocumentTypeFromMime(mimeType: string) {
+  const normalized = mimeType.split(';')[0].trim().toLowerCase();
+  const mimeToType: Record<string, string> = {
+    'application/pdf': 'PDF',
+    'application/msword': 'DOC',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+    'text/plain': 'TXT',
+    'text/markdown': 'MARKDOWN',
+    'text/x-markdown': 'MARKDOWN',
+    'application/rtf': 'DOC',
+    'application/vnd.oasis.opendocument.text': 'DOC',
+  };
+  return (mimeToType[normalized] as any) || 'OTHER';
+}
+
 /**
- * Create repository adapter using existing Prisma models
+ * Create repository adapter using existing Prisma Document model
  */
 export function createRepositoryAdapter(): RepositoryAdapter {
   return {
     async createDocument(input) {
       const { ownerId, fileName, mimeType, sizeBytes, storageKey, paperType, subjectId, semester, unit, academicYear, examinationYear, marks } = input;
 
-      const paper = await prisma.questionPaper.create({
+      // Compute checksum from fileName + size + timestamp for uniqueness
+      const checksum = crypto.createHash('sha256').update(`${fileName}-${sizeBytes}-${Date.now()}`).digest('hex');
+
+      const doc = await prisma.document.create({
         data: {
-          userId: ownerId,
+          owner: { connect: { id: ownerId } },
           title: fileName.replace(/\.[^/.]+$/, ''),
           fileName,
           fileSize: BigInt(sizeBytes),
           mimeType,
+          documentType: resolveDocumentTypeFromMime(mimeType),
           storagePath: storageKey,
           storageBucket: 'documents',
-          paperType: paperType || 'QB',
-          subjectId: subjectId || null,
-          semester: semester || null,
-          unit: unit || null,
-          academicYear: academicYear || null,
-          examinationYear: examinationYear || null,
-          marks: marks || null,
+          checksum,
           status: 'UPLOADED',
           pageCount: null,
           metadata: {
             v2StorageKey: storageKey,
             v2CreatedAt: new Date().toISOString(),
+            paperType: paperType || 'QB',
+            subjectId: subjectId || null,
+            semester: semester || null,
+            unit: unit || null,
+            academicYear: academicYear || null,
+            examinationYear: examinationYear || null,
+            marks: marks || null,
           },
         },
         select: { id: true },
       });
 
-      return { id: paper.id };
+      return { id: doc.id };
     },
 
     async listDocuments(ownerId, ids) {
       const whereClause = ids.length > 0 
-        ? { id: { in: ids }, userId: ownerId }
-        : { userId: ownerId };
+        ? { id: { in: ids }, ownerId }
+        : { ownerId };
       
-      const papers = await prisma.questionPaper.findMany({
+      const docs = await prisma.document.findMany({
         where: whereClause,
         select: {
           id: true,
           fileName: true,
           mimeType: true,
           storagePath: true,
-          academicYear: true,
-          examinationYear: true,
-          paperType: true,
-          marks: true,
-          unit: true,
-          semester: true,
+          metadata: true,
           pageCount: true,
         },
       });
 
-      return papers.map(p => ({
-        id: p.id,
-        fileName: p.fileName,
-        mimeType: p.mimeType,
-        storageKey: p.storagePath,
-        academicYear: p.academicYear,
-        examYear: p.examinationYear,
-        paperType: p.paperType,
-        marks: p.marks,
-        unit: p.unit,
-        semester: p.semester,
-        pageCount: p.pageCount,
+      return docs.map(d => ({
+        id: d.id,
+        fileName: d.fileName,
+        mimeType: d.mimeType,
+        storageKey: d.storagePath,
+        academicYear: (d.metadata as any)?.academicYear ?? null,
+        examYear: null,
+        paperType: (d.metadata as any)?.paperType || 'QB',
+        marks: (d.metadata as any)?.marks ?? null,
+        unit: (d.metadata as any)?.unit ?? null,
+        semester: (d.metadata as any)?.semester ?? null,
+        pageCount: d.pageCount,
       }));
     },
 
@@ -201,28 +218,23 @@ export function createRepositoryAdapter(): RepositoryAdapter {
 
     async deleteDocument(ownerId, id) {
       // Check ownership
-      const paper = await prisma.questionPaper.findFirst({
-        where: { id, userId: ownerId },
+      const doc = await prisma.document.findFirst({
+        where: { id, ownerId },
       });
 
-      if (!paper) {
+      if (!doc) {
         throw new Error('Document not found or access denied');
       }
 
-      // Delete questions first
-      await prisma.extractedQuestion.deleteMany({
-        where: { questionPaperId: id },
-      });
-
       // Delete from storage
       try {
-        await deleteFile('documents', paper.storagePath);
+        await deleteFile('documents', doc.storagePath);
       } catch (storageError) {
         console.warn('[ImportantQuestionsV2] Storage delete failed:', storageError);
       }
 
-      // Delete paper
-      await prisma.questionPaper.delete({ where: { id } });
+      // Delete document
+      await prisma.document.delete({ where: { id } });
     },
 
     async deleteAnalysis(ownerId, id) {

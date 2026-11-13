@@ -199,11 +199,12 @@ jobs:
       - name: Run Prisma Migrations
         run: |
           # Run migrations against Neon using DIRECT_URL
-          # This requires the Render service to have the migration script available
-          # or run via a separate Render job
-          echo "Run migrations via Render CLI or separate job"
+          # This runs from the workspace root with the web app's Prisma schema
+          cd apps/web
+          pnpm run db:migrate:deploy
         env:
           DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
 
       - name: Deploy Cloudflare Worker
         uses: cloudflare/wrangler-action@v3

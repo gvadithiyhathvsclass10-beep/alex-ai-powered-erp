@@ -57,16 +57,18 @@ export async function POST(request: Request) {
 
     // Process each file
     for (const file of files) {
+      let storageKey: string | null = null;
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
 
         // Upload to storage
-        const { storageKey } = await deps.storage.put({
+        const uploadResult = await deps.storage.put({
           ownerId: user.id,
           fileName: file.name,
           mimeType: file.type,
           bytes,
         });
+        storageKey = uploadResult.storageKey;
 
         // Create document record
         const doc = await deps.repository.createDocument({
@@ -87,6 +89,15 @@ export async function POST(request: Request) {
         results.push({ id: doc.id, fileName: file.name, status: 'uploaded' });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);
+        // Clean up storage if database operation failed
+        if (storageKey) {
+          try {
+            await deps.storage.remove(storageKey);
+            console.log('[ImportantQuestionsV2] Cleaned up orphaned storage object:', storageKey);
+          } catch (cleanupError) {
+            console.error('[ImportantQuestionsV2] Failed to cleanup storage:', cleanupError);
+          }
+        }
         results.push({
           id: '',
           fileName: file.name,

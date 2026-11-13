@@ -22,7 +22,7 @@ export function createDocumentExtractor(): DocumentExtractor {
       const documentType = resolveDocumentTypeFromMime(mimeType);
       const extracted = await extractContent(Buffer.from(bytes), documentType, mimeType);
 
-      // Build source document metadata
+      // Build source document metadata (uses Document model ID)
       const document: SourceDocument = {
         id: documentId || crypto.randomUUID(),
         fileName,
