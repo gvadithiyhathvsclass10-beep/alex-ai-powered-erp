@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { serializeBigInt } from '@/lib/prisma'
 import { getUserEmbeddingProvider } from '@/lib/ai/embeddings'
+import { analyzeQuestionPapers } from '@/lib/important-questions/analyzer'
 
 export async function GET() {
   try {

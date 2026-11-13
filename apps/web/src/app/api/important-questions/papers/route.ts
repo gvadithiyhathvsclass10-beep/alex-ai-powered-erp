@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { serializeBigInt } from '@/lib/prisma'
 import { uploadFile } from '@/lib/storage/client'
+import { validateUploadedFile, getMaxUploadSizeBytes } from '@/lib/document-processing/extractors'
+import { DocumentType } from '@prisma/client'
 
 export async function GET() {
   try {
@@ -27,6 +29,21 @@ export async function GET() {
   }
 }
 
+interface UploadedPaperResult {
+  id: string
+  title: string
+  fileName: string
+  fileSize: string
+  mimeType: string
+  paperType: 'QB' | 'PYQ'
+  subjectId: string | null
+  status: string
+  storagePath: string
+  uploadStatus: 'success' | 'error'
+  errorMessage?: string
+  extractionStatus?: 'pending' | 'completed' | 'error'
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireAuth()
@@ -37,7 +54,7 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File | null
     
     const allFiles = [...(files.length > 0 ? files : []), ...(file ? [file] : [])].filter(Boolean)
-    
+
     if (allFiles.length === 0) {
       return NextResponse.json(
         { error: 'At least one file is required' },
@@ -45,55 +62,34 @@ export async function POST(request: Request) {
       )
     }
 
-    const title = formData.get('title') as string
-    const paperType = formData.get('paperType') as string
-    const subjectId = formData.get('subjectId') as string | null
-    const semester = formData.get('semester') as string | null
-    const unit = formData.get('unit') as string | null
-    const academicYear = formData.get('academicYear') as string | null
-    const examinationYear = formData.get('examinationYear') as string | null
-    const marks = formData.get('marks') as string | null
-    const additionalInstructions = formData.get('additionalInstructions') as string | null
+    // Parse metadata (shared across all files, but can be overridden per-file)
+    const sharedTitle = formData.get('title') as string
+    const sharedPaperType = formData.get('paperType') as string
+    const sharedSubjectId = formData.get('subjectId') as string | null
+    const sharedSemester = formData.get('semester') as string | null
+    const sharedUnit = formData.get('unit') as string | null
+    const sharedAcademicYear = formData.get('academicYear') as string | null
+    const sharedExaminationYear = formData.get('examinationYear') as string | null
+    const sharedMarks = formData.get('marks') as string | null
+    const sharedAdditionalInstructions = formData.get('additionalInstructions') as string | null
 
-    // For multiple files, use the first file's title as base or require individual titles
-    // For now, we'll create papers with indexed titles if multiple files
-    if (allFiles.length > 1 && !title) {
-      return NextResponse.json(
-        { error: 'Title is required for multiple file uploads' },
-        { status: 400 }
-      )
+    // For multiple files, title is optional - we'll use individual filenames
+    if (allFiles.length > 1 && !sharedTitle) {
+      // Title is optional for multiple files
     }
 
-    if (!['QB', 'PYQ'].includes(paperType)) {
+    // Validate paperType
+    if (!['QB', 'PYQ'].includes(sharedPaperType)) {
       return NextResponse.json(
         { error: 'paperType must be QB or PYQ' },
         { status: 400 }
       )
     }
 
-    // Validate file types
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain', 'text/markdown']
-    for (const currentFile of allFiles) {
-      if (!allowedTypes.includes(currentFile.type)) {
-        return NextResponse.json(
-          { error: `Unsupported file type: ${currentFile.type}. Supported: PDF, DOCX, DOC, TXT, MD` },
-          { status: 400 }
-        )
-      }
-      // Check file size (50MB limit)
-      const maxSize = 50 * 1024 * 1024
-      if (currentFile.size > maxSize) {
-        return NextResponse.json(
-          { error: `File ${currentFile.name} exceeds 50MB limit` },
-          { status: 400 }
-        )
-      }
-    }
-
     // Validate subject ownership if provided
-    if (subjectId) {
+    if (sharedSubjectId) {
       const subject = await prisma.subject.findFirst({
-        where: { id: subjectId },
+        where: { id: sharedSubjectId },
         select: { id: true }
       })
       if (!subject) {
@@ -104,74 +100,193 @@ export async function POST(request: Request) {
       }
     }
 
-    const createdPapers = []
-
+    // Validate each file
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain', 'text/markdown']
+    const maxSize = getMaxUploadSizeBytes()
+    
+    const validationErrors: string[] = []
     for (let i = 0; i < allFiles.length; i++) {
       const currentFile = allFiles[i]
-      const currentTitle = allFiles.length > 1 
-        ? `${title} (Part ${i + 1})` 
-        : title
-
-      const buffer = await currentFile.arrayBuffer()
-      const fileName = `${Date.now()}-${i}-${currentFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-      const storagePath = `important-questions/${user.id}/${fileName}`
-      const fileBuffer = Buffer.from(buffer)
-
-      // Upload to storage (S3/R2 or local)
-      try {
-        await uploadFile('documents', storagePath, fileBuffer, { contentType: currentFile.type })
-      } catch (storageError) {
-        console.error('[ImportantQuestions] Storage upload error:', storageError)
-        // Clean up any already uploaded files
-        for (const created of createdPapers) {
-          try {
-            const { deleteFile } = await import('@/lib/storage/client')
-            await deleteFile('documents', created.storagePath)
-          } catch {}
-        }
-        return NextResponse.json(
-          { error: 'Failed to upload file to storage' },
-          { status: 500 }
-        )
+      if (!allowedTypes.includes(currentFile.type)) {
+        validationErrors.push(`File "${currentFile.name}": Unsupported file type "${currentFile.type}". Supported: PDF, DOCX, DOC, TXT, MD`)
       }
-
-      const paper = await prisma.questionPaper.create({
-        data: {
-          userId: user.id,
-          title: currentTitle.trim(),
-          fileName: currentFile.name,
-          fileSize: BigInt(currentFile.size),
-          mimeType: currentFile.type,
-          storagePath,
-          storageBucket: 'documents',
-          paperType,
-          subjectId: subjectId || null,
-          semester: semester || null,
-          unit: unit || null,
-          academicYear: academicYear || null,
-          examinationYear: examinationYear ? parseInt(examinationYear) : null,
-          marks: marks ? parseInt(marks) : null,
-          status: 'UPLOADED',
-          pageCount: null,
-          metadata: {
-            originalName: currentFile.name,
-            additionalInstructions: additionalInstructions || null,
-          },
-        },
-        include: {
-          subject: { select: { id: true, name: true, code: true } },
-        },
-      })
-
-      createdPapers.push(serializeBigInt(paper))
+      if (currentFile.size > maxSize) {
+        validationErrors.push(`File "${currentFile.name}": Exceeds ${Math.round(maxSize / (1024 * 1024))}MB limit`)
+      }
+      // Content validation
+      const buffer = await currentFile.arrayBuffer()
+      try {
+        validateUploadedFile(currentFile.name, currentFile.type, Buffer.from(buffer), maxSize)
+      } catch (validationError) {
+        if (validationError instanceof Error) {
+          validationErrors.push(`File "${currentFile.name}": ${validationError.message}`)
+        }
+      }
     }
 
-    return NextResponse.json({ papers: createdPapers })
+    if (validationErrors.length > 0) {
+      return NextResponse.json(
+        { error: 'File validation failed', details: validationErrors },
+        { status: 400 }
+      )
+    }
+
+    // Process each file
+    const results: UploadedPaperResult[] = []
+    const createdPapers: any[] = []
+    const storagePaths: string[] = []
+
+    // Use a transaction to ensure atomicity
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < allFiles.length; i++) {
+        const currentFile = allFiles[i]
+        
+        // For multiple files, use individual filename as title base
+        const currentTitle = allFiles.length > 1 
+          ? currentFile.name.replace(/\.[^/.]+$/, "") 
+          : (sharedTitle || currentFile.name.replace(/\.[^/.]+$/, ""))
+
+        const buffer = await currentFile.arrayBuffer()
+        const fileName = `${Date.now()}-${i}-${currentFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+        const storagePath = `important-questions/${user.id}/${fileName}`
+        const fileBuffer = Buffer.from(buffer)
+
+        // Upload to storage (S3/R2 or local)
+        let storageUploadSuccess = false
+        try {
+          await uploadFile('documents', storagePath, fileBuffer, { contentType: currentFile.type })
+          storageUploadSuccess = true
+          storagePaths.push(storagePath)
+        } catch (storageError) {
+          console.error(`[ImportantQuestions] Storage upload error for ${currentFile.name}:`, storageError)
+          
+          // Clean up any already uploaded files for this batch
+          for (const createdPath of storagePaths) {
+            try {
+              const { deleteFile } = await import('@/lib/storage/client')
+              await deleteFile('documents', createdPath)
+            } catch {}
+          }
+          
+          results.push({
+            id: '',
+            title: currentTitle,
+            fileName: currentFile.name,
+            fileSize: currentFile.size.toString(),
+            mimeType: currentFile.type,
+            paperType: sharedPaperType as 'QB' | 'PYQ',
+            subjectId: sharedSubjectId,
+            status: 'FAILED',
+            storagePath,
+            uploadStatus: 'error',
+            errorMessage: 'Failed to upload file to storage: ' + (storageError instanceof Error ? storageError.message : 'Unknown storage error')
+          })
+          continue
+        }
+
+        try {
+          const paper = await tx.questionPaper.create({
+            data: {
+              userId: user.id,
+              title: currentTitle.trim(),
+              fileName: currentFile.name,
+              fileSize: BigInt(currentFile.size),
+              mimeType: currentFile.type,
+              storagePath,
+              storageBucket: 'documents',
+              paperType: sharedPaperType as 'QB' | 'PYQ',
+              subjectId: sharedSubjectId || null,
+              semester: sharedSemester || null,
+              unit: sharedUnit || null,
+              academicYear: sharedAcademicYear || null,
+              examinationYear: sharedExaminationYear ? parseInt(sharedExaminationYear) : null,
+              marks: sharedMarks ? parseInt(sharedMarks) : null,
+              status: 'UPLOADED',
+              pageCount: null,
+              metadata: {
+                originalName: currentFile.name,
+                additionalInstructions: sharedAdditionalInstructions || null,
+                uploadIndex: i,
+                totalFiles: allFiles.length,
+              },
+            },
+            include: {
+              subject: { select: { id: true, name: true, code: true } },
+            },
+          })
+
+          createdPapers.push(paper)
+          
+          results.push({
+            id: paper.id,
+            title: paper.title,
+            fileName: paper.fileName,
+            fileSize: paper.fileSize.toString(),
+            mimeType: paper.mimeType,
+            paperType: paper.paperType as 'QB' | 'PYQ',
+            subjectId: paper.subjectId,
+            status: paper.status,
+            storagePath: paper.storagePath,
+            uploadStatus: 'success',
+            extractionStatus: 'pending'
+          })
+        } catch (dbError) {
+          console.error(`[ImportantQuestions] Database create error for ${currentFile.name}:`, dbError)
+          
+          // Clean up storage for this file
+          try {
+            const { deleteFile } = await import('@/lib/storage/client')
+            await deleteFile('documents', storagePath)
+          } catch {}
+          
+          results.push({
+            id: '',
+            title: currentTitle,
+            fileName: currentFile.name,
+            fileSize: currentFile.size.toString(),
+            mimeType: currentFile.type,
+            paperType: sharedPaperType as 'QB' | 'PYQ',
+            subjectId: sharedSubjectId,
+            status: 'FAILED',
+            storagePath,
+            uploadStatus: 'error',
+            errorMessage: 'Failed to create database record: ' + (dbError instanceof Error ? dbError.message : 'Unknown database error')
+          })
+        }
+      }
+    })
+
+    const successfulUploads = results.filter(r => r.uploadStatus === 'success')
+    const failedUploads = results.filter(r => r.uploadStatus === 'error')
+
+    if (successfulUploads.length === 0 && failedUploads.length > 0) {
+      return NextResponse.json(
+        { 
+          error: 'All file uploads failed',
+          papers: [],
+          results
+        },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ 
+      papers: createdPapers.map(serializeBigInt),
+      results,
+      summary: {
+        total: allFiles.length,
+        successful: successfulUploads.length,
+        failed: failedUploads.length
+      }
+    })
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[ImportantQuestions] Paper create error:', error)
-    return NextResponse.json({ error: 'Failed to create question paper(s)' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to create question paper(s)', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 })
   }
 }

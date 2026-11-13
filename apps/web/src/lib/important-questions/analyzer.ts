@@ -50,6 +50,7 @@ export interface AnalysisResult {
   totalPapers: number
   priorityItems: PriorityItem[]
   webResearch?: WebResearchResult
+  repeatedQuestionGroups?: RepeatedQuestionGroup[]
 }
 
 export interface PriorityItem {
@@ -73,7 +74,7 @@ export interface PriorityItem {
   recencyScore: number
   marksWeight: number
   unitRelevance: number
-  source: 'historical' | 'web_research' | 'fundamental'
+  source: 'historical' | 'web_research' | 'fundamental' | 'ai_enhanced'
 }
 
 export interface WebResearchResult {
@@ -88,6 +89,18 @@ export interface WebSource {
   url: string
   type: 'syllabus' | 'textbook' | 'academic' | 'educational'
   relevance: number
+}
+
+export interface RepeatedQuestionGroup {
+  id: string
+  representativeQuestion: string
+  count: number
+  questionIds: string[]
+  paperIds: string[]
+  years: number[]
+  marks: number[]
+  similarityType: 'exact' | 'semantic'
+  concept: string
 }
 
 /**
@@ -278,7 +291,62 @@ export async function analyzeQuestionPapers(
     return b.frequency - a.frequency
   })
 
-  // AI-powered analysis with additional instructions (if provided)
+  // 5. Build repeated question groups for display
+  const repeatedQuestionGroups: RepeatedQuestionGroup[] = []
+  
+  // Exact repeats
+  exactGroups.forEach((group, normalizedText) => {
+    if (group.length > 1) {
+      repeatedQuestionGroups.push({
+        id: `exact-${normalizedText.slice(0, 50)}`,
+        representativeQuestion: group[0].text,
+        count: group.length,
+        questionIds: group.map(q => q.id),
+        paperIds: [...new Set(group.map(q => q.questionPaperId))],
+        years: group.map(q => q.year).filter((y): y is number => y !== null),
+        marks: group.map(q => q.marks).filter((m): m is number => m !== null),
+        similarityType: 'exact',
+        concept: group[0].concept || group[0].topic || 'General',
+      })
+    }
+  })
+  
+  // Semantic repeats (from embeddings or keyword fallback)
+  if (semanticGroups.length > 0) {
+    const semanticGroupMap = new Map<string, { questions: ExtractedQuestion[]; similarities: number[] }>()
+    semanticGroups.forEach(sg => {
+      const q1 = allQuestions.find(q => q.id === sg.q1)
+      const q2 = allQuestions.find(q => q.id === sg.q2)
+      if (q1 && q2) {
+        const key = normalizeQuestionText(q1.text).slice(0, 50)
+        if (!semanticGroupMap.has(key)) {
+          semanticGroupMap.set(key, { questions: [], similarities: [] })
+        }
+        const entry = semanticGroupMap.get(key)!
+        if (!entry.questions.some(q => q.id === q1.id)) entry.questions.push(q1)
+        if (!entry.questions.some(q => q.id === q2.id)) entry.questions.push(q2)
+        entry.similarities.push(sg.similarity)
+      }
+    })
+    
+    semanticGroupMap.forEach((group, key) => {
+      if (group.questions.length > 1) {
+        repeatedQuestionGroups.push({
+          id: `semantic-${key}`,
+          representativeQuestion: group.questions[0].text,
+          count: group.questions.length,
+          questionIds: group.questions.map(q => q.id),
+          paperIds: [...new Set(group.questions.map(q => q.questionPaperId))],
+          years: group.questions.map(q => q.year).filter((y): y is number => y !== null),
+          marks: group.questions.map(q => q.marks).filter((m): m is number => m !== null),
+          similarityType: 'semantic',
+          concept: group.questions[0].concept || group.questions[0].topic || 'General',
+        })
+      }
+    })
+  }
+
+  // 6. AI-powered analysis with additional instructions (if provided)
   if (options.additionalInstructions && options.additionalInstructions.trim()) {
     try {
       const aiAnalysis = await performAIAnalysis({
@@ -317,7 +385,38 @@ export async function analyzeQuestionPapers(
     }
   }
 
-  // 5. Web Research Integration (if enabled)
+  // 7. Default AI synthesis (always run for better analysis)
+  try {
+    const defaultAIAnalysis = await performDefaultAIAnalysis({
+      papers,
+      allQuestions,
+      priorityItems: priorityItems.slice(0, 30),
+      subjectName: options.subjectName,
+    }, userId)
+    
+    if (defaultAIAnalysis && defaultAIAnalysis.enhancedItems.length > 0) {
+      for (const aiItem of defaultAIAnalysis.enhancedItems) {
+        const exists = priorityItems.some(p => 
+          normalizeQuestionText(p.questionText) === normalizeQuestionText(aiItem.questionText)
+        )
+        if (!exists) {
+          priorityItems.push(aiItem)
+        }
+      }
+      
+      priorityItems.sort((a, b) => {
+        const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+        if (priorityOrder[b.priority] !== priorityOrder[a.priority]) {
+          return priorityOrder[b.priority] - priorityOrder[a.priority]
+        }
+        return b.frequency - a.frequency
+      })
+    }
+  } catch (aiError) {
+    console.warn('[ImportantQuestions] Default AI analysis failed:', aiError)
+  }
+
+  // 8. Web Research Integration (if enabled)
   let webResearch: WebResearchResult | undefined
   if (options.enableWebResearch && options.subjectName) {
     webResearch = await performWebResearch({
@@ -369,159 +468,167 @@ export async function analyzeQuestionPapers(
     totalPapers: papers.length,
     priorityItems,
     webResearch,
+    repeatedQuestionGroups,
   }
 }
 
 /**
- * Perform web research for subject syllabus and important concepts
- * Uses AI to search and synthesize information from academic sources
+ * Perform default AI analysis (always runs to enhance analysis)
  */
-async function performWebResearch(
+async function performDefaultAIAnalysis(
   params: {
-    subjectName: string
-    semester?: string
-    academicYear?: string
-    existingTopics: string[]
-    existingConcepts: string[]
+    papers: QuestionPaperWithQuestions[]
+    allQuestions: ExtractedQuestion[]
+    priorityItems: PriorityItem[]
+    subjectName?: string
   },
   userId: string
-): Promise<WebResearchResult | undefined> {
+): Promise<{ enhancedItems: PriorityItem[] } | null> {
   try {
-    // Use AI to generate web research queries and analyze results
-    // This would integrate with a web search API if available
-    // For now, we use AI knowledge to identify fundamental concepts
-    
     const { generateStructuredOutput } = await import('@/lib/ai/service')
     
+    // Prepare context from papers and questions
+    const paperContext = params.papers.map(p => 
+      `${p.title} (${p.paperType}${p.examinationYear ? `, ${p.examinationYear}` : ''}${p.marks ? `, ${p.marks} marks` : ''}): ${p.questions.length} questions`
+    ).join('\n')
+    
+    const questionSummary = params.allQuestions
+      .slice(0, 50)
+      .map(q => `${q.questionNumber}: ${q.text.slice(0, 150)} (Marks: ${q.marks || '?'}, Unit: ${q.unit || '?'}, Topic: ${q.topic || '?'})`)
+      .join('\n')
+    
+    const priorityContext = params.priorityItems
+      .slice(0, 15)
+      .map(p => `[${p.priority}] ${p.concept} - ${p.reason} (Freq: ${p.frequency}, Papers: ${p.papersCount})`)
+      .join('\n')
+
     const result = await generateStructuredOutput<{
-      syllabusTopics: string[]
-      importantConcepts: string[]
-      missingTopics: string[]
-      sources: WebSource[]
+      enhancedItems: Array<{
+        questionId: string
+        questionText: string
+        concept: string
+        priority: 'HIGH' | 'MEDIUM' | 'LOW'
+        reason: string
+        frequency: number
+        papersCount: number
+        totalMarks: number
+        avgMarks: number
+        firstYear: number | null
+        lastYear: number | null
+        units: string[]
+        topics: string[]
+        concepts: string[]
+        questionTypes: string[]
+        isExactRepeat: boolean
+        matchedQuestionIds: string[]
+        recencyScore: number
+        marksWeight: number
+        unitRelevance: number
+        source: 'ai_enhanced'
+      }>
     }>({
       userId,
-      provider: undefined, // Use default
+      provider: undefined,
       model: undefined,
-      systemPrompt: `You are an academic curriculum expert. Given a subject name and existing topics from question papers, identify:
-1. Standard syllabus topics for this subject at university level
-2. Fundamental concepts that should be covered but may be missing from past papers
-3. Authoritative sources for this subject (textbooks, syllabi, academic references)
+      systemPrompt: `You are ALEX, an expert academic question paper analyzer. You have access to:
+1. Uploaded question papers with extracted questions
+2. Statistical analysis of question patterns (frequency, repeats, distributions)
+3. Existing priority items from statistical analysis
 
-Be specific to the subject. Do not fabricate sources. If you don't have specific knowledge, indicate uncertainty.`,
+Your task: Generate ADDITIONAL important question concepts that provide deeper academic insight beyond simple frequency counting. Do NOT duplicate existing priority items.
+
+Guidelines:
+- Focus on academic reasoning: concepts that are foundational, bridge multiple topics, or represent key learning objectives
+- Identify concepts that may not appear frequently but are critical for understanding (e.g., fundamental theorems, core definitions, prerequisite concepts)
+- Find cross-paper patterns: concepts that appear in different forms across papers
+- Consider question progression: concepts that build from basic to advanced
+- Use 'ai_enhanced' as source type
+- Limit to 5-10 high-quality new items`,
       schemaDescription: `{
-  "syllabusTopics": ["Topic 1", "Topic 2"],
-  "importantConcepts": ["Concept 1", "Concept 2"],
-  "missingTopics": ["Missing 1", "Missing 2"],
-  "sources": [
-    {"title": "Source title", "url": "https://example.com", "type": "syllabus|textbook|academic|educational", "relevance": 0.9}
+  "enhancedItems": [
+    {
+      "questionId": "ai-1",
+      "questionText": "Detailed question or concept description",
+      "concept": "Concept name",
+      "priority": "HIGH",
+      "reason": "Explanation of why this is important based on academic analysis",
+      "frequency": 1,
+      "papersCount": 1,
+      "totalMarks": 10,
+      "avgMarks": 10,
+      "firstYear": 2023,
+      "lastYear": 2023,
+      "units": ["Unit 3"],
+      "topics": ["Topic name"],
+      "concepts": ["Concept name"],
+      "questionTypes": ["LONG_ANSWER"],
+      "isExactRepeat": false,
+      "matchedQuestionIds": [],
+      "recencyScore": 0.8,
+      "marksWeight": 0.5,
+      "unitRelevance": 1,
+      "source": "ai_enhanced"
+    }
   ]
 }`,
-      prompt: `Subject: ${params.subjectName}
-${params.semester ? `Semester: ${params.semester}` : ''}
-${params.academicYear ? `Academic Year: ${params.academicYear}` : ''}
+      prompt: `Subject: ${params.subjectName || 'General'}
+Papers Analyzed: ${params.papers.length}
+Total Questions: ${params.allQuestions.length}
 
-Existing topics from question papers: ${params.existingTopics.slice(0, 20).join(', ') || 'None'}
-Existing concepts: ${params.existingConcepts.slice(0, 20).join(', ') || 'None'}
+PAPERS:
+${paperContext}
 
-Identify:
-1. Standard syllabus topics for this subject
-2. Fundamental concepts that are important but may not appear frequently in past papers
-3. Reputable academic sources (university syllabi, standard textbooks, educational portals)
+EXTRACTED QUESTIONS (sample):
+${questionSummary}
 
-Only include concepts you are confident about. Mark uncertain ones.`,
+EXISTING PRIORITY ITEMS (from statistical analysis):
+${priorityContext}
+
+Generate additional priority items that provide academic insight beyond frequency analysis. For example:
+- Foundational concepts that are prerequisites for other topics
+- Concepts that connect multiple units
+- Topics that typically appear in exams despite low historical frequency
+- Key theorems, definitions, or derivations that are exam-critical
+- Question patterns that suggest examiner focus areas
+
+Return up to 10 new items with source: "ai_enhanced"`,
       validate: (parsed) => {
+        if (!parsed || !Array.isArray(parsed.enhancedItems)) {
+          throw new Error('Model did not return valid enhancedItems array')
+        }
         return {
-          syllabusTopics: Array.isArray(parsed.syllabusTopics) ? parsed.syllabusTopics.filter(t => typeof t === 'string') : [],
-          importantConcepts: Array.isArray(parsed.importantConcepts) ? parsed.importantConcepts.filter(t => typeof t === 'string') : [],
-          missingTopics: Array.isArray(parsed.missingTopics) ? parsed.missingTopics.filter(t => typeof t === 'string') : [],
-          sources: Array.isArray(parsed.sources) ? parsed.sources.filter(s => s && typeof s.title === 'string' && typeof s.url === 'string') : [],
+          enhancedItems: parsed.enhancedItems.map((item: any) => ({
+            questionId: String(item.questionId || `ai-${Date.now()}-${Math.random()}`).trim(),
+            questionText: String(item.questionText || '').trim(),
+            concept: String(item.concept || '').trim(),
+            priority: ['HIGH', 'MEDIUM', 'LOW'].includes(item.priority) ? item.priority : 'MEDIUM',
+            reason: String(item.reason || '').trim(),
+            frequency: typeof item.frequency === 'number' ? item.frequency : 1,
+            papersCount: typeof item.papersCount === 'number' ? item.papersCount : 1,
+            totalMarks: typeof item.totalMarks === 'number' ? item.totalMarks : 0,
+            avgMarks: typeof item.avgMarks === 'number' ? item.avgMarks : 0,
+            firstYear: typeof item.firstYear === 'number' ? item.firstYear : null,
+            lastYear: typeof item.lastYear === 'number' ? item.lastYear : null,
+            units: Array.isArray(item.units) ? item.units.map(String) : [],
+            topics: Array.isArray(item.topics) ? item.topics.map(String) : [],
+            concepts: Array.isArray(item.concepts) ? item.concepts.map(String) : [],
+            questionTypes: Array.isArray(item.questionTypes) ? item.questionTypes.map(String) : [],
+            isExactRepeat: Boolean(item.isExactRepeat),
+            matchedQuestionIds: Array.isArray(item.matchedQuestionIds) ? item.matchedQuestionIds.map(String) : [],
+            recencyScore: typeof item.recencyScore === 'number' ? item.recencyScore : 0.5,
+            marksWeight: typeof item.marksWeight === 'number' ? item.marksWeight : 0.5,
+            unitRelevance: typeof item.unitRelevance === 'number' ? item.unitRelevance : 0.5,
+            source: 'ai_enhanced' as const,
+          })).filter((item: any) => item.questionText.length > 0 && item.concept.length > 0),
         }
       },
     })
     
     return result.data
   } catch (error) {
-    console.warn('[ImportantQuestions] Web research failed:', error)
-    return undefined
+    console.warn('[ImportantQuestions] Default AI analysis failed:', error)
+    return null
   }
-}
-
-/**
- * Generate Important Questions Report Data for PDF
- */
-export async function generateImportantQuestionsReportData(
-  analysisId: string,
-  userId: string
-): Promise<{
-  subject: { name: string; code: string } | null
-  semester: string | null
-  academicYear: string | null
-  analysis: any
-  papers: QuestionPaperWithQuestions[]
-  generatedAt: Date
-} | null> {
-  const analysis = await prisma.questionAnalysis.findFirst({
-    where: { id: analysisId, userId },
-    include: {
-      subject: { select: { id: true, name: true, code: true } },
-      priorityItems: true,
-      analysisData: true,
-    },
-  })
-  
-  if (!analysis) return null
-  
-  // Fetch source papers
-  const papers = await prisma.questionPaper.findMany({
-    where: { id: { in: analysis.paperIds as string[] }, userId },
-    include: {
-      questions: true,
-      subject: { select: { id: true, name: true, code: true } },
-    },
-  })
-  
-  return {
-    subject: analysis.subject,
-    semester: analysis.subject ? 'N/A' : null, // Could be derived from papers
-    academicYear: analysis.subject ? 'N/A' : null,
-    analysis: {
-      ...analysis,
-      priorityItems: analysis.priorityItems,
-      analysisData: analysis.analysisData,
-    },
-    papers: papers as QuestionPaperWithQuestions[],
-    generatedAt: new Date(),
-  }
-}
-
-// Helper functions
-function normalizeQuestionText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function extractKeywords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 3)
-    .slice(0, 10)
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0
-  let dotProduct = 0, normA = 0, normB = 0
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-  if (normA === 0 || normB === 0) return 0
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
 /**
@@ -684,4 +791,156 @@ Return up to 10 new items with source: "ai_enhanced"`,
     console.warn('[ImportantQuestions] AI analysis failed:', error)
     return null
   }
+}
+
+/**
+ * Perform web research for subject syllabus and important concepts
+ * Uses AI to search and synthesize information from academic sources
+ */
+async function performWebResearch(
+  params: {
+    subjectName: string
+    semester?: string
+    academicYear?: string
+    existingTopics: string[]
+    existingConcepts: string[]
+  },
+  userId: string
+): Promise<WebResearchResult | undefined> {
+  try {
+    // Use AI to generate web research queries and analyze results
+    // This would integrate with a web search API if available
+    // For now, we use AI knowledge to identify fundamental concepts
+    
+    const { generateStructuredOutput } = await import('@/lib/ai/service')
+    
+    const result = await generateStructuredOutput<{
+      syllabusTopics: string[]
+      importantConcepts: string[]
+      missingTopics: string[]
+      sources: WebSource[]
+    }>({
+      userId,
+      provider: undefined, // Use default
+      model: undefined,
+      systemPrompt: `You are an academic curriculum expert. Given a subject name and existing topics from question papers, identify:
+1. Standard syllabus topics for this subject at university level
+2. Fundamental concepts that should be covered but may be missing from past papers
+3. Authoritative sources for this subject (textbooks, syllabi, academic references)
+
+Be specific to the subject. Do not fabricate sources. If you don't have specific knowledge, indicate uncertainty.`,
+      schemaDescription: `{
+  "syllabusTopics": ["Topic 1", "Topic 2"],
+  "importantConcepts": ["Concept 1", "Concept 2"],
+  "missingTopics": ["Missing 1", "Missing 2"],
+  "sources": [
+    {"title": "Source title", "url": "https://example.com", "type": "syllabus|textbook|academic|educational", "relevance": 0.9}
+  ]
+}`,
+      prompt: `Subject: ${params.subjectName}
+${params.semester ? `Semester: ${params.semester}` : ''}
+${params.academicYear ? `Academic Year: ${params.academicYear}` : ''}
+
+Existing topics from question papers: ${params.existingTopics.slice(0, 20).join(', ') || 'None'}
+Existing concepts: ${params.existingConcepts.slice(0, 20).join(', ') || 'None'}
+
+Identify:
+1. Standard syllabus topics for this subject
+2. Fundamental concepts that are important but may not appear frequently in past papers
+3. Reputable academic sources (university syllabi, standard textbooks, educational portals)
+
+Only include concepts you are confident about. Mark uncertain ones.`,
+      validate: (parsed) => {
+        return {
+          syllabusTopics: Array.isArray(parsed.syllabusTopics) ? parsed.syllabusTopics.filter(t => typeof t === 'string') : [],
+          importantConcepts: Array.isArray(parsed.importantConcepts) ? parsed.importantConcepts.filter(t => typeof t === 'string') : [],
+          missingTopics: Array.isArray(parsed.missingTopics) ? parsed.missingTopics.filter(t => typeof t === 'string') : [],
+          sources: Array.isArray(parsed.sources) ? parsed.sources.filter(s => s && typeof s.title === 'string' && typeof s.url === 'string') : [],
+        }
+      },
+    })
+    
+    return result.data
+  } catch (error) {
+    console.warn('[ImportantQuestions] Web research failed:', error)
+    return undefined
+  }
+}
+
+/**
+ * Generate Important Questions Report Data for PDF
+ */
+export async function generateImportantQuestionsReportData(
+  analysisId: string,
+  userId: string
+): Promise<{
+  subject: { name: string; code: string } | null
+  semester: string | null
+  academicYear: string | null
+  analysis: any
+  papers: QuestionPaperWithQuestions[]
+  generatedAt: Date
+} | null> {
+  const analysis = await prisma.questionAnalysis.findFirst({
+    where: { id: analysisId, userId },
+    include: {
+      subject: { select: { id: true, name: true, code: true } },
+      priorityItems: true,
+      analysisData: true,
+    },
+  })
+  
+  if (!analysis) return null
+  
+  // Fetch source papers
+  const papers = await prisma.questionPaper.findMany({
+    where: { id: { in: analysis.paperIds as string[] }, userId },
+    include: {
+      questions: true,
+      subject: { select: { id: true, name: true, code: true } },
+    },
+  })
+  
+  return {
+    subject: analysis.subject,
+    semester: analysis.subject ? 'N/A' : null, // Could be derived from papers
+    academicYear: analysis.subject ? 'N/A' : null,
+    analysis: {
+      ...analysis,
+      priorityItems: analysis.priorityItems,
+      analysisData: analysis.analysisData,
+    },
+    papers: papers as QuestionPaperWithQuestions[],
+    generatedAt: new Date(),
+  }
+}
+
+// Helper functions
+function normalizeQuestionText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 10)
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0
+  let dotProduct = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  if (normA === 0 || normB === 0) return 0
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
 }

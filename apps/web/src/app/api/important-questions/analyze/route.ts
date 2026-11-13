@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireAuth()
     const body = await request.json()
-    const { paperIds, subjectId, enableWebResearch, subjectName, semester, academicYear, additionalInstructions } = body
+    const { paperIds, subjectId, enableWebResearch, subjectName, semester, academicYear, additionalInstructions, title } = body
 
     if (!paperIds || !Array.isArray(paperIds) || paperIds.length === 0) {
       return NextResponse.json(
@@ -21,13 +21,25 @@ export async function POST(request: Request) {
     const papers = await prisma.questionPaper.findMany({
       where: { id: { in: paperIds }, userId: user.id },
       include: { 
-        questions: true,
+        questions: {
+          orderBy: [{ year: 'asc' }, { questionNumber: 'asc' }],
+        },
         subject: { select: { id: true, name: true, code: true } }
       },
     })
 
     if (papers.length === 0) {
       return NextResponse.json({ error: 'No valid papers found' }, { status: 404 })
+    }
+
+    // Check if papers have extracted questions
+    const papersWithQuestions = papers.filter(p => p.questions && p.questions.length > 0)
+    const papersWithoutQuestions = papers.filter(p => !p.questions || p.questions.length === 0)
+    
+    if (papersWithQuestions.length === 0) {
+      return NextResponse.json({ 
+        error: 'No questions extracted from the selected papers. Please extract questions first.' 
+      }, { status: 400 })
     }
 
     // Collect additional instructions from papers
@@ -42,12 +54,12 @@ export async function POST(request: Request) {
 
     // Perform comprehensive analysis
     const analysisResult = await analyzeQuestionPapers(
-      papers as any,
-      subjectId || papers[0]?.subjectId || null,
+      papersWithQuestions as any,
+      subjectId || papersWithQuestions[0]?.subjectId || null,
       user.id,
       {
         enableWebResearch: enableWebResearch || false,
-        subjectName: subjectName || papers[0]?.subject?.name,
+        subjectName: subjectName || papersWithQuestions[0]?.subject?.name,
         semester,
         academicYear,
         additionalInstructions: combinedInstructions || undefined,
@@ -58,8 +70,8 @@ export async function POST(request: Request) {
     const analysis = await prisma.questionAnalysis.create({
       data: {
         userId: user.id,
-        title: body.title || `Analysis of ${papers.length} paper(s) - ${new Date().toLocaleDateString()}`,
-        subjectId: subjectId || papers[0]?.subjectId || null,
+        title: title || `Analysis of ${papers.length} paper(s) - ${new Date().toLocaleDateString()}`,
+        subjectId: subjectId || papersWithQuestions[0]?.subjectId || null,
         paperIds,
         totalQuestions: analysisResult.totalQuestions,
         exactRepeats: analysisResult.exactRepeats,
@@ -84,12 +96,20 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ analysis: serializeBigInt(analysis) })
+    return NextResponse.json({ 
+      analysis: serializeBigInt(analysis),
+      warnings: papersWithoutQuestions.length > 0 
+        ? `${papersWithoutQuestions.length} paper(s) had no extracted questions and were skipped`
+        : null
+    })
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('[ImportantQuestions] Batch analyze error:', error)
-    return NextResponse.json({ error: 'Failed to analyze question papers' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to analyze question papers',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
