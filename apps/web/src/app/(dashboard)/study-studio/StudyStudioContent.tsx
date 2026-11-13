@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { ImportantQuestionsNewTab } from "@/components/study-studio/important-questions/ImportantQuestionsNewTab"
+import { ImportantQuestionsWorkspace } from "@/components/study-studio/important-questions/ImportantQuestionsWorkspace"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
@@ -184,92 +184,38 @@ interface GeneratedQuizQuestion {
   }>
 }
 
-// Important Questions Analyser types
-interface QuestionPaper {
+// V2 API types for Important Questions
+interface SourceDocument {
   id: string
-  userId: string
-  title: string
   fileName: string
-  fileSize: string
   mimeType: string
-  storagePath: string
-  paperType: 'QB' | 'PYQ'
-  subjectId: string | null
-  semester: string | null
-  unit: string | null
-  academicYear: string | null
-  examinationYear: number | null
-  marks: number | null
-  status: string
-  pageCount: number | null
-  metadata: any
-  createdAt: string
-  updatedAt: string
-  subject?: { id: string; name: string; code: string } | null
-  _count?: { questions: number }
-  questions?: ExtractedQuestion[]
+  academicYear?: string | null
+  examYear?: number | null
+  pageCount?: number | null
+  paperType?: 'QB' | 'PYQ'
+  marks?: number | null
+  unit?: string | null
+  semester?: string | null
 }
 
-interface ExtractedQuestion {
+interface SavedAnalysis {
   id: string
-  questionPaperId: string
-  questionNumber: string
-  text: string
-  subQuestions: any | null
-  marks: number | null
-  unit: string | null
-  topic: string | null
-  concept: string | null
-  questionType: string | null
-  difficulty: string | null
-  year: number | null
-  pageReference: number | null
-  extractionConfidence: number
-  flags: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-interface QuestionAnalysis {
-  id: string
-  userId: string
   title: string
-  subjectId: string | null
-  paperIds: string[]
-  totalQuestions: number
-  exactRepeats: number
-  semanticRepeats: number
-  analysisData: any
   createdAt: string
-  updatedAt: string
-  subject?: { id: string; name: string; code: string } | null
-  priorityItems?: QuestionPriorityItem[]
+  summary: {
+    papersAnalyzed: number
+    totalQuestions: number
+    exactRepeatGroups: number
+    semanticRepeatGroups: number
+    conceptGroups: number
+  }
 }
 
-interface QuestionPriorityItem {
+interface Subject {
   id: string
-  analysisId: string
-  questionId: string
-  priority: 'HIGH' | 'MEDIUM' | 'LOW'
-  reason: string
-  frequency: number
-  recencyScore: number
-  marksWeight: number
-  unitRelevance: number
-  papersCount: number
-  createdAt: string
-  // From analysisData
-  questionText?: string
-  concept?: string
-  units?: string[]
-  topics?: string[]
-  concepts?: string[]
-  questionTypes?: string[]
-  firstYear?: number | null
-  lastYear?: number | null
-  avgMarks?: number
-  isExactRepeat?: boolean
-  matchedQuestionIds?: string[]
+  name: string
+  code: string
+  semester: string | null
 }
 
 interface GeneratedPracticePaper {
@@ -633,8 +579,8 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const iqSubjects: Subject[] = subjectsData?.subjects || []
 
   // V2 API returns { documents: [...] } and { analyses: [...] }
-  const questionPapers: QuestionPaper[] = papersData?.documents || []
-  const questionAnalyses: QuestionAnalysis[] = analysesData?.analyses || []
+  const iqDocuments: SourceDocument[] = papersData?.documents || []
+  const iqSavedAnalyses: SavedAnalysis[] = analysesData?.analyses || []
 
   const notebookSources: NotebookSourceItem[] = sourcesData?.sources || []
 
@@ -2459,11 +2405,11 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
           </div>
         </TabsContent>
 
-        {/* IMPORTANT QUESTIONS TAB - New V2 Implementation */}
+        {/* IMPORTANT QUESTIONS TAB - Single Workspace Implementation */}
         <TabsContent value="important-questions" className="mt-4 space-y-6">
-          <ImportantQuestionsNewTab
-            questionPapers={questionPapers}
-            questionAnalyses={questionAnalyses}
+          <ImportantQuestionsWorkspace
+            initialDocuments={iqDocuments}
+            initialAnalyses={iqSavedAnalyses}
             iqSubjects={iqSubjects}
           />
         </TabsContent>
