@@ -16,6 +16,7 @@ services:
     region: oregon
     healthCheckPath: /api/health
     autoDeploy: true
+    preDeployCommand: "pnpm --filter @alex/web run db:migrate:deploy"
     envVars:
       - key: NODE_ENV
         value: production
@@ -138,6 +139,7 @@ services:
     dockerBuildTarget: runner-worker
     plan: starter
     region: oregon
+    preDeployCommand: "pnpm --filter @alex/web run db:migrate:deploy"
     envVars:
       - key: NODE_ENV
         value: production
