@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { ImportantQuestionsWorkspace } from "@/components/study-studio/important-questions/ImportantQuestionsWorkspace"
+import { ImportantQuestionsComingSoon } from "@/components/study-studio/important-questions/ImportantQuestionsComingSoon"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
@@ -2405,13 +2405,9 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
           </div>
         </TabsContent>
 
-        {/* IMPORTANT QUESTIONS TAB - Single Workspace Implementation */}
+        {/* IMPORTANT QUESTIONS TAB - Coming Soon */}
         <TabsContent value="important-questions" className="mt-4 space-y-6">
-          <ImportantQuestionsWorkspace
-            initialDocuments={iqDocuments}
-            initialAnalyses={iqSavedAnalyses}
-            iqSubjects={iqSubjects}
-          />
+          <ImportantQuestionsComingSoon />
         </TabsContent>
       </Tabs>
     </div>
