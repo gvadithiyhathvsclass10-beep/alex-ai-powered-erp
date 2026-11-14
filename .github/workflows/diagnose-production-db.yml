@@ -1,0 +1,341 @@
+name: Diagnose Production Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_name:
+        description: 'Specific migration to check (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  diagnose:
+    name: Diagnose Production Database (NEON_DIRECT_URL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Validate NEON_DIRECT_URL secret
+        run: |
+          if [ -z "${{ secrets.NEON_DIRECT_URL }}" ]; then
+            echo "::error::NEON_DIRECT_URL secret is not set"
+            exit 1
+          fi
+          echo "NEON_DIRECT_URL is configured"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Generate Prisma Client
+        run: pnpm run db:generate
+        working-directory: apps/web
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+
+      - name: Run Database Diagnostics
+        id: diagnostics
+        working-directory: apps/web
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+        run: |
+          node -e "
+          const { PrismaClient } = require('@prisma/client');
+          const prisma = new PrismaClient({ log: ['error'] });
+
+          async function main() {
+            const results = {
+              timestamp: new Date().toISOString(),
+              target: 'NEON_DIRECT_URL (GitHub Actions migration runner)',
+              connection: {},
+              database: {},
+              tables: {},
+              migrations: {},
+              documentStatusEnum: {},
+              summary: {}
+            };
+
+            try {
+              // 1. Connection test
+              console.log('1. Testing database connection...');
+              await prisma.\$queryRaw\`SELECT 1\`;
+              results.connection = { ok: true };
+              console.log('   ✓ Connection successful');
+            } catch (e) {
+              results.connection = { ok: false, error: e instanceof Error ? e.message : String(e) };
+              console.error('   ✗ Connection failed:', e instanceof Error ? e.message : String(e));
+              console.log(JSON.stringify(results, null, 2));
+              process.exit(1);
+            }
+
+            // 2. Database info
+            console.log('2. Getting database info...');
+            try {
+              const dbInfo = await prisma.\$queryRaw\`
+                SELECT current_database() as current_database, 
+                       current_schema() as current_schema, 
+                       current_setting('search_path') as search_path
+              \`;
+              results.database = dbInfo[0];
+              console.table(dbInfo);
+            } catch (e) {
+              results.database = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 3. Tables in ALL schemas
+            console.log('3. Checking tables in ALL schemas...');
+            try {
+              const tablesAny = await prisma.\$queryRaw\`
+                SELECT table_name, table_schema 
+                FROM information_schema.tables 
+                WHERE table_name IN ('documents', 'document_chunks', 'study_material_jobs', 'users', 'subjects')
+                ORDER BY table_schema, table_name
+              \`;
+              results.tablesAnySchema = tablesAny;
+              console.table(tablesAny);
+            } catch (e) {
+              results.tablesAnySchema = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 4. Tables in PUBLIC schema
+            console.log('4. Checking tables in PUBLIC schema...');
+            try {
+              const tablesPublic = await prisma.\$queryRaw\`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('documents', 'document_chunks', 'study_material_jobs', 'users', 'subjects')
+                ORDER BY table_name
+              \`;
+              results.tablesPublic = tablesPublic;
+              console.table(tablesPublic);
+            } catch (e) {
+              results.tablesPublic = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 5. study_material_jobs columns
+            console.log('5. Checking study_material_jobs columns...');
+            try {
+              const columns = await prisma.\$queryRaw\`
+                SELECT column_name, data_type, is_nullable, column_default
+                FROM information_schema.columns
+                WHERE table_name = 'study_material_jobs'
+                ORDER BY ordinal_position
+              \`;
+              results.studyMaterialJobColumns = columns;
+              console.table(columns);
+            } catch (e) {
+              results.studyMaterialJobColumns = { error: e instanceof Error ? e.message : String(e), note: 'Table may not exist' };
+              console.error('   Table may not exist:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 6. study_material_jobs indexes
+            console.log('6. Checking study_material_jobs indexes...');
+            try {
+              const indexes = await prisma.\$queryRaw\`
+                SELECT indexname, indexdef 
+                FROM pg_indexes 
+                WHERE tablename = 'study_material_jobs'
+              \`;
+              results.studyMaterialJobIndexes = indexes;
+              console.table(indexes);
+            } catch (e) {
+              results.studyMaterialJobIndexes = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 7. study_material_jobs foreign keys
+            console.log('7. Checking study_material_jobs foreign keys...');
+            try {
+              const fks = await prisma.\$queryRaw\`
+                SELECT
+                  tc.constraint_name,
+                  kcu.column_name,
+                  ccu.table_name AS foreign_table,
+                  ccu.column_name AS foreign_column
+                FROM information_schema.table_constraints AS tc
+                JOIN information_schema.key_column_usage AS kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                  AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage AS ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                  AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'study_material_jobs'
+              \`;
+              results.studyMaterialJobForeignKeys = fks;
+              console.table(fks);
+            } catch (e) {
+              results.studyMaterialJobForeignKeys = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 8. Migration history
+            console.log('8. Checking migration history...');
+            try {
+              const migrations = await prisma.\$queryRaw\`
+                SELECT migration_name, started_at, finished_at, rolled_back_at, logs 
+                FROM _prisma_migrations 
+                WHERE migration_name IN (
+                  '20251113000000_add_important_questions_tables',
+                  '20251115000000_add_study_material_jobs',
+                  '20261114000000_repair_study_material_jobs'
+                )
+                ORDER BY started_at
+              \`;
+              results.migrationHistory = migrations.map(m => ({
+                migration_name: m.migration_name,
+                started_at: m.started_at,
+                finished_at: m.finished_at,
+                rolled_back_at: m.rolled_back_at,
+                status: m.rolled_back_at ? 'ROLLED_BACK' : (m.finished_at ? 'APPLIED' : 'PENDING/FAILED'),
+                logs_preview: m.logs ? m.logs.substring(0, 500) : 'none',
+              }));
+              console.table(results.migrationHistory);
+            } catch (e) {
+              results.migrationHistory = { error: e instanceof Error ? e.message : String(e), note: '_prisma_migrations table may not exist or be accessible' };
+              console.error('   Could not read migration history:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 9. DocumentStatus enum
+            console.log('9. Checking DocumentStatus enum...');
+            try {
+              const enumCheck = await prisma.\$queryRaw\`
+                SELECT EXISTS (
+                  SELECT 1 FROM pg_type WHERE typname = 'DocumentStatus'
+                ) as exists
+              \`;
+              results.documentStatusEnum = enumCheck[0]?.exists ?? false;
+              console.log('   DocumentStatus enum exists:', results.documentStatusEnum);
+            } catch (e) {
+              results.documentStatusEnum = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 10. study_material_jobs in public schema
+            console.log('10. Checking study_material_jobs in public schema...');
+            try {
+              const tableExists = await prisma.\$queryRaw\`
+                SELECT EXISTS (
+                  SELECT 1 FROM information_schema.tables 
+                  WHERE table_schema = 'public' AND table_name = 'study_material_jobs'
+                ) as exists
+              \`;
+              results.studyMaterialJobsExistsInPublic = tableExists[0]?.exists ?? false;
+              console.log('   study_material_jobs in public:', results.studyMaterialJobsExistsInPublic);
+            } catch (e) {
+              results.studyMaterialJobsExistsInPublic = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 11. DocumentStatus enum values (if exists)
+            console.log('11. DocumentStatus enum values (if exists)...');
+            try {
+              const enumValues = await prisma.\$queryRaw\`
+                SELECT enumlabel 
+                FROM pg_enum 
+                WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'DocumentStatus')
+                ORDER BY enumsortorder
+              \`;
+              results.documentStatusEnumValues = enumValues.map(v => v.enumlabel);
+              console.log('   Values:', results.documentStatusEnumValues.join(', '));
+            } catch (e) {
+              results.documentStatusEnumValues = { error: e instanceof Error ? e.message : String(e), note: 'Enum may not exist' };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // 12. Check for partially created Important Questions tables
+            console.log('12. Checking for partially created Important Questions tables...');
+            try {
+              const iqTables = await prisma.\$queryRaw\`
+                SELECT table_name, table_schema 
+                FROM information_schema.tables 
+                WHERE table_name IN (
+                  'question_papers', 'extracted_questions', 'question_analyses', 
+                  'question_analysis_items', 'question_priority_items', 'generated_practice_papers'
+                )
+                ORDER BY table_schema, table_name
+              \`;
+              results.importantQuestionsTables = iqTables;
+              console.table(iqTables);
+            } catch (e) {
+              results.importantQuestionsTables = { error: e instanceof Error ? e.message : String(e) };
+              console.error('   Failed:', e instanceof Error ? e.message : String(e));
+            }
+
+            // Summary
+            results.summary = {
+              studyMaterialJobsExists: results.studyMaterialJobsExistsInPublic === true,
+              documentStatusEnumExists: results.documentStatusEnum === true,
+              migrationHistoryAvailable: !results.migrationHistory.error,
+              tablesInPublic: results.tablesPublic?.map?.((t: any) => t.table_name) || [],
+              tablesInAnySchema: results.tablesAnySchema?.map?.((t: any) => `${t.table_schema}.${t.table_name}`) || [],
+            };
+
+            console.log('\n=== DIAGNOSTIC SUMMARY ===');
+            console.log('Database:', results.database);
+            console.log('Connection OK:', results.connection.ok);
+            console.log('study_material_jobs exists in public:', results.summary.studyMaterialJobsExists);
+            console.log('DocumentStatus enum exists:', results.summary.documentStatusEnumExists);
+            console.log('Migration history available:', results.summary.migrationHistoryAvailable);
+            console.log('Tables in public:', results.summary.tablesInPublic.join(', ') || 'none');
+            console.log('Tables in any schema:', results.summary.tablesInAnySchema.join(', ') || 'none');
+            
+            if (results.migrationHistory && Array.isArray(results.migrationHistory)) {
+              console.log('\nMigration Status:');
+              results.migrationHistory.forEach(m => {
+                console.log(`  ${m.migration_name}: ${m.status} ${m.finished_at ? '(finished: ' + m.finished_at + ')' : ''} ${m.rolled_back_at ? '(rolled back: ' + m.rolled_back_at + ')' : ''}`);
+                if (m.logs_preview !== 'none') {
+                  console.log(`    Logs: ${m.logs_preview}`);
+                }
+              });
+            }
+
+            if (results.migrationHistory && results.migrationHistory.error) {
+              console.log('\nMigration History Error:', results.migrationHistory.error);
+            }
+
+            console.log('\n=== FULL JSON OUTPUT ===');
+            console.log(JSON.stringify(results, null, 2));
+
+            await prisma.\$disconnect();
+          }
+
+          main().catch(async (e) => {
+            console.error('Diagnostic failed:', e);
+            await prisma.\$disconnect();
+            process.exit(1);
+          });
+          "
+        shell: bash
+
+      - name: Upload diagnostic results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-db-diagnostic-${{ github.run_id }}
+          path: apps/web/diagnostic-results.json
+          retention-days: 7
