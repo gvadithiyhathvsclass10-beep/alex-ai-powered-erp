@@ -116,6 +116,7 @@ RUN cd /app && npx esbuild worker-bundle-entry.ts \
 FROM node:20-alpine AS runner-api
 
 ENV NODE_ENV=production
+ENV TESSERACT_PATH=/usr/bin/tesseract
 
 WORKDIR /app
 
@@ -155,6 +156,7 @@ CMD ["node", "apps/web/server.js"]
 FROM node:20-alpine AS runner-worker
 
 ENV NODE_ENV=production
+ENV TESSERACT_PATH=/usr/bin/tesseract
 
 WORKDIR /app
 

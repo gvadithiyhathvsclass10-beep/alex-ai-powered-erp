@@ -15,7 +15,7 @@ services:
     plan: standard
     region: oregon
     healthCheckPath: /api/health
-    autoDeploy: true
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
@@ -138,6 +138,7 @@ services:
     dockerBuildTarget: runner-worker
     plan: starter
     region: oregon
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
@@ -203,6 +204,7 @@ services:
       # - key: EMAIL_FROM
       #   sync: false
     # Disk for persistent local storage (if STORAGE_MODE=local)
+    # Requires a plan that supports disks
     # disk:
     #   name: alex-worker-storage
     #   mountPath: /var/data/alex-storage

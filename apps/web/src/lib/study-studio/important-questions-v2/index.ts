@@ -33,10 +33,18 @@ import type { ImportantQuestionsDependencies } from './types';
  * Uses existing auth, storage, Prisma, and AI services
  */
 export function createImportantQuestionsDependencies(getUserId: () => Promise<{ id: string }>): ImportantQuestionsDependencies {
+  // Create a synchronous getter that returns the user ID from the async function
+  let cachedUserId: string | undefined;
+  const getUser = async () => {
+    const user = await getUserId();
+    cachedUserId = user.id;
+    return user;
+  };
+  
   return {
-    requireUser: getUserId,
+    requireUser: getUser,
     extractor: createDocumentExtractor(),
-    ai: createAIAssistanceAdapter(),
+    ai: createAIAssistanceAdapter(() => cachedUserId),
     storage: createStorageAdapter(),
     repository: createRepositoryAdapter(),
   };

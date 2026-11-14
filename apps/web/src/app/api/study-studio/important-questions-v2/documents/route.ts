@@ -1,53 +1,32 @@
 import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { createImportantQuestionsDependencies } from '@/lib/study-studio/important-questions-v2';
 import { validateUpload, MAX_FILE_BYTES } from '@/lib/study-studio/important-questions-v2/types';
-import { deleteFile } from '@/lib/storage/client';
+import { createDocumentRecord, processDocument } from '@/lib/document-processing/pipeline';
+import { DocumentStatus } from '@prisma/client';
+import { uploadFile, fileExists, deleteFile } from '@/lib/storage/client';
 
 export async function GET() {
   try {
     const user = await requireAuth();
 
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
-    const docs = await deps.repository.listDocuments(user.id, []);
-    
-    // Note: listDocuments requires IDs, but we want all. Let's use a different approach
-    const { prisma } = await import('@/lib/prisma');
-    const papers = await prisma.questionPaper.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        fileName: true,
-        fileSize: true,
-        mimeType: true,
-        storagePath: true,
-        paperType: true,
-        subjectId: true,
-        semester: true,
-        unit: true,
-        academicYear: true,
-        examinationYear: true,
-        marks: true,
-        status: true,
-        pageCount: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        subject: { select: { id: true, name: true, code: true } },
-        _count: { select: { questions: true } },
-      },
-    });
+    const documents = await deps.repository.listDocuments(user.id, []);
 
-    return NextResponse.json({ papers });
+    return NextResponse.json({ documents });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Documents GET error:', error);
+    if (error instanceof Error) {
+      console.error('[ImportantQuestionsV2] Documents GET error stack:', error.stack);
+      console.error('[ImportantQuestionsV2] Documents GET error name:', error.name);
+      console.error('[ImportantQuestionsV2] Documents GET error message:', error.message);
+    }
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents' } },
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to list documents', detail: error instanceof Error ? error.message : 'Unknown error' } },
       { status: 500 }
     );
   }
@@ -73,6 +52,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get client upload IDs for reliable matching
+    const uploadIds = formData.getAll('uploadIds') as string[];
+
     // Validate each file
     const validationErrors: string[] = [];
     for (const file of files) {
@@ -90,95 +72,130 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse shared metadata (defaults for all files)
-    const sharedPaperType = (formData.get('paperType') as string) || 'QB';
-    const sharedSubjectId = (formData.get('subjectId') as string) || null;
-    const sharedSemester = (formData.get('semester') as string) || null;
-    const sharedUnit = (formData.get('unit') as string) || null;
-    const sharedAcademicYear = (formData.get('academicYear') as string) || null;
-    const sharedExaminationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
-    const sharedMarks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+    // Parse optional metadata (can be global or per-file)
+    const globalPaperType = (formData.get('paperType') as string) || 'QB';
+    const globalSubjectId = (formData.get('subjectId') as string) || null;
+    const globalSemester = (formData.get('semester') as string) || null;
+    const globalUnit = (formData.get('unit') as string) || null;
+    const globalAcademicYear = (formData.get('academicYear') as string) || null;
+    const globalExaminationYear = formData.get('examinationYear') ? parseInt(formData.get('examinationYear') as string) : null;
+    const globalMarks = formData.get('marks') ? parseInt(formData.get('marks') as string) : null;
+    const additionalInstructions = (formData.get('additionalInstructions') as string) || null;
 
-    // Parse per-file metadata overrides (format: file_0_title, file_0_paperType, etc.)
-    const perFileMetadata: Map<number, Record<string, string>> = new Map();
-    for (const [key, value] of formData.entries()) {
-      const match = key.match(/^file_(\d+)_(.+)$/);
-      if (match) {
-        const index = parseInt(match[1], 10);
-        const field = match[2];
-        if (!perFileMetadata.has(index)) {
-          perFileMetadata.set(index, {});
-        }
-        perFileMetadata.get(index)![field] = value as string;
+    // Parse per-file metadata if provided
+    const perFileMetadata: Record<string, { paperType?: string; subjectId?: string; semester?: string; unit?: string; academicYear?: string; examinationYear?: number; marks?: number }> = {}
+    try {
+      const metadataJson = formData.get('fileMetadata') as string
+      if (metadataJson) {
+        Object.assign(perFileMetadata, JSON.parse(metadataJson))
       }
+    } catch {
+      // Ignore metadata parse errors
     }
 
     // Create dependencies
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
 
-    const results: Array<{ id: string; fileName: string; status: string; error?: string }> = [];
-    const storageKeys: string[] = [];
+    const results: Array<{ id: string; uploadId: string; fileName: string; status: string; error?: string }> = [];
 
-    // Process each file
+    // Process each file through the Research Notebook pipeline
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      let storageKey: string | null = null;
-      
+      const uploadId = uploadIds[i] || `upload-${Date.now()}-${i}`;
+      const fileMetadata = perFileMetadata[uploadId] || {}
+      let documentId: string | null = null;
+
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
+        const buffer = Buffer.from(bytes);
 
-        // Upload to storage
-        const storageResult = await deps.storage.put({
-          ownerId: user.id,
+        // Upload to storage using the existing pipeline
+        const { document, buffer: docBuffer } = await createDocumentRecord(
+          user.id,
+          file,
+          fileMetadata.subjectId || globalSubjectId || undefined,
+          undefined, // projectId
+          undefined, // notebookId
+          file.name, // customTitle
+          undefined // description
+        );
+
+        // Store Important Questions metadata in document metadata (merge with existing)
+        const iqMetadata = {
+          v2StorageKey: document.storagePath,
+          v2CreatedAt: new Date().toISOString(),
+          paperType: (fileMetadata.paperType || globalPaperType) as 'QB' | 'PYQ',
+          subjectId: fileMetadata.subjectId || globalSubjectId || null,
+          semester: fileMetadata.semester || globalSemester || null,
+          unit: fileMetadata.unit || globalUnit || null,
+          academicYear: fileMetadata.academicYear || globalAcademicYear || null,
+          examinationYear: (fileMetadata.examinationYear ?? globalExaminationYear) ?? null,
+          marks: (fileMetadata.marks ?? globalMarks) ?? null,
+        };
+
+        // Merge Important Questions metadata into document metadata
+        await prisma.document.update({
+          where: { id: document.id },
+          data: {
+            metadata: {
+              ...(document.metadata as Record<string, any> || {}),
+              ...iqMetadata,
+            },
+          },
+        });
+
+        documentId = document.id;
+
+        // Run the full document processing pipeline (extraction, chunking, embedding, indexing)
+        // This ensures the document is READY and has chunks for retrieval
+        const processingStats = await processDocument({
+          documentId: document.id,
+          userId: user.id,
+          fileBuffer: buffer,
           fileName: file.name,
           mimeType: file.type,
-          bytes,
-        });
-        storageKey = storageResult.storageKey;
-        storageKeys.push(storageKey);
-
-        // Get per-file metadata overrides
-        const fileMeta = perFileMetadata.get(i) || {};
-        
-        // Create document record with per-file metadata (falls back to shared)
-        const paperType = (fileMeta.paperType === 'QB' || fileMeta.paperType === 'PYQ') ? fileMeta.paperType : sharedPaperType;
-        const subjectId = fileMeta.subjectId || sharedSubjectId;
-        const semester = fileMeta.semester || sharedSemester;
-        const unit = fileMeta.unit || sharedUnit;
-        const academicYear = fileMeta.academicYear || sharedAcademicYear;
-        const examinationYear = fileMeta.examinationYear ? parseInt(fileMeta.examinationYear) : sharedExaminationYear;
-        const marks = fileMeta.marks ? parseInt(fileMeta.marks) : sharedMarks;
-
-        const doc = await deps.repository.createDocument({
-          ownerId: user.id,
-          fileName: file.name,
-          mimeType: file.type,
-          sizeBytes: file.size,
-          storageKey,
-          paperType: paperType as 'QB' | 'PYQ',
-          subjectId,
-          semester,
-          unit,
-          academicYear,
-          examinationYear,
-          marks,
+          documentType: document.documentType,
+          subjectId: fileMetadata.subjectId || globalSubjectId || undefined,
         });
 
-        results.push({ id: doc.id, fileName: file.name, status: 'uploaded' });
+        // Update document with processing stats
+        await prisma.document.update({
+          where: { id: document.id },
+          data: {
+            pageCount: processingStats.pageCount,
+            status: processingStats.status,
+            processedAt: new Date(),
+            processorId: user.id,
+          },
+        });
+
+        results.push({ id: document.id, uploadId, fileName: file.name, status: 'uploaded' });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);
         
-        // Cleanup storage if DB record creation failed
-        if (storageKey) {
+        // Clean up storage ONLY if document creation failed (no documentId)
+        // If document was created but processing failed, preserve the file and document
+        if (!documentId && error instanceof Error) {
+          // Document creation failed - we don't have a documentId, so no storage cleanup needed
+          // The createDocumentRecord function handles its own storage cleanup on failure
+        } else if (documentId && error instanceof Error) {
+          // Document was created but processing failed - mark document as FAILED, preserve file
           try {
-            await deleteFile('documents', storageKey);
-          } catch (cleanupError) {
-            console.warn('[ImportantQuestionsV2] Storage cleanup failed:', cleanupError);
+            await prisma.document.update({
+              where: { id: documentId },
+              data: {
+                status: DocumentStatus.FAILED,
+                errorMessage: error.message,
+              },
+            });
+          } catch (updateError) {
+            console.error('[ImportantQuestionsV2] Failed to mark document as FAILED:', updateError);
           }
         }
-        
+
         results.push({
-          id: '',
+          id: documentId || '',
+          uploadId,
           fileName: file.name,
           status: 'failed',
           error: error instanceof Error ? error.message : 'Upload failed',
@@ -198,8 +215,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
     }
     console.error('[ImportantQuestionsV2] Documents POST error:', error);
+    if (error instanceof Error) {
+      console.error('[ImportantQuestionsV2] Documents POST error stack:', error.stack);
+      console.error('[ImportantQuestionsV2] Documents POST error name:', error.name);
+      console.error('[ImportantQuestionsV2] Documents POST error message:', error.message);
+    }
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to upload documents' } },
+      { error: { code: 'INTERNAL_ERROR', message: 'Failed to upload documents', detail: error instanceof Error ? error.message : 'Unknown error' } },
       { status: 500 }
     );
   }

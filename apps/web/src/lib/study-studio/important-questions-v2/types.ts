@@ -3,7 +3,7 @@
  * Adapted to align with existing Prisma models and repository conventions
  */
 
-export type Priority = 'HIGH' | 'MEDIUM' | 'ADDITIONAL';
+export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
 export type RepeatKind = 'EXACT' | 'SEMANTIC' | 'CONCEPT';
 export type DocumentStatus = 'QUEUED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'FAILED';
 
@@ -137,7 +137,7 @@ export interface ExtractedDocument {
  * Document extractor port
  */
 export interface DocumentExtractor {
-  extract(input: { bytes: Uint8Array; fileName: string; mimeType: string }): Promise<ExtractedDocument>;
+  extract(input: { bytes: Uint8Array; fileName: string; mimeType: string; documentId?: string }): Promise<ExtractedDocument>;
 }
 
 /**
@@ -202,7 +202,7 @@ export interface RepositoryAdapter {
     storageKey: string;
     academicYear?: string | null;
     examYear?: number | null;
-    paperType?: string | null;
+    paperType?: 'QB' | 'PYQ' | null;
     marks?: number | null;
     unit?: string | null;
     semester?: string | null;

@@ -40,10 +40,36 @@ export async function analyzeQuestions(
     normalizedText: q.normalizedText || normalizeQuestion(q.text),
   }));
 
-  // AI classification (topic, unit, concept, semantic grouping)
-  const annotations = ai
-    ? (await Promise.all(chunk(questions, 40).map(batch => ai.classifyQuestions(batch, input.instructions, userId)))).flat()
-    : [];
+  // AI classification (topic, unit, concept, semantic grouping) - BATCHED
+  let annotations: Array<{
+    questionId: string;
+    topic?: string;
+    unit?: string;
+    conceptLabel?: string;
+    semanticGroupKey?: string;
+  }> = [];
+
+  let aiClassificationSuccess = false;
+  if (ai) {
+    try {
+      // Process in batches of 40 to avoid token limits and timeouts
+      const batches = chunk(questions, 40);
+      const classificationResults = await Promise.allSettled(
+        batches.map(batch => ai.classifyQuestions(batch, input.instructions, userId))
+      );
+
+      for (const result of classificationResults) {
+        if (result.status === 'fulfilled') {
+          annotations.push(...result.value);
+        } else {
+          console.warn('[ImportantQuestionsV2] AI classification batch failed:', result.reason);
+        }
+      }
+      aiClassificationSuccess = annotations.length > 0;
+    } catch (error) {
+      console.warn('[ImportantQuestionsV2] AI classification failed entirely:', error);
+    }
+  }
 
   // Apply AI annotations to questions
   for (const a of annotations) {
@@ -58,8 +84,8 @@ export async function analyzeQuestions(
   // Build repeat groups (exact, semantic, concept)
   const groups = buildRepeatGroups(questions, annotations);
 
-  // Rank questions by priority
-  const ranked = await rankQuestions(questions, groups, ai, input.instructions, request, annotations, userId);
+  // Rank questions by priority - DETERMINISTIC FIRST, then optional AI enrichment
+  const ranked = await rankQuestions(questions, groups, ai, input.instructions, request, annotations, aiClassificationSuccess, userId);
 
   // Build unit coverage
   const unitMap = new Map<string, { count: number; marks: number; topics: Set<string> }>();
@@ -99,6 +125,8 @@ export async function analyzeQuestions(
   }
   if (!ai) {
     limitations.push('AI classification was not available; topic/unit/concept grouping is limited to extracted metadata.');
+  } else if (!aiClassificationSuccess) {
+    limitations.push('AI classification was attempted but failed; deterministic analysis used instead.');
   }
 
   return {
@@ -243,6 +271,7 @@ export function buildRepeatGroups(
 
 /**
  * Rank questions by priority score with evidence-based rationale
+ * Uses BATCHED AI calls for priority explanations (max 20 questions enriched)
  */
 async function rankQuestions(
   questions: QuestionOccurrence[],
@@ -251,12 +280,19 @@ async function rankQuestions(
   instructions?: string,
   request?: AnalysisRequest,
   annotations: Array<{ questionId: string; conceptLabel?: string }> = [],
+  aiClassificationSuccess: boolean = false,
   userId?: string
 ): Promise<RankedQuestion[]> {
   const result: RankedQuestion[] = [];
 
+  // First pass: deterministic scoring for ALL questions
+  // Store related groups for each question for later use
+  const questionRelatedGroups = new Map<string, RepeatGroup[]>();
+  
   for (const q of questions) {
     const related = groups.filter(g => g.occurrenceIds.includes(q.id));
+    questionRelatedGroups.set(q.id, related);
+    
     const exact = related.filter(g => g.kind === 'EXACT').reduce((n, g) => Math.max(n, g.frequency), 1);
     const semantic = related.some(g => g.kind === 'SEMANTIC');
     const concept = related.some(g => g.kind === 'CONCEPT');
@@ -278,7 +314,7 @@ async function rankQuestions(
       )
     );
 
-    const priority: Priority = score >= 65 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'ADDITIONAL';
+    const priority: Priority = score >= 65 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'LOW';
 
     const rationale: string[] = [];
     if (exact > 1) rationale.push(`Exact normalized match found ${exact} times across the uploaded material.`);
@@ -288,15 +324,12 @@ async function rankQuestions(
     if (focus) rationale.push(`Matches requested focus unit ${q.unit}.`);
     if (!rationale.length) rationale.push('Included as a distinct question from the uploaded papers; no repeat evidence was found.');
 
-    // AI-generated additional rationale
-    const aiWhy = ai ? await ai.explainPriority({ question: q, frequency: exact, repeatKind: related[0]?.kind, instructions, userId }) : [];
-
     result.push({
       id: q.id,
       question: q.text,
       priority,
       score,
-      rationale: [...rationale, ...aiWhy],
+      rationale: [...rationale], // deterministic rationale only for now
       marks: q.marks,
       unit: q.unit,
       topic: q.topic,
@@ -307,8 +340,46 @@ async function rankQuestions(
   }
 
   // Sort by priority then score
-  const priorityOrder: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, ADDITIONAL: 2 };
-  return result.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || b.score - a.score);
+  const priorityOrder: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  result.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || b.score - a.score);
+
+  // Second pass: OPTIONAL AI enrichment for top questions only (batched, max 20)
+  if (ai && aiClassificationSuccess) {
+    try {
+      // Only enrich top 20 questions to avoid excessive AI calls
+      const topQuestions = result.slice(0, 20);
+      const enrichmentPromises = topQuestions.map(rq => {
+        const q = questions.find(x => x.id === rq.id);
+        if (!q) return Promise.resolve({ id: rq.id, rationale: [] as string[] });
+        const related = questionRelatedGroups.get(q.id) || [];
+        return ai.explainPriority({ question: q, frequency: rq.repeatGroupIds.length > 0 ? related.filter(g => g.kind === 'EXACT').reduce((n, g) => Math.max(n, g.frequency), 1) : 1, repeatKind: related[0]?.kind, instructions, userId })
+          .catch(err => {
+            console.warn('[ImportantQuestionsV2] AI enrichment failed for question', q.id, ':', err);
+            return [];
+          });
+      });
+
+      const enrichmentResults = await Promise.allSettled(enrichmentPromises);
+      
+      for (let i = 0; i < enrichmentResults.length; i++) {
+        const rq = topQuestions[i];
+        const enrichmentResult = enrichmentResults[i];
+        if (enrichmentResult.status === 'fulfilled') {
+          const value = enrichmentResult.value;
+          // Handle both string[] and { id: string; rationale: string[] } formats
+          const rationaleItems = Array.isArray(value) ? value : (value && 'rationale' in value ? value.rationale : []);
+          if (rationaleItems.length > 0) {
+            rq.rationale.push(...rationaleItems);
+            rq.source = 'ai_enhanced';
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[ImportantQuestionsV2] AI priority enrichment failed:', error);
+    }
+  }
+
+  return result;
 }
 
 /** Chunk array into batches */

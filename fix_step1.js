@@ -1,0 +1,49 @@
+const fs = require('fs');
+
+const content = fs.readFileSync('/tmp/alex-erp-repair/apps/web/src/components/study-studio/ImportantQuestionsTab.tsx', 'utf8');
+
+// Find the exact block to replace
+const startIdx = content.indexOf('            </div>\n            \n            {!iqSubjectId && (');
+const endIdx = content.indexOf('            <div className="flex justify-end pt-4">', content.indexOf('{!iqSubjectId && (')) + '            <div className="flex justify-end pt-4">'.length;
+
+if (startIdx === -1 || endIdx === -1) {
+  console.log('Could not find boundaries');
+  process.exit(1);
+}
+
+const newBlock = `            </div>
+            
+            {iqSubjectId ? null : (
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Create New Subject</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Subject Name *</Label>
+                    <Input placeholder="e.g., Engineering Physics" value={iqNewSubjectName} onChange={e => setIqNewSubjectName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subject Code *</Label>
+                    <Input placeholder="e.g., PHY101" value={iqNewSubjectCode} onChange={e => setIqNewSubjectCode(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Semester</Label>
+                    <Input placeholder="e.g., Semester 1" value={iqSemester} onChange={e => setIqSemester(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Academic Year</Label>
+                    <Input placeholder="e.g., 2023-2024" value={iqAcademicYear} onChange={e => setIqAcademicYear(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end pt-4">`;
+
+const oldBlock = content.substring(
+  content.indexOf('            </div>\n            \n            {!iqSubjectId && ('),
+  content.indexOf('            <div className="flex justify-end pt-4">') + '            <div className="flex justify-end pt-4">'.length
+);
+
+const newContent = content.substring(0, content.indexOf('            </div>\n            \n            {!iqSubjectId && (')) + newBlock + content.substring(content.indexOf('            <div className="flex justify-end pt-4">') + '            <div className="flex justify-end pt-4">'.length);
+
+fs.writeFileSync('/tmp/alex-erp-repair/apps/web/src/components/study-studio/ImportantQuestionsTab.tsx', newContent, 'utf8');
+console.log('Replacement done!');

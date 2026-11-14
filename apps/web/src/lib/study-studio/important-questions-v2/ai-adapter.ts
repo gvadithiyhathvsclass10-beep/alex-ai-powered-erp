@@ -9,8 +9,10 @@ import type { AIAssistance, QuestionOccurrence, RepeatKind } from './types';
 
 /**
  * Create AI assistance adapter using existing ALEX AI service
+ * Accepts an optional synchronous getter for the current user ID
  */
-export function createAIAssistanceAdapter(): AIAssistance {
+export function createAIAssistanceAdapter(getUserId?: () => string | undefined): AIAssistance {
+  const getUser = getUserId || (() => undefined);
   return {
     async classifyQuestions(questions: QuestionOccurrence[], instructions?: string, userId?: string) {
       if (!questions.length) return [];
@@ -24,6 +26,9 @@ export function createAIAssistanceAdapter(): AIAssistance {
         topic: q.topic,
       }));
 
+      // Use provided userId or fall back to getter
+      const effectiveUserId = userId ?? getUser();
+
       try {
         const result = await generateStructuredOutput<{
           classifications: Array<{
@@ -34,7 +39,7 @@ export function createAIAssistanceAdapter(): AIAssistance {
             semanticGroupKey?: string;
           }>;
         }>({
-          userId,
+          userId: effectiveUserId,
           systemPrompt: `You are ALEX, an expert academic question classifier. 
 Given a list of extracted questions from question papers, classify each question by:
 1. Topic - the specific subject topic (e.g., "Binary Search Trees", "Newton's Laws")
@@ -91,9 +96,12 @@ ${instructions ? `\nUser instructions: ${instructions}` : ''}`,
       instructions?: string;
       userId?: string;
     }) {
+      // Use provided userId or fall back to getter
+      const effectiveUserId = input.userId ?? getUser();
+
       try {
         const result = await generateText({
-          userId: input.userId,
+          userId: effectiveUserId,
           systemPrompt: `You are ALEX, an expert academic analyst.
 Explain WHY a question should be prioritized for study based on the evidence provided.
 Return 1-3 concise bullet-point reasons. Each reason should be specific and evidence-based.

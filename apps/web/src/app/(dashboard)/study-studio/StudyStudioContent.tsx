@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { DocumentUpload } from "@/components/documents/document-upload"
 import { DocumentList } from "@/components/documents/document-list"
-import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2, ChevronRight, ChevronLeft, Settings, Search, FlaskConical, HelpCircle, Link, Trash2, Link2, ListMinus, Filter, Trophy, Archive, FolderOpen, FilePlus, X, Upload } from "lucide-react"
+import { Plus, FileText, Sparkles, Brain, BookOpen, Target, Zap, Download, Copy, CheckCircle2, XCircle, AlertCircle, RotateCcw, Loader2, ChevronRight, ChevronLeft, Settings, Search, FlaskConical, HelpCircle, Link, Trash2, Link2, ListMinus, Filter, Trophy, Archive } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { MindMapViewer } from "@/components/study-studio/MindMapViewer"
 import { DiagramViewer } from "@/components/study-studio/DiagramViewer"
@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { ImportantQuestionsNewTab } from "@/components/study-studio/important-questions/ImportantQuestionsNewTab"
+import { ImportantQuestionsWorkspace } from "@/components/study-studio/important-questions/ImportantQuestionsWorkspace"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
@@ -184,92 +184,38 @@ interface GeneratedQuizQuestion {
   }>
 }
 
-// Important Questions Analyser types
-interface QuestionPaper {
+// V2 API types for Important Questions
+interface SourceDocument {
   id: string
-  userId: string
-  title: string
   fileName: string
-  fileSize: string
   mimeType: string
-  storagePath: string
-  paperType: 'QB' | 'PYQ'
-  subjectId: string | null
-  semester: string | null
-  unit: string | null
-  academicYear: string | null
-  examinationYear: number | null
-  marks: number | null
-  status: string
-  pageCount: number | null
-  metadata: any
-  createdAt: string
-  updatedAt: string
-  subject?: { id: string; name: string; code: string } | null
-  _count?: { questions: number }
-  questions?: ExtractedQuestion[]
+  academicYear?: string | null
+  examYear?: number | null
+  pageCount?: number | null
+  paperType?: 'QB' | 'PYQ'
+  marks?: number | null
+  unit?: string | null
+  semester?: string | null
 }
 
-interface ExtractedQuestion {
+interface SavedAnalysis {
   id: string
-  questionPaperId: string
-  questionNumber: string
-  text: string
-  subQuestions: any | null
-  marks: number | null
-  unit: string | null
-  topic: string | null
-  concept: string | null
-  questionType: string | null
-  difficulty: string | null
-  year: number | null
-  pageReference: number | null
-  extractionConfidence: number
-  flags: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-interface QuestionAnalysis {
-  id: string
-  userId: string
   title: string
-  subjectId: string | null
-  paperIds: string[]
-  totalQuestions: number
-  exactRepeats: number
-  semanticRepeats: number
-  analysisData: any
   createdAt: string
-  updatedAt: string
-  subject?: { id: string; name: string; code: string } | null
-  priorityItems?: QuestionPriorityItem[]
+  summary: {
+    papersAnalyzed: number
+    totalQuestions: number
+    exactRepeatGroups: number
+    semanticRepeatGroups: number
+    conceptGroups: number
+  }
 }
 
-interface QuestionPriorityItem {
+interface Subject {
   id: string
-  analysisId: string
-  questionId: string
-  priority: 'HIGH' | 'MEDIUM' | 'LOW'
-  reason: string
-  frequency: number
-  recencyScore: number
-  marksWeight: number
-  unitRelevance: number
-  papersCount: number
-  createdAt: string
-  // From analysisData
-  questionText?: string
-  concept?: string
-  units?: string[]
-  topics?: string[]
-  concepts?: string[]
-  questionTypes?: string[]
-  firstYear?: number | null
-  lastYear?: number | null
-  avgMarks?: number
-  isExactRepeat?: boolean
-  matchedQuestionIds?: string[]
+  name: string
+  code: string
+  semester: string | null
 }
 
 interface GeneratedPracticePaper {
@@ -429,10 +375,8 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     academicYear: '',
     examinationYear: '',
     marks: '',
-    files: [] as File[],
+    file: null as File | null,
   })
-  const [selectedExistingPaperIds, setSelectedExistingPaperIds] = React.useState<string[]>([])
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [iqAnalyses, setIqAnalyses] = React.useState<QuestionAnalysis[]>([])
   const [selectedIqAnalysis, setSelectedIqAnalysis] = React.useState<QuestionAnalysis | null>(null)
   const [showCreateAnalysis, setShowCreateAnalysis] = React.useState(false)
@@ -602,9 +546,9 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     },
   })
 
-  // Fetch question papers
+  // Fetch question papers (V2 API)
   const { data: papersData, refetch: refetchPapers } = useQuery({
-    queryKey: ["question-papers"],
+    queryKey: ["question-papers-v2"],
     queryFn: async () => {
       const res = await fetch("/api/study-studio/important-questions-v2/documents")
       if (!res.ok) throw new Error("Failed to fetch question papers")
@@ -612,9 +556,9 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     },
   })
 
-  // Fetch analyses
+  // Fetch analyses (V2 API)
   const { data: analysesData, refetch: refetchAnalyses } = useQuery({
-    queryKey: ["question-analyses"],
+    queryKey: ["question-analyses-v2"],
     queryFn: async () => {
       const res = await fetch("/api/study-studio/important-questions-v2/analyses")
       if (!res.ok) throw new Error("Failed to fetch analyses")
@@ -634,8 +578,9 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
 
   const iqSubjects: Subject[] = subjectsData?.subjects || []
 
-  const questionPapers: QuestionPaper[] = papersData?.papers || []
-  const questionAnalyses: QuestionAnalysis[] = analysesData?.analyses || []
+  // V2 API returns { documents: [...] } and { analyses: [...] }
+  const iqDocuments: SourceDocument[] = papersData?.documents || []
+  const iqSavedAnalyses: SavedAnalysis[] = analysesData?.analyses || []
 
   const notebookSources: NotebookSourceItem[] = sourcesData?.sources || []
 
@@ -849,7 +794,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
       toast({ title: "Generation failed", description: err.message, variant: "destructive" }),
   })
 
-  // Important Questions mutations
+  // Important Questions mutations (V2 API)
   const uploadPaperMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const res = await fetch("/api/study-studio/important-questions-v2/documents", {
@@ -857,7 +802,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
         body: formData,
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error?.message || "Failed to upload paper")
+      if (!res.ok) throw new Error(data.error || "Failed to upload paper")
       return data
     },
     onSuccess: () => {
@@ -872,7 +817,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
         academicYear: '',
         examinationYear: '',
         marks: '',
-        files: [],
+        file: null,
       })
       toast({ title: "Question paper uploaded successfully" })
     },
@@ -883,19 +828,20 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const extractQuestionsMutation = useMutation({
     mutationFn: async ({ paperId, provider, model }: { paperId: string; provider?: string; model?: string }) => {
       setExtractingPaper(paperId)
+      // V2 extracts during analysis, not separately
       const res = await fetch(`/api/study-studio/important-questions-v2/documents/${paperId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: 'extract', provider, model }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error?.message || "Failed to extract questions")
+      if (!res.ok) throw new Error(data.error || "Failed to extract questions")
       return data
     },
     onSuccess: (data, variables) => {
       refetchPapers()
       setExtractingPaper(null)
-      toast({ title: `Extracted ${data.extractedCount} questions` })
+      toast({ title: `Extracted ${data.extractedCount} questions`, description: `Provider: ${data.provider} (${data.model})` })
       // Auto-select the paper to show extracted questions
       const paper = questionPapers.find(p => p.id === variables.paperId)
       if (paper) setSelectedIqPaper({ ...paper, questions: data.questions })
@@ -930,13 +876,11 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
         body: JSON.stringify({
           documentIds: data.paperIds,
           title: data.title,
-          instructions: data.filters?.additionalInstructions,
-          focusUnits: data.filters?.focusUnits,
-          prioritizeMarks: data.filters?.prioritizeMarks,
+          instructions: JSON.stringify(data.filters),
         }),
       })
       const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(payload.error?.message || "Failed to create analysis")
+      if (!res.ok) throw new Error(payload.error || "Failed to create analysis")
       return payload
     },
     onSuccess: (data) => {
@@ -972,7 +916,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
   const generatePracticeMutation = useMutation({
     mutationFn: async (data: any) => {
       setGeneratingPractice(true)
-      const res = await fetch("/api/important-questions/generate-practice", {
+      const res = await fetch("/api/study-studio/important-questions-v2/generate-practice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -2461,1044 +2405,13 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
           </div>
         </TabsContent>
 
-        {/* IMPORTANT QUESTIONS TAB */}
+        {/* IMPORTANT QUESTIONS TAB - Single Workspace Implementation */}
         <TabsContent value="important-questions" className="mt-4 space-y-6">
-          <div className="space-y-6">
-            {/* Tab Navigation for IQ Analyser */}
-            <Tabs value={iqActiveTab} onValueChange={setIqActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="papers">Question Papers ({questionPapers.length})</TabsTrigger>
-                <TabsTrigger value="extract" disabled={!selectedIqPaper}>Extract Questions</TabsTrigger>
-                <TabsTrigger value="analysis">Analyses ({questionAnalyses.length})</TabsTrigger>
-                <TabsTrigger value="practice">Practice Papers</TabsTrigger>
-              </TabsList>
-
-              {/* PAPERS TAB */}
-              <TabsContent value="papers" className="mt-4 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold">Question Papers</h2>
-                    <p className="text-sm text-muted-foreground">Upload Question Banks (QB) and Previous Year Question Papers (PYQs)</p>
-                  </div>
-                  <Button onClick={() => setShowUploadPaper(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Upload Paper
-                  </Button>
-                </div>
-
-                {showUploadPaper && (
-                  <Card className="border-primary/40">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        Upload Question Papers
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault()
-                          const fd = new FormData()
-                          fd.append('title', uploadPaperForm.title)
-                          fd.append('paperType', uploadPaperForm.paperType)
-                          if (uploadPaperForm.subjectId) fd.append('subjectId', uploadPaperForm.subjectId)
-                          if (uploadPaperForm.semester) fd.append('semester', uploadPaperForm.semester)
-                          if (uploadPaperForm.unit) fd.append('unit', uploadPaperForm.unit)
-                          if (uploadPaperForm.academicYear) fd.append('academicYear', uploadPaperForm.academicYear)
-                          if (uploadPaperForm.examinationYear) fd.append('examinationYear', uploadPaperForm.examinationYear)
-                          if (uploadPaperForm.marks) fd.append('marks', uploadPaperForm.marks)
-                          uploadPaperForm.files.forEach(file => fd.append('files', file))
-                          // Also send selected existing paper IDs
-                          selectedExistingPaperIds.forEach(id => fd.append('existingPaperIds', id))
-                          uploadPaperMutation.mutate(fd)
-                        }}
-                        className="space-y-6"
-                      >
-                        {/* Upload New Files Section */}
-                        <div className="space-y-4">
-                          <h4 className="font-medium text-sm flex items-center gap-2">
-                            <Upload className="h-4 w-4" />
-                            Upload New Files
-                          </h4>
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label>Title (optional for multiple files)</Label>
-                              <Input
-                                placeholder="e.g., Physics PYQ 2023 - Semester 1"
-                                value={uploadPaperForm.title}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, title: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Paper Type</Label>
-                              <Select value={uploadPaperForm.paperType} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, paperType: v as 'QB' | 'PYQ' }))}>
-                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="QB">Question Bank (QB)</SelectItem>
-                                  <SelectItem value="PYQ">Previous Year Question Paper (PYQ)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Subject</Label>
-                              <Select value={uploadPaperForm.subjectId} onValueChange={v => setUploadPaperForm(prev => ({ ...prev, subjectId: v }))}>
-                                <SelectTrigger><SelectValue placeholder="Select subject (optional)" /></SelectTrigger>
-                                <SelectContent>
-                                  {iqSubjects.map((subj: Subject) => (
-                                    <SelectItem key={subj.id} value={subj.id}>{subj.code} - {subj.name} {subj.semester && `(${subj.semester})`}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Semester</Label>
-                              <Input
-                                placeholder="e.g., Semester 3"
-                                value={uploadPaperForm.semester}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, semester: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Unit</Label>
-                              <Input
-                                placeholder="e.g., Unit 1: Mechanics"
-                                value={uploadPaperForm.unit}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, unit: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Academic Year</Label>
-                              <Input
-                                placeholder="e.g., 2023-2024"
-                                value={uploadPaperForm.academicYear}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, academicYear: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Examination Year</Label>
-                              <Input
-                                type="number"
-                                placeholder="e.g., 2023"
-                                value={uploadPaperForm.examinationYear}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, examinationYear: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Total Marks</Label>
-                              <Input
-                                type="number"
-                                placeholder="e.g., 100"
-                                value={uploadPaperForm.marks}
-                                onChange={e => setUploadPaperForm(prev => ({ ...prev, marks: e.target.value }))}
-                              />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                              <Label>Files (PDF, DOCX, TXT, MD) - Max 10 files, 50MB each</Label>
-                              <div
-                                className="border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer hover:border-primary/50"
-                                onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
-                                onDragLeave={e => { e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); }}
-                                onDrop={e => {
-                                  e.preventDefault()
-                                  e.currentTarget.classList.remove('border-primary', 'bg-primary/5')
-                                  const files = Array.from(e.dataTransfer.files)
-                                  setUploadPaperForm(prev => ({ ...prev, files: [...prev.files, ...files].slice(0, 10) }))
-                                }}
-                              >
-                                <input
-                                  ref={fileInputRef}
-                                  type="file"
-                                  accept=".pdf,.docx,.doc,.txt,.md"
-                                  multiple
-                                  onChange={e => setUploadPaperForm(prev => ({ ...prev, files: [...prev.files, ...Array.from(e.target.files || [])].slice(0, 10) }))}
-                                  className="hidden"
-                                  id="iq-file-input"
-                                />
-                                <div className="flex flex-col items-center gap-4">
-                                  <div className="p-3 rounded-full bg-primary/10 text-primary">
-                                    <Upload className="h-6 w-6" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">Drag & drop files here, or</p>
-                                    <Button
-                                      variant="outline"
-                                      onClick={() => fileInputRef.current?.click()}
-                                      className="mt-2"
-                                    >
-                                      <FilePlus className="mr-2 h-4 w-4" />
-                                      Browse Files
-                                    </Button>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Supported: PDF, DOCX, DOC, TXT, MD • Max 50MB each • Max 10 files
-                                  </p>
-                                </div>
-                              </div>
-                              {uploadPaperForm.files.length > 0 && (
-                                <div className="mt-3 space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
-                                  <p className="text-xs font-medium text-muted-foreground">Selected files ({uploadPaperForm.files.length}/10)</p>
-                                  {uploadPaperForm.files.map((file, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                                        <FileText className="h-4 w-4 text-muted-foreground" />
-                                        <span className="truncate">{file.name}</span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 text-destructive hover:text-destructive"
-                                          onClick={() => setUploadPaperForm(prev => ({
-                                            ...prev,
-                                            files: prev.files.filter((_, i) => i !== idx)
-                                          }))}
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Select Existing Papers Section */}
-                        <div className="space-y-4 pt-4 border-t">
-                          <h4 className="font-medium text-sm flex items-center gap-2">
-                            <FolderOpen className="h-4 w-4" />
-                            Or Select Already-Uploaded Papers
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            Choose from papers that already have questions extracted (status: READY)
-                          </p>
-                          {questionPapers.filter(p => p.status === 'READY' && p._count?.questions && p._count.questions > 0).length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">No papers with extracted questions available.</p>
-                          ) : (
-                            <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
-                              {questionPapers
-                                .filter(p => p.status === 'READY' && p._count?.questions && p._count.questions > 0)
-                                .map((paper: QuestionPaper) => (
-                                  <label key={paper.id} className="flex items-center gap-3 p-2 hover:bg-accent/50 rounded cursor-pointer transition-colors">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedExistingPaperIds.includes(paper.id)}
-                                      onChange={e => setSelectedExistingPaperIds(prev =>
-                                        e.target.checked
-                                          ? [...prev, paper.id]
-                                          : prev.filter(id => id !== paper.id)
-                                      )}
-                                      className="h-4 w-4 rounded border-primary"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-medium text-sm truncate">{paper.title}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {paper.paperType} • {paper._count?.questions || 0} questions • {paper.subject?.code || 'No subject'}
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs">{paper._count?.questions || 0} Qs</Badge>
-                                  </label>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex gap-2 pt-4 border-t">
-                          <Button type="submit" disabled={uploadPaperMutation.isPending || (uploadPaperForm.files.length === 0 && selectedExistingPaperIds.length === 0)}>
-                            {uploadPaperMutation.isPending ? "Uploading..." : 
-                              `Add ${uploadPaperForm.files.length + selectedExistingPaperIds.length} Paper${uploadPaperForm.files.length + selectedExistingPaperIds.length > 1 ? 's' : ''}`}
-                          </Button>
-                          <Button type="button" variant="outline" onClick={() => {
-                            setShowUploadPaper(false)
-                            setUploadPaperForm({
-                              title: '',
-                              paperType: 'PYQ',
-                              subjectId: '',
-                              semester: '',
-                              unit: '',
-                              academicYear: '',
-                              examinationYear: '',
-                              marks: '',
-                              files: [],
-                            })
-                            setSelectedExistingPaperIds([])
-                          }}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {questionPapers.length === 0 && !showUploadPaper && (
-                  <EmptyState
-                    icon={FileText}
-                    title="No question papers uploaded"
-                    description="Upload Question Banks or Previous Year Question Papers to begin analysis."
-                    action={
-                      <Button onClick={() => setShowUploadPaper(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Upload First Paper
-                      </Button>
-                    }
-                  />
-                )}
-
-                {questionPapers.length > 0 && (
-                  <div className="space-y-4">
-                    {questionPapers.map((paper: QuestionPaper) => (
-                      <Card
-                        key={paper.id}
-                        className={cn(
-                          "hover:shadow-md transition-shadow cursor-pointer",
-                          selectedIqPaper?.id === paper.id && "border-primary ring-1 ring-primary"
-                        )}
-                        onClick={() => setSelectedIqPaper(paper)}
-                      >
-                        <CardHeader className="flex flex-row items-start justify-between pb-2">
-                          <div>
-                            <CardTitle className="flex items-center gap-2">
-                              <Badge variant={paper.paperType === 'PYQ' ? 'secondary' : 'outline'} className="text-xs">
-                                {paper.paperType}
-                              </Badge>
-                              {paper.title}
-                            </CardTitle>
-                            <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
-                              {paper.subject && <span>{paper.subject.code} - {paper.subject.name}</span>}
-                              {paper.semester && <span>•</span>}
-                              {paper.semester && <span>{paper.semester}</span>}
-                              {paper.examinationYear && <span>•</span>}
-                              {paper.examinationYear && <span>{paper.examinationYear}</span>}
-                              {paper.unit && <span>•</span>}
-                              {paper.unit && <span>{paper.unit}</span>}
-                              <span>•</span>
-                              <Badge variant={paper.status === 'READY' ? 'success' : 'warning'} className="text-xs">
-                                {paper.status}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {paper.status === 'READY' && paper.questions && paper.questions.length > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {paper.questions.length} questions
-                              </Badge>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deletePaperMutation.mutate(paper.id)
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{paper._count?.questions || 0} questions extracted</span>
-                            {paper.marks && <span>• Max marks: {paper.marks}</span>}
-                            <span>• {formatRelativeTime(paper.createdAt)}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* EXTRACT QUESTIONS TAB */}
-              <TabsContent value="extract" className="mt-4 space-y-6">
-                {selectedIqPaper ? (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-xl font-semibold">{selectedIqPaper.title}</h2>
-                        <p className="text-sm text-muted-foreground">
-                          {selectedIqPaper.paperType} • {selectedIqPaper._count?.questions || 0} questions
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        {selectedIqPaper.status !== 'READY' && (
-                          <Button
-                            onClick={() => extractQuestionsMutation.mutate({ paperId: selectedIqPaper.id })}
-                            disabled={extractingPaper === selectedIqPaper.id}
-                          >
-                            {extractingPaper === selectedIqPaper.id ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Extracting...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="mr-2 h-4 w-4" />
-                                Extract Questions with AI
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        {selectedIqPaper.status === 'READY' && (
-                          <Button variant="outline" onClick={() => extractQuestionsMutation.mutate({ paperId: selectedIqPaper.id })}>
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            Re-extract
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {extractingPaper === selectedIqPaper.id && (
-                      <LoadingState message="Extracting questions with AI..." subtitle="This may take a moment depending on document length" />
-                    )}
-
-                    {selectedIqPaper.status === 'READY' && selectedIqPaper.questions && selectedIqPaper.questions.length > 0 && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Extracted Questions ({selectedIqPaper.questions.length})</CardTitle>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
-                                Extracted PYQ
-                              </Badge>
-                              <span>Source: {selectedIqPaper.fileName}</span>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                            {selectedIqPaper.questions.map((q: ExtractedQuestion, idx: number) => (
-                              <div key={q.id} className="p-4 border rounded-lg space-y-3 bg-card">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-sm">
-                                      <span className="text-primary mr-2">Q{q.questionNumber}.</span>
-                                      {q.text}
-                                    </p>
-                                    {q.subQuestions && Array.isArray(q.subQuestions) && q.subQuestions.length > 0 && (
-                                      <div className="ml-6 mt-2 space-y-1 text-sm text-muted-foreground">
-                                        {q.subQuestions.map((sq: any, si: number) => (
-                                          <p key={si}>{sq.label}) {sq.text} {sq.marks && `(${sq.marks} marks)`}</p>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
-                                    {q.marks && <Badge variant="outline">{q.marks} marks</Badge>}
-                                    {q.unit && <Badge variant="secondary">{q.unit}</Badge>}
-                                    {q.topic && <Badge variant="outline">{q.topic}</Badge>}
-                                    {q.concept && <Badge variant="outline">{q.concept}</Badge>}
-                                    {q.questionType && <Badge variant="secondary">{q.questionType}</Badge>}
-                                    {q.difficulty && <Badge variant="outline">{q.difficulty}</Badge>}
-                                    {q.year && <Badge variant="outline">{q.year}</Badge>}
-                                    {q.pageReference && <Badge variant="outline">p.{q.pageReference}</Badge>}
-                                    {q.extractionConfidence < 0.8 && (
-                                      <Badge variant="destructive" className="text-xs">Low confidence: {(q.extractionConfidence * 100).toFixed(0)}%</Badge>
-                                    )}
-                                    {q.flags && q.flags.length > 0 && (
-                                      <Badge variant="destructive" className="text-xs">{q.flags.join(', ')}</Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedIqPaper.status === 'READY' && (!selectedIqPaper.questions || selectedIqPaper.questions.length === 0) && (
-                      <EmptyState
-                        icon={ListMinus}
-                        title="No questions extracted yet"
-                        description="Click 'Extract Questions with AI' to analyze this paper."
-                      />
-                    )}
-
-                    {selectedIqPaper.status !== 'READY' && (
-                      <Card className="border-warning">
-                        <CardContent className="p-6 text-center">
-                          <AlertCircle className="mx-auto h-10 w-10 text-warning mb-2" />
-                          <h4 className="font-medium">Paper not ready for extraction</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            The paper status is "{selectedIqPaper.status}". Text extraction from binary documents (PDF, DOCX) 
-                            requires the document processing pipeline. Please ensure the document has been processed, 
-                            or use text-based files (TXT, MD) for immediate extraction.
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                ) : (
-                  <Card>
-                    <CardContent className="pt-12 pb-12 text-center">
-                      <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <p className="mt-2 text-muted-foreground">Select a question paper from the "Question Papers" tab to extract questions.</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              {/* ANALYSIS TAB */}
-              <TabsContent value="analysis" className="mt-4 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold">Question Analyses</h2>
-                    <p className="text-sm text-muted-foreground">Analyze patterns across multiple question papers</p>
-                  </div>
-                  <Button onClick={() => setShowCreateAnalysis(true)} disabled={questionPapers.length === 0}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Analysis
-                  </Button>
-                </div>
-
-                {showCreateAnalysis && (
-                  <Card className="border-primary/40">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5" />
-                        Create New Analysis
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault()
-                          createAnalysisMutation.mutate(createAnalysisForm)
-                        }}
-                        className="space-y-4"
-                      >
-                        <div className="space-y-2">
-                          <Label>Analysis Title</Label>
-                          <Input
-                            placeholder="e.g., Physics PYQ Analysis 2020-2024"
-                            value={createAnalysisForm.title}
-                            onChange={e => setCreateAnalysisForm(prev => ({ ...prev, title: e.target.value }))}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Subject</Label>
-                          <Select value={createAnalysisForm.subjectId} onValueChange={v => setCreateAnalysisForm(prev => ({ ...prev, subjectId: v }))}>
-                            <SelectTrigger><SelectValue placeholder="Select subject (optional)" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">General / All Subjects</SelectItem>
-                              {(allUserDocuments?.documents || []).map((doc: any) => (
-                                <SelectItem key={doc.id} value={doc.id}>{doc.title} ({doc.documentType})</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Select Papers to Analyze</Label>
-                          <div className="space-y-2">
-                            {questionPapers
-                              .filter(p => p.status === 'READY' && p.questions && p.questions.length > 0)
-                              .map((paper: QuestionPaper) => (
-                                <label key={paper.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/40 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={createAnalysisForm.paperIds.includes(paper.id)}
-                                    onChange={(e) =>
-                                      setCreateAnalysisForm(prev => ({
-                                        ...prev,
-                                        paperIds: e.target.checked
-                                          ? [...prev.paperIds, paper.id]
-                                          : prev.paperIds.filter(id => id !== paper.id),
-                                      }))
-                                    }
-                                    className="h-4 w-4 rounded border-primary"
-                                  />
-                                  <div>
-                                    <p className="font-medium text-sm">{paper.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {paper.paperType} • {paper.questions?.length || 0} questions
-                                      {paper.examinationYear && ` • ${paper.examinationYear}`}
-                                    </p>
-                                  </div>
-                                </label>
-                              ))}
-                            {questionPapers.filter(p => p.status === 'READY' && p.questions && p.questions.length > 0).length === 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                No papers with extracted questions available. Extract questions first.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 pt-4 border-t">
-                          <Button type="submit" disabled={creatingAnalysis || createAnalysisForm.paperIds.length === 0}>
-                            {creatingAnalysis ? "Creating..." : "Create Analysis"}
-                          </Button>
-                          <Button type="button" variant="outline" onClick={() => setShowCreateAnalysis(false)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {questionAnalyses.length === 0 && !showCreateAnalysis && (
-                  <EmptyState
-                    icon={Filter}
-                    title="No analyses created yet"
-                    description="Create an analysis to identify recurring patterns, important topics, and question priorities."
-                    action={
-                      <Button onClick={() => setShowCreateAnalysis(true)} disabled={questionPapers.length === 0}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create First Analysis
-                      </Button>
-                    }
-                  />
-                )}
-
-                {questionAnalyses.length > 0 && (
-                  <div className="space-y-4">
-                    {questionAnalyses.map((analysis: QuestionAnalysis) => (
-                      <Card
-                        key={analysis.id}
-                        className={cn(
-                          "hover:shadow-md transition-shadow cursor-pointer",
-                          selectedIqAnalysis?.id === analysis.id && "border-primary ring-1 ring-primary"
-                        )}
-                        onClick={() => setSelectedIqAnalysis(analysis)}
-                      >
-                        <CardHeader className="flex flex-row items-start justify-between pb-2">
-                          <div>
-                            <CardTitle>{analysis.title}</CardTitle>
-                            <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
-                              {analysis.subject && <span>{analysis.subject.code} - {analysis.subject.name}</span>}
-                              <span>•</span>
-                              <span>{analysis.totalQuestions} questions</span>
-                              <span>•</span>
-                              <span>{analysis.paperIds.length} papers</span>
-                              <span>•</span>
-                              <Badge variant="outline">{analysis.exactRepeats} exact repeats</Badge>
-                              <span>•</span>
-                              <Badge variant="secondary">{analysis.semanticRepeats} semantic repeats</Badge>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteAnalysisMutation.mutate(analysis.id)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{formatRelativeTime(analysis.createdAt)}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {selectedIqAnalysis && (
-                  <Card className="border-primary/30 animate-in slide-in-from-bottom-2">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle>{selectedIqAnalysis.title}</CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {selectedIqAnalysis.totalQuestions} questions • {selectedIqAnalysis.paperIds.length} papers • {selectedIqAnalysis.exactRepeats} exact repeats
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setGeneratePracticeForm(prev => ({
-                              ...prev,
-                              title: `${selectedIqAnalysis.title} - Practice`,
-                              sourceAnalysisId: selectedIqAnalysis.id,
-                              subjectId: selectedIqAnalysis.subjectId || '',
-                            }))
-                            setShowGeneratePractice(true)
-                            setIqActiveTab("practice")
-                          }}
-                        >
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Generate Practice Paper
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {/* Summary Stats */}
-                      <div className="grid gap-4 md:grid-cols-4">
-                        <Card>
-                          <CardContent className="p-4 text-center">
-                            <div className="text-2xl font-bold text-primary">{selectedIqAnalysis.priorityItems?.filter((p: any) => p.priority === 'HIGH').length || 0}</div>
-                            <div className="text-sm text-muted-foreground">High Priority Topics</div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4 text-center">
-                            <div className="text-2xl font-bold text-blue-600">{selectedIqAnalysis.priorityItems?.filter((p: any) => p.priority === 'MEDIUM').length || 0}</div>
-                            <div className="text-sm text-muted-foreground">Medium Priority Topics</div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4 text-center">
-                            <div className="text-2xl font-bold text-gray-600">{selectedIqAnalysis.priorityItems?.filter((p: any) => p.priority === 'LOW').length || 0}</div>
-                            <div className="text-sm text-muted-foreground">Low Priority Topics</div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4 text-center">
-                            <div className="text-2xl font-bold text-amber-600">{selectedIqAnalysis.analysisData?.totalQuestions || 0}</div>
-                            <div className="text-sm text-muted-foreground">Total Questions Analyzed</div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Priority Items */}
-                      {selectedIqAnalysis.priorityItems && selectedIqAnalysis.priorityItems.length > 0 && (
-                        <div className="space-y-4">
-                          <h4 className="font-semibold">Priority Topics & Questions</h4>
-                          <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                            {selectedIqAnalysis.priorityItems.map((item: QuestionPriorityItem, idx: number) => (
-                              <Card key={item.id} className={cn(
-                                "overflow-hidden",
-                                item.priority === 'HIGH' && "border-l-4 border-l-red-500",
-                                item.priority === 'MEDIUM' && "border-l-4 border-l-amber-500",
-                                item.priority === 'LOW' && "border-l-4 border-l-gray-400"
-                              )}>
-                                <CardContent className="p-4">
-                                  <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Badge variant={item.priority === 'HIGH' ? 'destructive' : item.priority === 'MEDIUM' ? 'warning' : 'secondary'}>
-                                          {item.priority}
-                                        </Badge>
-                                        <span className="font-medium text-sm">{item.concept || item.questionText?.slice(0, 80) || 'General'}</span>
-                                      </div>
-                                      <p className="text-xs text-muted-foreground mb-2">{item.reason}</p>
-                                      <div className="flex flex-wrap gap-1 text-[11px] text-muted-foreground">
-                                        <Badge variant="outline">Freq: {item.frequency}</Badge>
-                                        <Badge variant="outline">Papers: {item.papersCount}</Badge>
-                                        <Badge variant="outline">Avg Marks: {item.avgMarks?.toFixed(1) || 'N/A'}</Badge>
-                                        {item.firstYear && item.lastYear && (
-                                          <Badge variant="outline">Years: {item.firstYear}-{item.lastYear}</Badge>
-                                        )}
-                                        {item.isExactRepeat && <Badge variant="destructive" className="text-xs">Exact Repeat</Badge>}
-                                      </div>
-                                      {item.units && item.units.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-1">
-                                          {item.units.map((u: string, ui: number) => (
-                                            <Badge key={ui} variant="secondary" className="text-xs">{u}</Badge>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {item.topics && item.topics.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-1">
-                                          {item.topics.map((t: string, ti: number) => (
-                                            <Badge key={ti} variant="outline" className="text-xs">{t}</Badge>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                    {item.questionText && (
-                                      <div className="text-right text-sm text-muted-foreground max-w-xs">
-                                        <p className="font-medium">{item.questionText.slice(0, 120)}…</p>
-                                        <p className="text-xs mt-1">Click analysis card for full details</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Distributions */}
-                      {selectedIqAnalysis.analysisData && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {selectedIqAnalysis.analysisData.unitDistribution && Object.keys(selectedIqAnalysis.analysisData.unitDistribution).length > 0 && (
-                            <Card>
-                              <CardHeader><CardTitle>Unit Distribution</CardTitle></CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  {Object.entries(selectedIqAnalysis.analysisData.unitDistribution as Record<string, number>)
-                                    .sort(([,a], [,b]) => b - a)
-                                    .map(([unit, count]) => (
-                                      <div key={unit} className="flex items-center justify-between text-sm">
-                                        <span>{unit}</span>
-                                        <Badge variant="outline">{count} questions</Badge>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                          {selectedIqAnalysis.analysisData.topicDistribution && Object.keys(selectedIqAnalysis.analysisData.topicDistribution).length > 0 && (
-                            <Card>
-                              <CardHeader><CardTitle>Topic Distribution</CardTitle></CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  {Object.entries(selectedIqAnalysis.analysisData.topicDistribution as Record<string, number>)
-                                    .sort(([,a], [,b]) => b - a)
-                                    .slice(0, 15)
-                                    .map(([topic, count]) => (
-                                      <div key={topic} className="flex items-center justify-between text-sm">
-                                        <span className="truncate max-w-[200px]">{topic}</span>
-                                        <Badge variant="outline">{count} questions</Badge>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                          {selectedIqAnalysis.analysisData.marksDistribution && Object.keys(selectedIqAnalysis.analysisData.marksDistribution).length > 0 && (
-                            <Card>
-                              <CardHeader><CardTitle>Marks Distribution</CardTitle></CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  {Object.entries(selectedIqAnalysis.analysisData.marksDistribution as Record<string, number>)
-                                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                                    .map(([marks, count]) => (
-                                      <div key={marks} className="flex items-center justify-between text-sm">
-                                        <span>{marks} marks</span>
-                                        <Badge variant="outline">{count} questions</Badge>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                          {selectedIqAnalysis.analysisData.yearDistribution && Object.keys(selectedIqAnalysis.analysisData.yearDistribution).length > 0 && (
-                            <Card>
-                              <CardHeader><CardTitle>Year Distribution</CardTitle></CardHeader>
-                              <CardContent>
-                                <div className="space-y-2">
-                                  {Object.entries(selectedIqAnalysis.analysisData.yearDistribution as Record<string, number>)
-                                    .sort(([a], [b]) => parseInt(b) - parseInt(a))
-                                    .map(([year, count]) => (
-                                      <div key={year} className="flex items-center justify-between text-sm">
-                                        <span>{year}</span>
-                                        <Badge variant="outline">{count} questions</Badge>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Limitations */}
-                      <Card className="border-destructive/20 bg-destructive/5">
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-                            <div className="text-sm text-destructive">
-                              <p className="font-medium mb-1">Analysis Limitations</p>
-                              <ul className="list-disc list-inside space-y-1">
-                                <li>Exact repeats detected by text normalization; semantic similarity requires embeddings</li>
-                                <li>Priority ranking based on frequency, recency, marks, and paper coverage - not a guarantee of future questions</li>
-                                <li>Analysis limited to {selectedIqAnalysis.totalQuestions} questions from {selectedIqAnalysis.paperIds.length} papers</li>
-                                <li>Questions with missing metadata (marks, year, unit) may affect accuracy</li>
-                                <li>AI-generated practice papers are for practice only, not actual exam predictions</li>
-                              </ul>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              {/* PRACTICE PAPERS TAB */}
-              <TabsContent value="practice" className="mt-4 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold">Generated Practice Papers</h2>
-                    <p className="text-sm text-muted-foreground">AI-generated practice papers based on historical analysis</p>
-                  </div>
-                  <Button onClick={() => {
-                    setGeneratePracticeForm(prev => ({ ...prev, sourceAnalysisId: selectedIqAnalysis?.id || '' }))
-                    setShowGeneratePractice(true)
-                  }} disabled={questionAnalyses.length === 0}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Generate Practice Paper
-                  </Button>
-                </div>
-
-                {showGeneratePractice && (
-                  <Card className="border-primary/40">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5" />
-                        Generate Practice Paper
-                      </CardTitle>
-                      <CardDescription>
-                        Create practice papers from analysis results. All questions are AI-generated and clearly labeled as practice material.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault()
-                          generatePracticeMutation.mutate({
-                            ...generatePracticeForm,
-                            durationMinutes: generatePracticeForm.durationMinutes ? parseInt(generatePracticeForm.durationMinutes) : undefined,
-                          })
-                        }}
-                        className="space-y-4"
-                      >
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Title</Label>
-                            <Input
-                              placeholder="e.g., Physics Practice Paper - Mechanics"
-                              value={generatePracticeForm.title}
-                              onChange={e => setGeneratePracticeForm(prev => ({ ...prev, title: e.target.value }))}
-                              required
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Paper Type</Label>
-                            <Select value={generatePracticeForm.paperType} onValueChange={v => setGeneratePracticeForm(prev => ({ ...prev, paperType: v as any }))}>
-                              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PRACTICE">Practice Questions</SelectItem>
-                                <SelectItem value="MOCK">Mock Examination</SelectItem>
-                                <SelectItem value="PREDICTED">Predicted Paper (Based on Patterns)</SelectItem>
-                                <SelectItem value="UNIT_WISE">Unit-wise Practice</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Source Analysis</Label>
-                            <Select value={generatePracticeForm.sourceAnalysisId} onValueChange={v => setGeneratePracticeForm(prev => ({ ...prev, sourceAnalysisId: v }))}>
-                              <SelectTrigger><SelectValue placeholder="Select analysis (optional)" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">No specific analysis (general)</SelectItem>
-                                {questionAnalyses.map((a: QuestionAnalysis) => (
-                                  <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Subject</Label>
-                            <Select value={generatePracticeForm.subjectId} onValueChange={v => setGeneratePracticeForm(prev => ({ ...prev, subjectId: v }))}>
-                              <SelectTrigger><SelectValue placeholder="Select subject (optional)" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">General</SelectItem>
-                                {(allUserDocuments?.documents || []).map((doc: any) => (
-                                  <SelectItem key={doc.id} value={doc.id}>{doc.title} ({doc.documentType})</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Unit (for unit-wise)</Label>
-                            <Input
-                              placeholder="e.g., Unit 1: Mechanics"
-                              value={generatePracticeForm.unit}
-                              onChange={e => setGeneratePracticeForm(prev => ({ ...prev, unit: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Question Count</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="50"
-                              value={generatePracticeForm.questionCount}
-                              onChange={e => setGeneratePracticeForm(prev => ({ ...prev, questionCount: parseInt(e.target.value) || 10 }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Total Marks</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={generatePracticeForm.totalMarks}
-                              onChange={e => setGeneratePracticeForm(prev => ({ ...prev, totalMarks: parseInt(e.target.value) || 100 }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Duration (minutes, optional)</Label>
-                            <Input
-                              type="number"
-                              placeholder="e.g., 180"
-                              value={generatePracticeForm.durationMinutes}
-                              onChange={e => setGeneratePracticeForm(prev => ({ ...prev, durationMinutes: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Target Difficulty</Label>
-                            <Select value={generatePracticeForm.difficulty} onValueChange={v => setGeneratePracticeForm(prev => ({ ...prev, difficulty: v }))}>
-                              <SelectTrigger><SelectValue placeholder="Select difficulty" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="EASY">Easy</SelectItem>
-                                <SelectItem value="MEDIUM">Medium</SelectItem>
-                                <SelectItem value="HARD">Hard</SelectItem>
-                                <SelectItem value="MIXED">Mixed</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>Question Types (optional)</Label>
-                            <div className="flex flex-wrap gap-2">
-                              {['MCQ', 'SHORT_ANSWER', 'LONG_ANSWER', 'NUMERICAL', 'DERIVATION', 'DIAGRAM'].map(type => (
-                                <label key={type} className="inline-flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={generatePracticeForm.questionTypes.includes(type)}
-                                    onChange={(e) =>
-                                      setGeneratePracticeForm(prev => ({
-                                        ...prev,
-                                        questionTypes: e.target.checked
-                                          ? [...prev.questionTypes, type]
-                                          : prev.questionTypes.filter(t => t !== type),
-                                      }))
-                                    }
-                                    className="h-4 w-4 rounded border-primary"
-                                  />
-                                  <span className="text-sm">{type}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 pt-4 border-t">
-                          <Button type="submit" disabled={generatingPractice}>
-                            {generatingPractice ? "Generating..." : "Generate Practice Paper"}
-                          </Button>
-                          <Button type="button" variant="outline" onClick={() => setShowGeneratePractice(false)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Note: In a full implementation, you'd fetch and display generated practice papers here */}
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground text-center">
-                      Generated practice papers would appear here. 
-                      <br />
-                      The practice paper generation API creates papers saved to the database.
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
+          <ImportantQuestionsWorkspace
+            initialDocuments={iqDocuments}
+            initialAnalyses={iqSavedAnalyses}
+            iqSubjects={iqSubjects}
+          />
         </TabsContent>
       </Tabs>
     </div>

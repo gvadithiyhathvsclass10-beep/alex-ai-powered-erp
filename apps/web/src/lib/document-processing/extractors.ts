@@ -561,7 +561,40 @@ function parsePdfStreamsNatively(buffer: Buffer): ExtractedContent | null {
 }
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<ExtractedContent> {
-  // 1. Try pdf-parse package if installed
+  // 1. Try system pdftotext utility first (most reliable in Alpine)
+  const tmpPdfPath = path.join(
+    os.tmpdir(),
+    `alex-pdf-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
+  )
+  try {
+    await writeFile(tmpPdfPath, buffer)
+    const { stdout } = await execFileAsync('pdftotext', ['-layout', tmpPdfPath, '-'], {
+      timeout: 15000,
+      maxBuffer: 20 * 1024 * 1024,
+    })
+    const rawPages = stdout
+      .split('\f')
+      .map(p => p.trim())
+      .filter(Boolean)
+    if (rawPages.length > 0) {
+      const pages: PageContent[] = rawPages.map((text, idx) => ({
+        pageNumber: idx + 1,
+        text,
+      }))
+      await unlink(tmpPdfPath).catch(() => undefined)
+      return {
+        text: pages.map(p => p.text).join('\n\n'),
+        pages,
+        metadata: { pageCount: pages.length, extractor: 'pdftotext' },
+      }
+    }
+  } catch {
+    // Fall through to pdf-parse / native parser
+  } finally {
+    await unlink(tmpPdfPath).catch(() => undefined)
+  }
+
+  // 2. Try pdf-parse package if installed
   try {
     const pdfParseModule: any = await import('pdf-parse')
     if (typeof pdfParseModule.PDFParse === 'function') {
@@ -597,42 +630,10 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<ExtractedConte
       }
     }
   } catch {
-    // Fall through to pdftotext / native parser
-  }
-
-  // 2. Try system pdftotext utility if available
-  const tmpPdfPath = path.join(
-    os.tmpdir(),
-    `alex-pdf-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
-  )
-  try {
-    await writeFile(tmpPdfPath, buffer)
-    const { stdout } = await execFileAsync('pdftotext', ['-layout', tmpPdfPath, '-'], {
-      timeout: 15000,
-      maxBuffer: 20 * 1024 * 1024,
-    })
-    const rawPages = stdout
-      .split('\f')
-      .map(p => p.trim())
-      .filter(Boolean)
-    if (rawPages.length > 0) {
-      const pages: PageContent[] = rawPages.map((text, idx) => ({
-        pageNumber: idx + 1,
-        text,
-      }))
-      return {
-        text: pages.map(p => p.text).join('\n\n'),
-        pages,
-        metadata: { pageCount: pages.length, extractor: 'pdftotext' },
-      }
-    }
-  } catch {
     // Fall through to native parser
-  } finally {
-    await unlink(tmpPdfPath).catch(() => undefined)
   }
 
-  // 3. Pure Node.js PDF content stream & FlateDecode parser
+  // 4. Pure Node.js PDF content stream & FlateDecode parser
   const nativeResult = parsePdfStreamsNatively(buffer)
   if (nativeResult && nativeResult.text.trim()) {
     return nativeResult
