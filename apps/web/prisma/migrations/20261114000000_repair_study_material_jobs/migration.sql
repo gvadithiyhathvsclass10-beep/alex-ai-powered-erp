@@ -23,78 +23,20 @@ CREATE TABLE IF NOT EXISTS "public"."study_material_jobs" (
 
 -- 2. Add missing columns if table exists but columns are missing
 -- These ALTER TABLE ADD COLUMN IF NOT EXISTS statements are safe to run multiple times
+-- No EXCEPTION block needed since IF NOT EXISTS handles the case where column exists
 
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "userId" TEXT NOT NULL DEFAULT '';
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT '';
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT '';
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "sourceDocId" TEXT;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "subjectId" TEXT;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "input" JSONB NOT NULL DEFAULT '{}';
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "result" JSONB;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "errorMessage" TEXT;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-DO $$ 
-BEGIN
-    ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "userId" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "sourceDocId" TEXT;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "subjectId" TEXT;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "input" JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "result" JSONB;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "errorMessage" TEXT;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3);
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "public"."study_material_jobs" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- 3. Ensure primary key exists
 DO $$ 

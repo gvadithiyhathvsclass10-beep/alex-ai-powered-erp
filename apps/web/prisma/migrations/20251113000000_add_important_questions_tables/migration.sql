@@ -1,6 +1,14 @@
 -- Add Important Questions tables
 -- This migration adds the tables required for the Important Questions feature
--- DocumentStatus enum already exists in the database (created by earlier migrations)
+-- Creates DocumentStatus enum if it doesn't exist
+
+-- Create DocumentStatus enum if not exists
+DO $$ 
+BEGIN
+    CREATE TYPE "DocumentStatus" AS ENUM ('UPLOADED', 'QUEUED', 'EXTRACTING', 'CHUNKING', 'EMBEDDING', 'INDEXING', 'READY', 'FAILED');
+EXCEPTION 
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateTable: question_papers
 CREATE TABLE IF NOT EXISTS "question_papers" (
