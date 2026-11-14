@@ -1,3 +1,3 @@
 provider = "postgresql"
 migration_id = "20251115000000_add_study_material_jobs"
-checksum = "8a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7"
+checksum = "b0eb53a6a7d7df61b44ce894a75ba917e8317b71ac9f8f727b24afcb66aa92f4"

@@ -155,19 +155,54 @@ jobs:
           const prisma = new PrismaClient();
           async function verify() {
             try {
-              const tables = await prisma.\$queryRaw\`
+              // Check V2 required tables (documents, document_chunks, study_material_jobs)
+              // Also check legacy tables for backward compatibility
+              const v2Tables = await prisma.\$queryRaw\`
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('documents', 'document_chunks', 'study_material_jobs')
+              \`;
+              const legacyTables = await prisma.\$queryRaw\`
                 SELECT table_name FROM information_schema.tables 
                 WHERE table_schema = 'public' 
                 AND table_name IN ('question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers')
               \`;
-              const existing = new Set(tables.map(t => t.table_name));
-              const required = ['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'];
-              const missing = required.filter(t => !existing.has(t));
-              if (missing.length > 0) {
-                console.error('MISSING TABLES:', missing.join(', '));
+              
+              const v2Existing = new Set(v2Tables.map(t => t.table_name));
+              const legacyExisting = new Set(legacyTables.map(t => t.table_name));
+              
+              const v2Required = ['documents', 'document_chunks', 'study_material_jobs'];
+              const legacyRequired = ['question_analyses', 'question_priority_items', 'question_analysis_items', 'question_papers', 'extracted_questions', 'generated_practice_papers'];
+              
+              const v2Missing = v2Required.filter(t => !v2Existing.has(t));
+              const legacyMissing = legacyRequired.filter(t => !legacyExisting.has(t));
+              
+              if (v2Missing.length > 0) {
+                console.error('MISSING V2 TABLES:', v2Missing.join(', '));
                 process.exit(1);
               }
-              console.log('All required tables exist:', required.join(', '));
+              if (legacyMissing.length > 0) {
+                console.warn('MISSING LEGACY TABLES (expected for fresh installs):', legacyMissing.join(', '));
+              }
+              console.log('All required V2 tables exist:', v2Required.join(', '));
+              console.log('Legacy tables present:', Array.from(legacyExisting).join(', ') || 'none');
+
+              // Check migration status
+              try {
+                const migrations = await prisma.\$queryRaw\`
+                  SELECT migration_name, finished_at, rolled_back_at 
+                  FROM _prisma_migrations 
+                  ORDER BY finished_at DESC
+                  LIMIT 10
+                \`;
+                console.log('Recent migrations:');
+                for (const m of migrations) {
+                  const status = m.rolled_back_at ? 'ROLLED BACK' : (m.finished_at ? 'APPLIED' : 'PENDING');
+                  console.log('  -', m.migration_name, ':', status, m.finished_at ? 'at ' + m.finished_at : '');
+                }
+              } catch (e) {
+                console.warn('Could not read _prisma_migrations:', e.message);
+              }
             } catch (e) {
               console.error('Verification failed:', e.message);
               process.exit(1);

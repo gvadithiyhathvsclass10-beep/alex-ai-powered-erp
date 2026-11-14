@@ -1,0 +1,3 @@
+provider = "postgresql"
+migration_id = "20251113000000_add_important_questions_tables"
+checksum = "1e58917ba13248f399aae8b7e8b185f195a556bbe9349fe22257f143ebb1cfed"
