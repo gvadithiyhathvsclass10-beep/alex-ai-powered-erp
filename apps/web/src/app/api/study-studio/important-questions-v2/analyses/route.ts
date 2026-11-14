@@ -68,21 +68,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check database readiness before attempting analysis
-    const dbCheck = await quickDatabaseCheck();
-    if (!dbCheck.ready) {
-      console.error('[ImportantQuestionsV2] Database not ready:', dbCheck);
-      return NextResponse.json(
-        { 
-          error: { 
-            code: 'DATABASE_NOT_READY', 
-            message: 'Database schema not ready. Required tables are missing.',
-            detail: dbCheck.error,
-            missingTables: dbCheck.missingTables
-          } 
-        },
-        { status: 503 }
-      );
+    // For generation mode, we only need documents and chunks to be ready.
+    // The study_material_jobs table is needed for persistence, checked later.
+    if (mode === 'generate') {
+      // Quick check: verify documents and chunks tables exist
+      const { prisma } = await import('@/lib/prisma');
+      const tablesCheck = await prisma.$queryRaw<Array<{ table_name: string }>>`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('documents', 'document_chunks')
+      `;
+      const existingTables = new Set(tablesCheck.map(t => t.table_name));
+      const requiredForGeneration = ['documents', 'document_chunks'];
+      const missingForGeneration = requiredForGeneration.filter(t => !existingTables.has(t));
+      
+      if (missingForGeneration.length > 0) {
+        return NextResponse.json(
+          { 
+            error: { 
+              code: 'DATABASE_NOT_READY', 
+              message: 'Database schema not ready. Required tables for generation are missing.',
+              detail: `Missing tables: ${missingForGeneration.join(', ')}`,
+              missingTables: missingForGeneration
+            } 
+          },
+          { status: 503 }
+        );
+      }
+    } else {
+      // For analyze mode, do the full check
+      const dbCheck = await quickDatabaseCheck();
+      if (!dbCheck.ready) {
+        console.error('[ImportantQuestionsV2] Database not ready:', dbCheck);
+        return NextResponse.json(
+          { 
+            error: { 
+              code: 'DATABASE_NOT_READY', 
+              message: 'Database schema not ready. Required tables are missing.',
+              detail: dbCheck.error,
+              missingTables: dbCheck.missingTables
+            } 
+          },
+          { status: 503 }
+        );
+      }
     }
 
     let result;
@@ -119,6 +148,27 @@ export async function POST(request: Request) {
             generationResult.errorCode === 'AI_INVALID_KEY' ? 401 :
             generationResult.errorCode === 'AI_RATE_LIMITED' ? 429 :
             generationResult.errorCode === 'AI_TIMEOUT' ? 504 : 500 }
+        );
+      }
+
+      // Persist the generated analysis - check study_material_jobs table exists
+      const { prisma } = await import('@/lib/prisma');
+      const jobTableCheck = await prisma.$queryRaw<Array<{ table_name: string }>>`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'study_material_jobs'
+      `;
+      
+      if (jobTableCheck.length === 0) {
+        // Table doesn't exist - return a clear error so the user knows what's missing
+        return NextResponse.json(
+          { 
+            error: { 
+              code: 'PERSISTENCE_TABLE_MISSING', 
+              message: 'Generated questions could not be saved: study_material_jobs table is missing. Please run migrations.',
+              detail: 'The study_material_jobs table is required to persist generated questions. Run `prisma migrate deploy` to create it.',
+            } 
+          },
+          { status: 503 }
         );
       }
 

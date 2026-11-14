@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     // Create dependencies
     const deps = createImportantQuestionsDependencies(async () => ({ id: user.id }));
 
-    const results: Array<{ id: string; uploadId: string; fileName: string; status: string; error?: string }> = [];
+    const results: Array<{ id: string; uploadId: string; fileName: string; status: string; error?: string; processingStatus?: string }> = [];
 
     // Process each file through the Research Notebook pipeline
     for (let i = 0; i < files.length; i++) {
@@ -169,7 +169,18 @@ export async function POST(request: Request) {
           },
         });
 
-        results.push({ id: document.id, uploadId, fileName: file.name, status: 'uploaded' });
+        // Return the actual processing status so frontend knows if document is ready
+        const finalStatus = processingStats.status === 'READY' ? 'ready' : 
+                           processingStats.status === 'FAILED' ? 'failed' : 'processing';
+
+        results.push({ 
+          id: document.id, 
+          uploadId, 
+          fileName: file.name, 
+          status: 'uploaded',
+          processingStatus: finalStatus,
+          error: processingStats.status === 'FAILED' ? processingStats.errorMessage : undefined
+        });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);
         
@@ -198,6 +209,7 @@ export async function POST(request: Request) {
           uploadId,
           fileName: file.name,
           status: 'failed',
+          processingStatus: 'failed',
           error: error instanceof Error ? error.message : 'Upload failed',
         });
       }
