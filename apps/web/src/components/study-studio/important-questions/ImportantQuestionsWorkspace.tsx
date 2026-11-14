@@ -220,6 +220,9 @@ export function ImportantQuestionsWorkspace({
 
   // Analysis state
   const [analysisTitle, setAnalysisTitle] = React.useState("")
+  const [targetCount, setTargetCount] = React.useState(30)
+  const [difficulty, setDifficulty] = React.useState<'easy' | 'medium' | 'hard'>('medium')
+  const [generationMode, setGenerationMode] = React.useState<'generate' | 'analyze'>('generate')
   const [generatingAnalysis, setGeneratingAnalysis] = React.useState(false)
   const [generationProgress, setGenerationProgress] = React.useState<AnalysisProgress | null>(null)
   const [generationError, setGenerationError] = React.useState<string | null>(null)
@@ -422,7 +425,7 @@ export function ImportantQuestionsWorkspace({
 
     setGeneratingAnalysis(true)
     setGenerationError(null)
-    setGenerationProgress({ stage: 'Retrieving documents...', progress: 10, message: 'Starting analysis' })
+    setGenerationProgress({ stage: 'Retrieving documents...', progress: 10, message: 'Starting generation' })
 
     try {
       const documentIds = completedFiles.map(f => f.documentId!).filter(Boolean)
@@ -434,14 +437,22 @@ export function ImportantQuestionsWorkspace({
           documentIds,
           instructions: additionalInstructions || undefined,
           title: analysisTitle || undefined,
+          mode: generationMode,
+          targetCount,
+          difficulty,
+          focusUnits: generationMode === 'analyze' ? undefined : undefined,
+          prioritizeMarks: generationMode === 'analyze' ? undefined : undefined,
         }),
       })
 
-      setGenerationProgress({ stage: 'Extracting & analyzing questions...', progress: 50, message: 'Processing documents' })
+      setGenerationProgress({ 
+        stage: generationMode === 'generate' ? 'Generating questions...' : 'Extracting & analyzing questions...', 
+        progress: 50, 
+        message: generationMode === 'generate' ? 'AI is creating questions' : 'Processing documents' 
+      })
 
       if (!res.ok) {
         const err = await res.json()
-        // Use detailed error message from API
         const errorMessage = err.error?.detail || err.error?.message || 'Analysis failed'
         throw new Error(errorMessage)
       }
@@ -451,13 +462,11 @@ export function ImportantQuestionsWorkspace({
 
       setGenerationProgress({ stage: 'Finalizing...', progress: 90, message: 'Saving results' })
 
-      // Refresh analyses list
       queryClient.invalidateQueries({ queryKey: ["question-analyses-v2"] })
 
       setSelectedAnalysis(newAnalysis)
       setView('results')
 
-      // Show warnings if any
       if (newAnalysis.limitations && newAnalysis.limitations.length > 0) {
         const warnings = newAnalysis.limitations.filter(l => 
           l.includes('could not be processed') || l.includes('OCR') || l.includes('AI')
@@ -469,16 +478,15 @@ export function ImportantQuestionsWorkspace({
             variant: 'default'
           })
         } else {
-          toast({ title: "Analysis complete", description: "Important questions report generated successfully" })
+          toast({ title: "Generation complete", description: "Important questions generated successfully" })
         }
       } else {
-        toast({ title: "Analysis complete", description: "Important questions report generated successfully" })
+        toast({ title: "Generation complete", description: "Important questions generated successfully" })
       }
     } catch (err) {
-      // Use the detailed error message from the API
       const errorMessage = err instanceof Error ? err.message : 'Analysis failed'
       setGenerationError(errorMessage)
-      toast({ title: "Analysis failed", description: errorMessage, variant: 'destructive' })
+      toast({ title: "Generation failed", description: errorMessage, variant: 'destructive' })
     } finally {
       setGeneratingAnalysis(false)
       setGenerationProgress(null)
@@ -788,6 +796,88 @@ export function ImportantQuestionsWorkspace({
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="pt-6">
               <div className="space-y-4">
+                {/* Generation Mode Selector */}
+                <div>
+                  <Label className="flex items-center gap-2 mb-2">
+                    <span>Generation Mode</span>
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </Label>
+                  <div className="flex gap-3">
+                    <Label className={cn(
+                      "flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                      generationMode === 'generate' 
+                        ? "border-primary bg-primary/10 text-primary" 
+                        : "border-border hover:border-primary/50"
+                    )}>
+                      <input
+                        type="radio"
+                        value="generate"
+                        checked={generationMode === 'generate'}
+                        onChange={() => setGenerationMode('generate')}
+                        className="sr-only"
+                      />
+                      <div className="flex flex-col items-center gap-1">
+                        <Sparkles className="h-5 w-5" />
+                        <span className="font-medium text-sm">Generate Questions</span>
+                        <span className="text-xs text-muted-foreground">Create new questions from study material</span>
+                      </div>
+                    </Label>
+                    <Label className={cn(
+                      "flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                      generationMode === 'analyze' 
+                        ? "border-primary bg-primary/10 text-primary" 
+                        : "border-border hover:border-primary/50"
+                    )}>
+                      <input
+                        type="radio"
+                        value="analyze"
+                        checked={generationMode === 'analyze'}
+                        onChange={() => setGenerationMode('analyze')}
+                        className="sr-only"
+                      />
+                      <div className="flex flex-col items-center gap-1">
+                        <Search className="h-5 w-5" />
+                        <span className="font-medium text-sm">Analyze Papers</span>
+                        <span className="text-xs text-muted-foreground">Extract & rank from question papers</span>
+                      </div>
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Generation Options */}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="target-count">Target Question Count</Label>
+                    <select
+                      id="target-count"
+                      value={targetCount}
+                      onChange={e => setTargetCount(Number(e.target.value))}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      disabled={generationMode !== 'generate'}
+                    >
+                      <option value={10}>10 questions</option>
+                      <option value={20}>20 questions</option>
+                      <option value={30}>30 questions</option>
+                      <option value={40}>40 questions</option>
+                      <option value={50}>50 questions</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="difficulty">Difficulty Level</Label>
+                    <select
+                      id="difficulty"
+                      value={difficulty}
+                      onChange={e => setDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      disabled={generationMode !== 'generate'}
+                    >
+                      <option value="easy">Easy - Fundamental concepts</option>
+                      <option value="medium">Medium - Standard exam level</option>
+                      <option value="hard">Hard - Advanced/Application</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Label className="flex items-center gap-2">
                     <span>Optional Instructions</span>
@@ -795,20 +885,19 @@ export function ImportantQuestionsWorkspace({
                   </Label>
                 </div>
                 <Textarea
-                  placeholder="Guide the AI analysis with specific instructions. Examples:
+                  placeholder="Guide the AI with specific instructions. Examples:
 • Focus on Unit 3 and Unit 4
-• Prioritize frequently repeated questions
+• Prioritize frequently tested concepts
 • Give more importance to 10-mark questions
-• Generate around 30 questions
 • Include questions from every unit
-• Focus on important theory questions rather than numerical problems"
+• Focus on theory questions rather than numerical problems"
                   value={additionalInstructions}
                   onChange={e => setAdditionalInstructions(e.target.value)}
                   rows={3}
                   className="min-h-[80px]"
                 />
                 <p className="text-xs text-muted-foreground">
-                  These instructions will directly influence the AI analysis and priority ranking. Leave empty for default analysis.
+                  These instructions will directly influence the AI generation and priority ranking. Leave empty for default analysis.
                 </p>
               </div>
 
@@ -822,12 +911,12 @@ export function ImportantQuestionsWorkspace({
                   {generatingAnalysis ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Analyzing...
+                      {generationMode === 'generate' ? 'Generating...' : 'Analyzing...'}
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      Generate Important Questions
+                      {generationMode === 'generate' ? 'Generate Important Questions' : 'Analyze Question Papers'}
                     </>
                   )}
                 </Button>

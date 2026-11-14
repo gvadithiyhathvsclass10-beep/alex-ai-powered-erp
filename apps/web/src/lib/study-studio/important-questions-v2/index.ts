@@ -20,6 +20,7 @@ export { createRepositoryAdapter } from './repository';
 // Services
 export { createAnalysis, getAnalysis, listAnalyses, deleteAnalysis, deleteDocument } from './analyze-service';
 export { renderAnalysisPdf } from './pdf-export';
+export { generateImportantQuestions, analyzeExistingQuestions } from './generation';
 
 // Dependency factory for route handlers
 import { createAIAssistanceAdapter } from './ai-adapter';
