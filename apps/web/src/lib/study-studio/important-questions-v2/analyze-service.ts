@@ -40,7 +40,7 @@ export async function createAnalysis(
     throw new Error('No questions could be extracted. Check document quality or OCR support, then try again.');
   }
 
-  // Run V2 analysis
+  // Run V2 analysis - pass user.id to AI adapter for credential resolution
   const result = await analyzeQuestions(
     {
       id: crypto.randomUUID(),
@@ -50,7 +50,8 @@ export async function createAnalysis(
       instructions: request.instructions,
     },
     deps.ai,
-    request
+    request,
+    user.id
   );
 
   // Persist analysis

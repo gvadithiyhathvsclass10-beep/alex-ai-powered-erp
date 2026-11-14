@@ -146,7 +146,8 @@ export interface DocumentExtractor {
 export interface AIAssistance {
   classifyQuestions(
     questions: QuestionOccurrence[],
-    instructions?: string
+    instructions?: string,
+    userId?: string
   ): Promise<Array<{
     questionId: string;
     topic?: string;
@@ -159,6 +160,7 @@ export interface AIAssistance {
     frequency: number;
     repeatKind?: RepeatKind;
     instructions?: string;
+    userId?: string;
   }): Promise<string[]>;
 }
 

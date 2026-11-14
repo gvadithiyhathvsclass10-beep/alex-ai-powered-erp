@@ -12,7 +12,7 @@ import type { AIAssistance, QuestionOccurrence, RepeatKind } from './types';
  */
 export function createAIAssistanceAdapter(): AIAssistance {
   return {
-    async classifyQuestions(questions: QuestionOccurrence[], instructions?: string) {
+    async classifyQuestions(questions: QuestionOccurrence[], instructions?: string, userId?: string) {
       if (!questions.length) return [];
 
       // Prepare question summaries for classification
@@ -34,7 +34,7 @@ export function createAIAssistanceAdapter(): AIAssistance {
             semanticGroupKey?: string;
           }>;
         }>({
-          userId: questions[0]?.sourceDocumentId ? undefined : undefined, // Will be resolved from auth context
+          userId,
           systemPrompt: `You are ALEX, an expert academic question classifier. 
 Given a list of extracted questions from question papers, classify each question by:
 1. Topic - the specific subject topic (e.g., "Binary Search Trees", "Newton's Laws")
@@ -89,10 +89,11 @@ ${instructions ? `\nUser instructions: ${instructions}` : ''}`,
       frequency: number;
       repeatKind?: RepeatKind;
       instructions?: string;
+      userId?: string;
     }) {
       try {
         const result = await generateText({
-          userId: undefined, // Will be resolved from auth context
+          userId: input.userId,
           systemPrompt: `You are ALEX, an expert academic analyst.
 Explain WHY a question should be prioritized for study based on the evidence provided.
 Return 1-3 concise bullet-point reasons. Each reason should be specific and evidence-based.

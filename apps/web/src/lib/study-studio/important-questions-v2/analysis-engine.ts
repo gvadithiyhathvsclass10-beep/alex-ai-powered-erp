@@ -31,7 +31,8 @@ export interface AnalysisInput {
 export async function analyzeQuestions(
   input: AnalysisInput,
   ai: AIAssistance | undefined,
-  request?: AnalysisRequest
+  request?: AnalysisRequest,
+  userId?: string
 ): Promise<AnalysisResult> {
   // Ensure all questions have normalized text
   const questions = input.questions.map(q => ({
@@ -41,7 +42,7 @@ export async function analyzeQuestions(
 
   // AI classification (topic, unit, concept, semantic grouping)
   const annotations = ai
-    ? (await Promise.all(chunk(questions, 40).map(batch => ai.classifyQuestions(batch, input.instructions)))).flat()
+    ? (await Promise.all(chunk(questions, 40).map(batch => ai.classifyQuestions(batch, input.instructions, userId)))).flat()
     : [];
 
   // Apply AI annotations to questions
@@ -58,7 +59,7 @@ export async function analyzeQuestions(
   const groups = buildRepeatGroups(questions, annotations);
 
   // Rank questions by priority
-  const ranked = await rankQuestions(questions, groups, ai, input.instructions, request, annotations);
+  const ranked = await rankQuestions(questions, groups, ai, input.instructions, request, annotations, userId);
 
   // Build unit coverage
   const unitMap = new Map<string, { count: number; marks: number; topics: Set<string> }>();
@@ -249,7 +250,8 @@ async function rankQuestions(
   ai: AIAssistance | undefined,
   instructions?: string,
   request?: AnalysisRequest,
-  annotations: Array<{ questionId: string; conceptLabel?: string }> = []
+  annotations: Array<{ questionId: string; conceptLabel?: string }> = [],
+  userId?: string
 ): Promise<RankedQuestion[]> {
   const result: RankedQuestion[] = [];
 
@@ -287,7 +289,7 @@ async function rankQuestions(
     if (!rationale.length) rationale.push('Included as a distinct question from the uploaded papers; no repeat evidence was found.');
 
     // AI-generated additional rationale
-    const aiWhy = ai ? await ai.explainPriority({ question: q, frequency: exact, repeatKind: related[0]?.kind, instructions }) : [];
+    const aiWhy = ai ? await ai.explainPriority({ question: q, frequency: exact, repeatKind: related[0]?.kind, instructions, userId }) : [];
 
     result.push({
       id: q.id,
