@@ -15,7 +15,6 @@ import {
   Brain,
   FlaskConical,
   Calendar,
-  FolderKanban,
   Book,
 } from "lucide-react"
 
@@ -100,8 +99,11 @@ export function AssistantRightPanel({
   return (
     <aside
       className={cn(
-        "h-screen border-l bg-sidebar transition-all duration-300 ease-out flex flex-col",
-        "w-80"
+        "flex flex-col border-l bg-sidebar",
+        // Phones: overlay drawer so the chat keeps full width.
+        "fixed inset-y-0 right-0 z-50 h-[100dvh] w-[min(20rem,88vw)] shadow-2xl",
+        // Desktop: regular column beside the chat.
+        "lg:static lg:z-auto lg:h-full lg:w-80 lg:shadow-none"
       )}
       aria-label="Utility panel"
     >

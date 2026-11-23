@@ -217,7 +217,7 @@ export async function GET() {
         title: a.title,
         subtitle: `${a.subject.code} Assignment`,
         dueDate: a.dueDate,
-        href: '/dashboard/assignments',
+        href: '/dashboard/assessments',
       })),
       ...upcomingTasks.map(t => ({
         id: t.id,

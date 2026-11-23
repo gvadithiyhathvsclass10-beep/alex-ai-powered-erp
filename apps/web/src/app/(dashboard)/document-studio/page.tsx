@@ -33,6 +33,7 @@ import {
   ChevronUp,
   Eye,
   Save,
+  History as HistoryIcon,
 } from "lucide-react"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
@@ -441,7 +442,7 @@ export default function DocumentStudioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl flex items-center gap-2">
           <FileText className="h-8 w-8 text-primary" />
           Document Studio
         </h1>
@@ -451,22 +452,23 @@ export default function DocumentStudioPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v: "generate" | "templates" | "library" | "history") => setActiveTab(v)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="generate">
-            <Sparkles className="mr-2 h-4 w-4" />
-            Generate
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsTrigger value="generate" className="min-w-0 px-2">
+            <Sparkles className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">Generate</span>
           </TabsTrigger>
-          <TabsTrigger value="templates">
-            <LayoutTemplate className="mr-2 h-4 w-4" />
-            Templates
+          <TabsTrigger value="templates" className="min-w-0 px-2">
+            <LayoutTemplate className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">Templates</span>
           </TabsTrigger>
-          <TabsTrigger value="library">
-            <Database className="mr-2 h-4 w-4" />
-            My Library
+          <TabsTrigger value="library" className="min-w-0 px-2">
+            <Database className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">My Library</span>
           </TabsTrigger>
-          <TabsTrigger value="history">
+          <TabsTrigger value="history" className="min-w-0 px-2">
             <FileText className="mr-2 h-4 w-4" />
-            History
+            <HistoryIcon className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">History</span>
           </TabsTrigger>
         </TabsList>
 

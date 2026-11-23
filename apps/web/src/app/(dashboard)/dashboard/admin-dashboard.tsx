@@ -76,13 +76,13 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Dashboard</h1>
         <p className="text-muted-foreground mt-1">Manage your institution&apos;s academic system.</p>
       </div>
 
       {isError && (
         <Card className="border-destructive">
-          <CardContent className="pt-6 flex items-center justify-between">
+          <CardContent className="flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
               <span>{error instanceof Error ? error.message : "Failed to load admin dashboard"}</span>
@@ -94,7 +94,7 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {adminStats.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -141,7 +141,7 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Recent Registrations</CardTitle>
             <Button variant="ghost" size="sm" asChild>
@@ -174,7 +174,7 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-lg">System Health</CardTitle>
           </CardHeader>
@@ -198,7 +198,7 @@ export function AdminDashboard({ user: _user }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-lg">Pending Approvals</CardTitle>
           </CardHeader>

@@ -33,12 +33,12 @@ interface DashboardProps {
 }
 
 const lecturerQuickActions = [
-  { label: "Mark Attendance", href: "/attendance", icon: UserCheck, description: "Record & update class attendance" },
-  { label: "Teacher Meetings", href: "/planner", icon: Video, description: "Schedule & manage meetings" },
-  { label: "Create Assessment", href: "/assessments", icon: ClipboardCheck, description: "Add & grade assessments" },
-  { label: "Create Assignment", href: "/assignments", icon: FileText, description: "Assign & evaluate coursework" },
-  { label: "Upload Resources", href: "/subjects", icon: BookOpen, description: "Share study materials" },
-  { label: "View Subjects", href: "/subjects", icon: Book, description: "Manage your classrooms" },
+  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, description: "Record & update class attendance" },
+  { label: "Teacher Meetings", href: "/dashboard/planner", icon: Video, description: "Schedule & manage meetings" },
+  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, description: "Add & grade assessments" },
+  { label: "Create Assignment", href: "/dashboard/assessments", icon: FileText, description: "Assign & evaluate coursework" },
+  { label: "Upload Resources", href: "/dashboard/subjects", icon: BookOpen, description: "Share study materials" },
+  { label: "View Subjects", href: "/dashboard/subjects", icon: Book, description: "Manage your classrooms" },
 ]
 
 export function LecturerDashboard({ user }: DashboardProps) {
@@ -78,13 +78,13 @@ export function LecturerDashboard({ user }: DashboardProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome, Dr. {user.lastName}!</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Welcome, Dr. {user.lastName}!</h1>
         <p className="text-muted-foreground mt-1">Manage your classes, meetings, attendance, and assessments.</p>
       </div>
 
       {isError && (
         <Card className="border-destructive">
-          <CardContent className="pt-6 flex items-center justify-between">
+          <CardContent className="flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
               <span>{error instanceof Error ? error.message : "Failed to load dashboard"}</span>
@@ -96,7 +96,7 @@ export function LecturerDashboard({ user }: DashboardProps) {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {lecturerStats.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -142,12 +142,12 @@ export function LecturerDashboard({ user }: DashboardProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Today&apos;s Classes</CardTitle>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base sm:text-lg">Today&apos;s Classes</CardTitle>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/attendance">
+              <Link href="/dashboard/attendance">
                 <Plus className="mr-1 h-4 w-4" />
                 Attendance
               </Link>
@@ -176,11 +176,11 @@ export function LecturerDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Teacher Meetings</CardTitle>
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base sm:text-lg">Teacher Meetings</CardTitle>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/planner">
+              <Link href="/dashboard/planner">
                 <Plus className="mr-1 h-4 w-4" />
                 Schedule
               </Link>
@@ -193,9 +193,9 @@ export function LecturerDashboard({ user }: DashboardProps) {
               <div className="space-y-3">
                 {upcomingMeetings.map((m: any) => (
                   <div key={m.id} className="p-2 border rounded-lg space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium truncate">{m.title}</p>
-                      <Badge variant="outline" className="text-xs">{m.eventType}</Badge>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-medium">{m.title}</p>
+                      <Badge variant="outline" className="shrink-0 text-xs">{m.eventType}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(m.startTime)} · {m.participantCount || 0} participants
@@ -217,11 +217,11 @@ export function LecturerDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Pending Grading</CardTitle>
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base sm:text-lg">Pending Grading</CardTitle>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/assignments">
+              <Link href="/dashboard/assessments">
                 <ArrowRight className="mr-1 h-4 w-4" />
                 View All
               </Link>
@@ -237,7 +237,7 @@ export function LecturerDashboard({ user }: DashboardProps) {
             ) : (
               <div className="space-y-3">
                 {pendingSubmissions.map((sub: { id: string; assignment: { title: string; subject: { code: string } }; user: { firstName: string; lastName: string } }) => (
-                  <Link key={sub.id} href="/assignments" className="block p-2 border rounded-lg hover:bg-accent transition-colors">
+                  <Link key={sub.id} href="/dashboard/assessments" className="block p-2 border rounded-lg hover:bg-accent transition-colors">
                     <p className="text-sm font-medium truncate">{sub.assignment.subject.code}: {sub.assignment.title}</p>
                     <p className="text-xs text-muted-foreground">{sub.user.firstName} {sub.user.lastName}</p>
                   </Link>
@@ -247,7 +247,7 @@ export function LecturerDashboard({ user }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-lg">Recent Announcements</CardTitle>
           </CardHeader>

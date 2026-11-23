@@ -335,24 +335,26 @@ export function RAGChat({
 
   return (
     <Card className="flex min-h-0 flex-col panel">
-      <CardHeader className="pb-3 border-b border-border/50">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary flex-shrink-0">
+      <CardHeader className="border-b border-border/50 pb-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-primary">
               <Bot className="h-5 w-5 text-primary-foreground" />
             </div>
             <div className="min-w-0">
-              <CardTitle className="text-lg font-semibold truncate">
-                {conversationData?.conversation?.title ||
-                  (notebookId ? "Notebook Grounded Q&A" : "AI Assistant")}
+              <CardTitle className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-base font-semibold sm:text-lg">
+                <span className="min-w-0 max-w-full truncate">
+                  {conversationData?.conversation?.title ||
+                    (notebookId ? "Notebook Grounded Q&A" : "AI Assistant")}
+                </span>
                 <Badge 
                   variant="outline" 
-                  className="text-xs font-normal ml-2 border-primary/30 text-primary bg-primary/10"
+                  className="shrink-0 border-primary/30 bg-primary/10 text-[10px] font-normal text-primary sm:text-xs"
                 >
                   {notebookId ? "Source-Grounded" : useDocuments ? "Document Context" : "General Chat"}
                 </Badge>
               </CardTitle>
-              <p className="text-xs text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground">
                 {activeConversationId 
                   ? `Conversation • ${conversationData?.conversation?._count?.messages || 0} messages`
                   : "Start a new conversation"}
@@ -360,12 +362,12 @@ export function RAGChat({
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeConversationId && messages.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs gap-1 hover:bg-secondary"
+                className="gap-1 text-xs hover:bg-secondary"
                 onClick={() => {
                   setActiveConversationId(undefined)
                   setMessages([])
@@ -401,11 +403,11 @@ export function RAGChat({
             
             {/* Provider indicator */}
             {conversationData?.conversation && (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-secondary border border-border/50 text-xs text-muted-foreground">
-                <Zap className="h-3 w-3" />
-                <span>{conversationData.conversation.provider || "AI"}</span>
+              <div className="flex max-w-full min-w-0 items-center gap-1.5 truncate rounded-lg border border-border/50 bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                <Zap className="h-3 w-3 shrink-0" />
+                <span className="truncate">{conversationData.conversation.provider || "AI"}</span>
                 <span className="text-muted-foreground/50">/</span>
-                <span>{conversationData.conversation.model || "default"}</span>
+                <span className="truncate">{conversationData.conversation.model || "default"}</span>
               </div>
             )}
           </div>
@@ -689,7 +691,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
 
   if (isLoading) {
     return (
-      <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg p-2 z-50">
+      <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] bg-background border border-border rounded-xl shadow-lg p-2 z-50">
         <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
           <Loader2 className="h-4 w-4 animate-spin mr-2" />
           Loading documents...
@@ -700,7 +702,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
 
   if (error) {
     return (
-      <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg p-2 z-50">
+      <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] bg-background border border-border rounded-xl shadow-lg p-2 z-50">
         <div className="flex flex-col items-center gap-2 py-4 text-center text-sm">
           <AlertCircle className="h-5 w-5 text-destructive" />
           <p className="text-destructive">{error}</p>
@@ -716,7 +718,7 @@ function DocumentSelector({ selectedIds, onChange, onClose, showOnlyReady = true
   const filteredDocuments = documents
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
+    <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] bg-background border border-border rounded-xl shadow-lg z-50 overflow-hidden">
       <div className="flex items-center justify-between p-2 border-b border-border">
         <span className="text-sm font-medium">Select Documents</span>
         <div className="flex items-center gap-1">

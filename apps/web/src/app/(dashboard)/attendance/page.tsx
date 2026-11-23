@@ -455,9 +455,9 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Attendance</h1>
           <p className="text-muted-foreground mt-1">
             {isTeacher
               ? "Record classroom attendance, manage sessions, and track student attendance summaries"
@@ -473,14 +473,14 @@ export default function AttendancePage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overall Attendance</CardTitle>
             <CalendarIcon className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.overallPercentage || 0}%</div>
+            <div className="text-2xl font-bold sm:text-3xl">{stats.overallPercentage || 0}%</div>
             <Progress value={stats.overallPercentage || 0} className="mt-2" />
           </CardContent>
         </Card>
@@ -490,7 +490,7 @@ export default function AttendancePage() {
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.present || 0}</div>
+            <div className="text-2xl font-bold sm:text-3xl">{stats.present || 0}</div>
             <p className="text-sm text-muted-foreground">
               Out of {stats.total || 0} sessions
             </p>
@@ -502,7 +502,7 @@ export default function AttendancePage() {
             <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.absent || 0}</div>
+            <div className="text-2xl font-bold sm:text-3xl">{stats.absent || 0}</div>
             <p className="text-sm text-muted-foreground">Unexcused absences</p>
           </CardContent>
         </Card>
@@ -512,7 +512,7 @@ export default function AttendancePage() {
             <Clock className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.late || 0}</div>
+            <div className="text-2xl font-bold sm:text-3xl">{stats.late || 0}</div>
             <p className="text-sm text-muted-foreground">Late arrivals</p>
           </CardContent>
         </Card>
@@ -522,7 +522,7 @@ export default function AttendancePage() {
             <ShieldCheck className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-2xl font-bold sm:text-3xl">
               {(stats.excused || 0) + (stats.onDuty || 0)}
             </div>
             <p className="text-sm text-muted-foreground">
@@ -792,7 +792,7 @@ export default function AttendancePage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Class, Date, Period, and Session Selector */}
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
                   <div className="space-y-2">
                     <Label>Class / Subject</Label>
                     <Select

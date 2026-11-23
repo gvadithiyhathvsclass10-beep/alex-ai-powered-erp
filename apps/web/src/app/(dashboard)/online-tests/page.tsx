@@ -121,7 +121,7 @@ export default function OnlineTestsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Online Tests</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Online Tests</h1>
           <p className="text-muted-foreground mt-1">Take assessments and track your performance</p>
         </div>
         <Card>
@@ -138,7 +138,7 @@ export default function OnlineTestsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Online Tests</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Online Tests</h1>
           <p className="text-muted-foreground mt-1">Take assessments and track your performance</p>
         </div>
         <Card className="border-destructive/50">
@@ -176,9 +176,9 @@ export default function OnlineTestsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Online Tests</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Online Tests</h1>
           <p className="text-muted-foreground mt-1">Take assessments and track your performance</p>
         </div>
       </div>

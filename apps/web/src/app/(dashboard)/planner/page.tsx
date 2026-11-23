@@ -405,9 +405,9 @@ export default function PlannerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             {isTeacher ? "Teacher Meetings & Planner" : "Smart Planner"}
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -441,7 +441,7 @@ export default function PlannerPage() {
         {/* Meetings Tab */}
         <TabsContent value="meetings" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant={meetingFilter === "ALL" ? "default" : "outline"}

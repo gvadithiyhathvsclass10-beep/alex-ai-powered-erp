@@ -3,22 +3,18 @@
 import * as React from "react"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { AIAvatar } from '@/components/ai/Avatar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { MobileBottomNav } from '@/components/layout/mobile-nav'
-import { cn } from '@/lib/utils'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { Menu, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const pathname = usePathname()
-  const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
   const [queryClient] = React.useState(
     () =>
       new QueryClient({
@@ -32,6 +28,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   )
 
   const userRole = user?.role || 'STUDENT'
+
+  // The drawer is bound to the pathname it was opened on. A route change makes
+  // the stored path stop matching, so the drawer closes without an effect that
+  // writes state during render/commit (React 19 flags that as a cascading
+  // render).
+  const [sidebarOpenAt, setSidebarOpenAt] = React.useState<string | null>(null)
+  const sidebarOpen = sidebarOpenAt === pathname
+  const setSidebarOpen = React.useCallback(
+    (open: boolean) => setSidebarOpenAt(open ? pathname : null),
+    [pathname]
+  )
+  const toggleSidebar = React.useCallback(
+    () => setSidebarOpenAt((current) => (current === pathname ? null : pathname)),
+    [pathname]
+  )
+
+  // Lock background scrolling while the mobile drawer is open.
+  React.useEffect(() => {
+    if (!sidebarOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [sidebarOpen])
+
+  React.useEffect(() => {
+    if (!sidebarOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [sidebarOpen, setSidebarOpen])
 
   // The Assistant owns its workspace layout. Do not wrap it in the global
   // dashboard sidebar/header as that creates nested, overlapping shells.
@@ -47,64 +77,52 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen bg-background">
-          {/* Mobile sidebar overlay */}
+        <div
+          className="app-shell min-h-[100dvh] bg-background"
+          style={{ "--sidebar-width": sidebarCollapsed ? "4.5rem" : "16rem" } as React.CSSProperties}
+        >
+          {/* Mobile drawer backdrop */}
           {sidebarOpen && (
-            <div
-              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            <button
+              type="button"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] lg:hidden"
               onClick={() => setSidebarOpen(false)}
-              aria-hidden="true"
+              aria-label="Close navigation menu"
             />
           )}
 
-          {/* Sidebar */}
-          <Sidebar userRole={userRole} className={cn("z-50 lg:z-40", sidebarOpen && "translate-x-0")} />
+          <Sidebar
+            userRole={userRole}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
+            mobileOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
 
-          {/* Mobile Bottom Navigation */}
-          <MobileBottomNav userRole={userRole} onOpenMenu={() => setSidebarOpen(true)} />
+          <div className="flex min-h-[100dvh] min-w-0 flex-col transition-[padding] duration-300 lg:pl-[var(--sidebar-width)]">
+            <Header
+              user={{
+                id: user?.id || '',
+                firstName: user?.firstName || '',
+                lastName: user?.lastName || '',
+                email: user?.email || '',
+                avatarUrl: user?.avatarUrl || null,
+                role: userRole,
+              }}
+              menuOpen={sidebarOpen}
+              onMenuClick={toggleSidebar}
+            />
 
-          {/* Main content */}
-          <div className="lg:pl-64 pb-16 lg:pb-0">
-            {/* Header with mobile menu button */}
-            <TooltipProvider>
-              <Header 
-                user={{ 
-                  id: user?.id || '', 
-                  firstName: user?.firstName || '', 
-                  lastName: user?.lastName || '', 
-                  email: user?.email || '', 
-                  avatarUrl: user?.avatarUrl || null, 
-                  role: userRole 
-                }} 
-              >
-              </Header>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="lg:hidden h-10 w-10"
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-                  >
-                    {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {sidebarOpen ? "Close sidebar" : "Open sidebar"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* Page content */}
-            <main className="min-w-0 p-4 sm:p-6 lg:p-8 pt-4 pb-16 lg:pb-0">
-              <div className="container-responsive">
+            <main id="main-content" className="app-main min-w-0 flex-1">
+              <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
                 {children}
               </div>
             </main>
           </div>
 
-          {/* Floating AI Avatar */}
+          <MobileBottomNav userRole={userRole} onOpenMenu={() => setSidebarOpen(true)} />
+
+          {/* Floating AI Avatar — positioned above the mobile bottom bar */}
           <AIAvatar />
         </div>
       </TooltipProvider>

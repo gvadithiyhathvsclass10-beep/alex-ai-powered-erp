@@ -97,9 +97,9 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Notifications</h1>
           <p className="text-muted-foreground mt-1">Stay updated with your academic activities</p>
         </div>
         <div className="flex items-center gap-2">
@@ -110,8 +110,8 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="unread">Unread</TabsTrigger>
@@ -121,7 +121,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-2">
           <Label htmlFor="category-filter" className="sr-only">Filter by category</Label>
           <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="All categories" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All categories" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               {CATEGORIES.map((c) => (
@@ -156,7 +156,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className={`font-medium ${notification.isRead ? "" : "font-semibold"}`}>
+                      <p className={`min-w-0 break-words font-medium ${notification.isRead ? "" : "font-semibold"}`}>
                         {notification.title}
                       </p>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">

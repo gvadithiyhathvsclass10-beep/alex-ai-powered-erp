@@ -203,7 +203,7 @@ export default function LecturerTestsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Test Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Test Management</h1>
           <p className="text-muted-foreground mt-1">Create and manage online assessments</p>
         </div>
         <Card>
@@ -220,7 +220,7 @@ export default function LecturerTestsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Test Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Test Management</h1>
           <p className="text-muted-foreground mt-1">Create and manage online assessments</p>
         </div>
         <Card className="border-destructive">
@@ -243,9 +243,9 @@ export default function LecturerTestsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Test Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Test Management</h1>
           <p className="text-muted-foreground mt-1">Create and manage online assessments</p>
         </div>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -430,14 +430,14 @@ export default function LecturerTestsPage() {
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Tests</CardTitle>
                 <FileText className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{tests.length}</div>
+                <div className="text-2xl font-bold sm:text-3xl">{tests.length}</div>
                 <p className="text-sm text-muted-foreground">{publishedTests.length} published, {draftTests.length} drafts</p>
               </CardContent>
             </Card>
@@ -447,7 +447,7 @@ export default function LecturerTestsPage() {
                 <HelpCircle className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-2xl font-bold sm:text-3xl">
                   {tests.reduce((sum, t) => sum + t._count.questions, 0)}
                 </div>
                 <p className="text-sm text-muted-foreground">Across all tests</p>
@@ -459,7 +459,7 @@ export default function LecturerTestsPage() {
                 <Users className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-2xl font-bold sm:text-3xl">
                   {tests.reduce((sum, t) => sum + t._count.attempts, 0)}
                 </div>
                 <p className="text-sm text-muted-foreground">Student submissions</p>
@@ -471,7 +471,7 @@ export default function LecturerTestsPage() {
                 <Shield className="h-4 w-4 text-amber-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-2xl font-bold sm:text-3xl">
                   {tests.filter(t => t.isProctored).length}
                 </div>
                 <p className="text-sm text-muted-foreground">With integrity monitoring</p>

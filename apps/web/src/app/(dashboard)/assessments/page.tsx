@@ -186,9 +186,9 @@ export default function AssessmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Assessments</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Assessments</h1>
           <p className="text-muted-foreground mt-1">Track and manage academic performance</p>
         </div>
         {isLecturer && (
@@ -221,18 +221,18 @@ export default function AssessmentsPage() {
           <div className="space-y-4">
             {assessments?.assessments?.map((assessment: Assessment) => (
               <Card key={assessment.id} onClick={() => setSelectedAssessment(assessment.id)} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
+                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <CardTitle>{assessment.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">{assessment.subject.code} - {assessment.subject.name}</p>
                   </div>
-                  <Badge variant={assessment.isPublished ? 'success' : 'outline'}>
+                  <Badge variant={assessment.isPublished ? 'success' : 'outline'} className="shrink-0 self-start sm:self-auto">
                     {assessment.isPublished ? 'Published' : 'Pending'}
                   </Badge>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                       <span>{assessment.type}</span>
                       <span>•</span>
                       <span>Max: {assessment.maxMarks} marks</span>
@@ -242,7 +242,7 @@ export default function AssessmentsPage() {
                       <span>{formatDate(assessment.assessmentDate)}</span>
                     </div>
                     {assessment.isPublished && (
-                      <Button variant="outline" size="sm" onClick={e => { e.stopPropagation(); setSelectedAssessment(assessment.id); setActiveTab("results") }}>
+                      <Button variant="outline" size="sm" className="self-start sm:self-auto" onClick={e => { e.stopPropagation(); setSelectedAssessment(assessment.id); setActiveTab("results") }}>
                         View Result
                       </Button>
                     )}
@@ -263,12 +263,12 @@ export default function AssessmentsPage() {
               <div className="space-y-4">
                 {assessments?.assessments?.map((assessment: Assessment) => (
                   <Card key={assessment.id}>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
+                    <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
                         <CardTitle>{assessment.name}</CardTitle>
                         <p className="text-sm text-muted-foreground">{assessment.subject.code} - {assessment.subject.name}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
                         <Badge variant={assessment.isPublished ? 'success' : 'outline'}>
                           {assessment.isPublished ? 'Published' : 'Draft'}
                         </Badge>
@@ -281,8 +281,8 @@ export default function AssessmentsPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                           <span>{assessment.type}</span>
                           <span>•</span>
                           <span>Max: {assessment.maxMarks} marks</span>
@@ -318,12 +318,12 @@ export default function AssessmentsPage() {
         <TabsContent value="results" className="mt-4">
           {selectedAssessment && assessmentDetail ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-xl font-semibold">{assessmentDetail.name}</h2>
                   <p className="text-sm text-muted-foreground">{assessmentDetail.subject.code} - {assessmentDetail.subject.name}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {isLecturer && (
                     <>
                       <Button variant="outline" size="sm" onClick={() => setShowMarksDialog(true)}>
@@ -401,14 +401,14 @@ export default function AssessmentsPage() {
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Overall Average</CardTitle>
                 <BarChart className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{calculateOverallAverage(assessments?.assessments)}%</div>
+                <div className="text-2xl font-bold sm:text-3xl">{calculateOverallAverage(assessments?.assessments)}%</div>
                 <p className="text-sm text-muted-foreground">Across all published assessments</p>
               </CardContent>
             </Card>
@@ -418,7 +418,7 @@ export default function AssessmentsPage() {
                 <CheckCircle className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{assessments?.assessments?.filter((a: Assessment) => a.isPublished).length || 0}</div>
+                <div className="text-2xl font-bold sm:text-3xl">{assessments?.assessments?.filter((a: Assessment) => a.isPublished).length || 0}</div>
                 <p className="text-sm text-muted-foreground">Out of {assessments?.assessments?.length || 0} assessments</p>
               </CardContent>
             </Card>
@@ -428,7 +428,7 @@ export default function AssessmentsPage() {
                 <AlertCircle className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{assessments?.assessments?.filter((a: Assessment) => a.isPublished && a._count.results === 0).length || 0}</div>
+                <div className="text-2xl font-bold sm:text-3xl">{assessments?.assessments?.filter((a: Assessment) => a.isPublished && a._count.results === 0).length || 0}</div>
                 <p className="text-sm text-muted-foreground">Assessments awaiting results</p>
               </CardContent>
             </Card>
@@ -438,7 +438,7 @@ export default function AssessmentsPage() {
                 <Calendar className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{getUpcomingCount(assessments?.assessments)}</div>
+                <div className="text-2xl font-bold sm:text-3xl">{getUpcomingCount(assessments?.assessments)}</div>
                 <p className="text-sm text-muted-foreground">In the next 30 days</p>
               </CardContent>
             </Card>

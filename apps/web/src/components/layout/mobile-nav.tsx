@@ -7,11 +7,16 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Sparkles,
-  Brain,
-  ChevronUp,
   ChevronDown,
+  X,
+  LayoutGrid,
 } from "lucide-react"
-import { getBottomNavItemsForRole, getMoreMenuItemsForRole } from "@/lib/navigation/config"
+import {
+  getBottomNavItemsForRole,
+  getMoreMenuItemsForRole,
+  resolveActiveNavHref,
+  type NavItem,
+} from "@/lib/navigation/config"
 
 interface MobileNavProps {
   userRole: string
@@ -20,104 +25,192 @@ interface MobileNavProps {
 
 export function MobileBottomNav({ userRole, onOpenMenu }: MobileNavProps) {
   const pathname = usePathname()
-  const [showMore, setShowMore] = React.useState(false)
 
   const bottomItems = getBottomNavItemsForRole(userRole)
   const moreItems = getMoreMenuItemsForRole(userRole)
+  const hasMore = moreItems.length > 0
+  const columns = bottomItems.length + (hasMore ? 1 : 0)
 
-  function renderMoreButton() {
-    return (
-      <div>
-        <Button
-          variant={showMore ? "default" : "ghost"}
-          size="sm"
-          className="h-10 flex flex-col items-center gap-1 px-1"
-          onClick={() => setShowMore(!showMore)}
-          aria-label="More"
-          aria-expanded={showMore}
-        >
-          <Sparkles className="h-5 w-5" />
-          <span className="text-xs font-medium">More</span>
-          {showMore ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </Button>
-        
-        {showMore && (
-          <div className="lg:hidden fixed bottom-16 left-0 right-0 z-40 pb-safe">
-            <div className="bg-background border-t border-border rounded-t-2xl shadow-xl max-h-[50vh] overflow-y-auto">
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <span className="font-semibold">More</span>
-                <Button variant="ghost" size="icon" onClick={() => setShowMore(false)} aria-label="Close">
-                  <ChevronDown className="h-5 w-5" />
-                </Button>
-              </div>
-              <nav className="p-2 space-y-1">
-                {moreItems.map(moreItem => (
-                  <Link
-                    key={moreItem.href}
-                    href={moreItem.href}
-                    onClick={() => setShowMore(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                      pathname === moreItem.href || pathname.startsWith(moreItem.href + "/")
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    )}
-                  >
-                    <moreItem.icon className="h-5 w-5 shrink-0" />
-                    <span className="truncate">{moreItem.label}</span>
-                    {moreItem.badge && (
-                      <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
-                        {moreItem.badge}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
+  const activeBottomHref = resolveActiveNavHref(bottomItems, pathname)
+  const activeMoreHref = resolveActiveNavHref(moreItems, pathname)
+  const moreIsActive = Boolean(activeMoreHref)
 
-  function renderNavItem(item: typeof bottomItems[0], isActive: boolean) {
-    return (
-      <Link
-        href={item.href}
-        onClick={() => setShowMore(false)}
-        className={cn(
-          "flex flex-col items-center gap-1 px-1 h-10 transition-colors",
-          isActive
-            ? "bg-primary/15 text-primary"
-            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-        )}
-        aria-current={isActive ? "page" : undefined}
-      >
-        <item.icon className="h-5 w-5" />
-        <span className="text-xs font-medium truncate max-w-[5rem]">{item.label}</span>
+  // Bind the sheet to the pathname it was opened on: a route change closes it
+  // without an effect that writes state (React 19 flags that pattern).
+  const [moreOpenAt, setMoreOpenAt] = React.useState<string | null>(null)
+  const showMore = moreOpenAt === pathname
+  const setShowMore = React.useCallback(
+    (open: boolean) => setMoreOpenAt(open ? pathname : null),
+    [pathname]
+  )
+  const toggleMore = React.useCallback(
+    () => setMoreOpenAt((current) => (current === pathname ? null : pathname)),
+    [pathname]
+  )
+
+  // Prevent the page behind the More sheet from scrolling.
+  React.useEffect(() => {
+    if (!showMore) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [showMore])
+
+  React.useEffect(() => {
+    if (!showMore) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowMore(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showMore, setShowMore])
+
+  const renderNavItem = (item: NavItem, isActive: boolean) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      className={cn(
+        "flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium transition-colors",
+        isActive
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+      )}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <span className="relative">
+        <item.icon className="h-5 w-5" aria-hidden="true" />
         {item.badge && (
-          <span className="text-[9px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30 px-1.5">
+          <span className="absolute -right-2 -top-1 rounded-full bg-primary px-1 text-[8px] font-bold uppercase leading-3 text-primary-foreground">
             {item.badge}
           </span>
         )}
-      </Link>
-    )
-  }
-  
+      </span>
+      <span className="max-w-full truncate">{item.label}</span>
+    </Link>
+  )
+
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="grid grid-cols-5 gap-1 px-2 py-1.5 pb-safe">
-        {bottomItems.map((item, index) => {
-          const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + "/"))
-          const isMore = item.label === "More"
-          
-          return (
-            <React.Fragment key={item.href}>
-              {isMore ? renderMoreButton() : renderNavItem(item, isActive)}
-            </React.Fragment>
+    <>
+      {showMore && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] lg:hidden"
+            onClick={() => setShowMore(false)}
+            aria-label="Close more navigation"
+          />
+          <div
+            id="mobile-more-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="More navigation"
+            className="fixed inset-x-0 bottom-[var(--bottom-nav-height)] z-50 mx-auto w-full max-w-lg px-2 lg:hidden"
+          >
+            <div className="flex max-h-[min(70dvh,32rem)] flex-col overflow-hidden rounded-t-2xl border border-border bg-background shadow-2xl">
+              <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4 text-primary" />
+                  <span className="font-semibold">More</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10"
+                  onClick={() => setShowMore(false)}
+                  aria-label="Close more navigation"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+                <div className="grid grid-cols-2 gap-1">
+                  {moreItems.map((item) => {
+                    const isActive = item.href === activeMoreHref
+                    return (
+                      <Link
+                        key={`${item.href}-${item.label}`}
+                        href={item.href}
+                        onClick={() => setShowMore(false)}
+                        className={cn(
+                          "flex min-h-12 min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                        aria-current={isActive ? "page" : undefined}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{item.label}</span>
+                        {item.badge && (
+                          <span className="ml-auto shrink-0 rounded-full border border-primary/30 bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-primary">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-2 border-t border-border pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMore(false)
+                      onOpenMenu()
+                    }}
+                    className="flex min-h-12 w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <LayoutGrid className="h-4 w-4 shrink-0" />
+                    Browse all navigation
+                  </button>
+                </div>
+              </nav>
+            </div>
+          </div>
+        </>
+      )}
+
+      <nav
+        className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:hidden"
+        aria-label="Mobile navigation"
+      >
+        <div
+          className={cn(
+            "mx-auto grid w-full max-w-lg gap-0.5 px-1.5 pt-1",
+            columns === 5 ? "grid-cols-5" : "grid-cols-4"
           )}
-        )}
-      </div>
-    </div>
+        >
+          {bottomItems.map((item) => renderNavItem(item, item.href === activeBottomHref))}
+
+          {hasMore && (
+            <button
+              type="button"
+              onClick={toggleMore}
+              className={cn(
+                "flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium transition-colors",
+                showMore || moreIsActive
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+              aria-label="More navigation"
+              aria-expanded={showMore}
+              aria-controls="mobile-more-menu"
+            >
+              <span className="relative">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+                <ChevronDown
+                  className={cn("absolute -right-2 -top-1 h-3 w-3 transition-transform", showMore && "rotate-180")}
+                  aria-hidden="true"
+                />
+              </span>
+              <span>More</span>
+            </button>
+          )}
+        </div>
+      </nav>
+    </>
   )
 }

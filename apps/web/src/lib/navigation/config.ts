@@ -18,15 +18,12 @@ import {
   FileText,
   Bell,
   Settings,
-  GraduationCap,
   Users,
   Library,
   Archive,
   Shield,
   Plus,
   Mic2,
-  Sparkles,
-  Brain,
 } from "lucide-react";
 
 export interface NavItem {
@@ -37,6 +34,10 @@ export interface NavItem {
   badge?: string;
   section?: "main" | "lecturer" | "admin";
   hiddenFromMobile?: boolean;
+  /** Tools are secondary actions that point at a destination already present in
+   *  the main navigation (e.g. "Create Subject" -> Subjects). They are listed
+   *  in the drawer/More sheet but never claim the primary active highlight. */
+  isTool?: boolean;
 }
 
 // ============================================================================
@@ -54,6 +55,7 @@ export const mainNavItems: NavItem[] = [
   { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"], section: "main" },
   { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"], section: "main" },
   { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"], section: "main" },
+  { label: "Online Tests", href: "/dashboard/online-tests", icon: FileText, roles: ["STUDENT", "LECTURER"], section: "main" },
   { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"], section: "main" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"], section: "main" },
 ];
@@ -62,31 +64,38 @@ export const mainNavItems: NavItem[] = [
 // LECTURER-ONLY ITEMS
 // ============================================================================
 export const lecturerOnlyItems: NavItem[] = [
-  { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"], section: "lecturer" },
-  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"], section: "lecturer" },
-  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"], section: "lecturer" },
-  { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"], section: "lecturer" },
+  { label: "Create Subject", href: "/dashboard/subjects", icon: Plus, roles: ["LECTURER", "ADMIN"], section: "lecturer", isTool: true },
+  { label: "Mark Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"], section: "lecturer", isTool: true },
+  { label: "Create Assessment", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["LECTURER"], section: "lecturer", isTool: true },
+  { label: "Manage Resources", href: "/dashboard/subjects", icon: Library, roles: ["LECTURER", "ADMIN"], section: "lecturer", isTool: true },
 ];
 
 // ============================================================================
 // ADMIN-ONLY ITEMS
 // ============================================================================
 export const adminOnlyItems: NavItem[] = [
-  { label: "User Management", href: "/dashboard/settings", icon: Users, roles: ["ADMIN"], section: "admin" },
-  { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"], section: "admin" },
-  { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"], section: "admin" },
-  { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"], section: "admin" },
+  { label: "User Management", href: "/dashboard/settings", icon: Users, roles: ["ADMIN"], section: "admin", isTool: true },
+  { label: "Institution Settings", href: "/dashboard/settings", icon: Shield, roles: ["ADMIN"], section: "admin", isTool: true },
+  { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, roles: ["ADMIN"], section: "admin", isTool: true },
+  { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, roles: ["ADMIN"], section: "admin", isTool: true },
 ];
 
 // ============================================================================
 // MOBILE BOTTOM NAV (most frequently used items)
+// The order is deliberate: each role gets exactly four destinations plus the
+// More sheet. Keeping the count stable avoids the cramped/broken grid the old
+// label-based "More" detection produced for admins and mentors.
 // ============================================================================
 export const bottomNavItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
   { label: "AI Chat", href: "/dashboard/assistant", icon: Bot, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"], badge: "AI" },
   { label: "Documents", href: "/dashboard/documents", icon: FolderOpen, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
   { label: "Planner", href: "/dashboard/planner", icon: Calendar, roles: ["STUDENT"] },
-  { label: "More", href: "#", icon: Sparkles, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"], hiddenFromMobile: true },
+  { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["LECTURER"] },
+  { label: "Research", href: "/dashboard/research", icon: FlaskConical, roles: ["PROJECT_MENTOR"] },
+  { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["ADMIN"] },
+  { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["ADMIN"] },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
 ];
 
 // ============================================================================
@@ -94,11 +103,13 @@ export const bottomNavItems: NavItem[] = [
 // ============================================================================
 export const moreMenuItems: NavItem[] = [
   { label: "Study Studio", href: "/dashboard/study-studio", icon: BookOpen, roles: ["STUDENT"] },
+  { label: "Voice Assistant", href: "/dashboard/voice-assistant", icon: Mic2, roles: ["STUDENT"] },
   { label: "Subjects", href: "/dashboard/subjects", icon: Book, roles: ["STUDENT", "LECTURER", "ADMIN"] },
   { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
   { label: "Personal Drive", href: "/dashboard/drive", icon: Cloud, roles: ["STUDENT", "LECTURER", "PROJECT_MENTOR"] },
   { label: "Attendance", href: "/dashboard/attendance", icon: UserCheck, roles: ["STUDENT", "LECTURER"] },
   { label: "Assessments", href: "/dashboard/assessments", icon: ClipboardCheck, roles: ["STUDENT", "LECTURER"] },
+  { label: "Online Tests", href: "/dashboard/online-tests", icon: FileText, roles: ["STUDENT", "LECTURER"] },
   { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["STUDENT", "LECTURER", "ADMIN", "PROJECT_MENTOR"] },
 ];
@@ -112,39 +123,49 @@ export const assistantWorkspaceNavItems: NavItem[] = [
 ];
 
 // ============================================================================
-// HELPER FUNCTIONS
+// HELPERS
 // ============================================================================
+
+function uniqueByHref(items: NavItem[]): NavItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.href)) return false;
+    seen.add(item.href);
+    return true;
+  });
+}
 
 export function getNavItemsForRole(userRole: string, includeLecturer = true, includeAdmin = true): NavItem[] {
   let items = [...mainNavItems.filter(item => item.roles.includes(userRole))];
-  
+
   if (includeLecturer && (userRole === "LECTURER" || userRole === "ADMIN")) {
     items = [...items, ...lecturerOnlyItems.filter(item => item.roles.includes(userRole))];
   }
-  
+
   if (includeAdmin && userRole === "ADMIN") {
     items = [...items, ...adminOnlyItems.filter(item => item.roles.includes(userRole))];
   }
-  
+
   return items;
 }
 
+/** Exactly four destinations for the bottom bar (More is appended by the UI). */
 export function getBottomNavItemsForRole(userRole: string): NavItem[] {
-  return bottomNavItems.filter(item => item.roles.includes(userRole));
+  return bottomNavItems.filter(item => item.roles.includes(userRole)).slice(0, 4);
 }
 
+/**
+ * Overflow destinations for the More sheet. Deduplicated by href so tools such
+ * as "Create Subject" do not create a second row for the same page.
+ */
 export function getMoreMenuItemsForRole(userRole: string): NavItem[] {
-  let items = [...moreMenuItems.filter(item => item.roles.includes(userRole))];
-  
-  if (userRole === "LECTURER" || userRole === "ADMIN") {
-    items = [...items, ...lecturerOnlyItems.filter(item => item.roles.includes(userRole))];
-  }
-  
-  if (userRole === "ADMIN") {
-    items = [...items, ...adminOnlyItems.filter(item => item.roles.includes(userRole))];
-  }
-  
-  return items;
+  const primaryHrefs = new Set(getBottomNavItemsForRole(userRole).map((item) => item.href));
+  const candidates = [
+    ...moreMenuItems.filter(item => item.roles.includes(userRole)),
+    ...mainNavItems.filter(item => item.roles.includes(userRole)),
+  ];
+
+  return uniqueByHref(candidates).filter((item) => !primaryHrefs.has(item.href));
 }
 
 export function getSectionTitle(section: NavItem["section"]): string {
@@ -171,4 +192,77 @@ export const allNavItems = [
 // Find nav item by href
 export function findNavItemByHref(href: string): NavItem | undefined {
   return allNavItems.find(item => item.href === href);
+}
+
+function normalizePathname(pathname: string): string {
+  if (!pathname) return "/";
+  const trimmed = pathname.split("?")[0].split("#")[0];
+  return trimmed.length > 1 ? trimmed.replace(/\/+$/, "") : trimmed;
+}
+
+/**
+ * Route-aware active matching.
+ *
+ * The dashboard is the index of every nested route, so a plain
+ * `startsWith("/dashboard/")` check used to highlight Dashboard on every page.
+ * The dashboard is therefore exact-match only; every other destination also
+ * matches its own descendants.
+ */
+export function isNavItemActive(pathname: string, href: string): boolean {
+  const current = normalizePathname(pathname);
+  const target = normalizePathname(href);
+
+  if (target === "/dashboard") {
+    return current === "/dashboard" || current === "/dashboard/dashboard";
+  }
+
+  return current === target || current.startsWith(`${target}/`);
+}
+
+/** Longest matching destination wins, so nested routes highlight one item. */
+export function resolveActiveNavHref(items: NavItem[], pathname: string): string | null {
+  const matches = items
+    .filter((item) => isNavItemActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length);
+
+  return matches[0]?.href ?? null;
+}
+
+const PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/dashboard/dashboard": "Dashboard",
+  "/dashboard/assistant": "AI Assistant",
+  "/dashboard/voice-assistant": "Voice Assistant",
+  "/dashboard/documents": "Documents",
+  "/dashboard/drive": "Personal Drive",
+  "/dashboard/study-studio": "Study Studio",
+  "/dashboard/planner": "Smart Planner",
+  "/dashboard/subjects": "Subjects",
+  "/dashboard/research": "Research Lab",
+  "/dashboard/attendance": "Attendance",
+  "/dashboard/assessments": "Assessments",
+  "/dashboard/online-tests": "Online Tests",
+  "/dashboard/notifications": "Notifications",
+  "/dashboard/settings": "Settings",
+  "/dashboard/ai-settings": "AI Settings",
+  "/dashboard/achievements": "Achievements",
+  "/dashboard/document-studio": "Document Studio",
+  "/dashboard/solution-generator": "Solution Generator",
+};
+
+/** Human-readable title for the current route (used by the mobile header). */
+export function getPageTitle(pathname: string): string {
+  const current = normalizePathname(pathname);
+  if (PAGE_TITLES[current]) return PAGE_TITLES[current];
+
+  // Longest prefix match for nested routes such as /dashboard/online-tests/lecturer
+  const prefix = Object.keys(PAGE_TITLES)
+    .filter((key) => key !== "/dashboard" && current.startsWith(`${key}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
+  if (prefix) return PAGE_TITLES[prefix];
+
+  const last = current.split("/").filter(Boolean).pop();
+  if (!last) return "Dashboard";
+  return last.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }

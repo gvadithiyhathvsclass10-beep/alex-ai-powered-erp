@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { X, Mic, Volume2, VolumeX, ChevronDown, Sparkles, Brain, Send, Maximize2, Home, FileText, BookOpen, Calendar, Bot, MessageSquare, RefreshCw, Trash2, Copy, Download, Settings } from "lucide-react"
@@ -122,8 +123,14 @@ export function AIAvatar({
   documentIds,
   pageContext,
 }: AIAvatarProps) {
-  const [isOpen, setIsOpen] = React.useState(false)
-  const [isMinimized, setIsMinimized] = React.useState(false)
+  const pathname = usePathname()
+
+  // The panel is bound to the pathname it was opened on, so navigation closes
+  // it without an effect that writes state (React 19 cascading-render rule).
+  const [openAtPath, setOpenAtPath] = React.useState<string | null>(null)
+  const [minimizedAtPath, setMinimizedAtPath] = React.useState<string | null>(null)
+  const isOpen = openAtPath === pathname
+  const isMinimized = minimizedAtPath === pathname
   const [isListening, setIsListening] = React.useState(false)
   const [isSpeaking, setIsSpeaking] = React.useState(false)
   const [avatarStyle, setAvatarStyle] = React.useState<"bot" | "cat" | "robot" | "orb">("bot")
@@ -167,6 +174,16 @@ export function AIAvatar({
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
+  // A full-screen mobile assistant owns the viewport; lock page scrolling.
+  React.useEffect(() => {
+    if (!isOpen || !isMobile) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [isOpen, isMobile])
+
   // Save conversation to localStorage
   React.useEffect(() => {
     if (conversationId) {
@@ -189,10 +206,14 @@ export function AIAvatar({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const toggleOpen = () => setIsOpen(!isOpen)
-  const minimize = () => setIsMinimized(true)
-  const maximize = () => setIsMinimized(false)
-  const close = () => { setIsOpen(false); setIsMinimized(false) }
+  const toggleOpen = () =>
+    setOpenAtPath((current) => (current === pathname ? null : pathname))
+  const minimize = () => setMinimizedAtPath(pathname)
+  const maximize = () => setMinimizedAtPath(null)
+  const close = () => {
+    setOpenAtPath(null)
+    setMinimizedAtPath(null)
+  }
 
   const getCurrentAvatar = React.useCallback(() => avatarComponents[avatarStyle], [avatarStyle])
 
@@ -470,9 +491,9 @@ export function AIAvatar({
             getCurrentAvatar()
           )}
         </div>
-        <div className={cn("flex-1 max-w-[85%]", message.role === "user" ? "text-right" : "text-left")}>
+        <div className={cn("min-w-0 flex-1 max-w-[88%] sm:max-w-[85%]", message.role === "user" ? "text-right" : "text-left")}>
           <div className={cn(
-            "inline-block rounded-2xl px-4 py-2 relative",
+            "relative inline-block max-w-full break-words rounded-2xl px-4 py-2",
             message.role === "user" ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted rounded-tl-none"
           )}>
             <MarkdownRenderer content={message.content} />
@@ -493,12 +514,11 @@ export function AIAvatar({
   // Responsive panel classes
   const isDesktop = !isMobile
   const panelClasses = cn(
-    "fixed z-50 bg-card border rounded-2xl shadow-xl flex flex-col overflow-hidden",
+    "fixed z-50 flex flex-col overflow-hidden bg-card shadow-xl",
     isDesktop
-      ? "bottom-6 right-6 w-96 max-h-[600px]"
-      : "bottom-0 left-0 right-0 max-h-[85vh] rounded-t-2xl rounded-b-none",
-    isMinimized && isDesktop && "h-16 max-h-16",
-    isMinimized && isMobile && "h-16 max-h-16"
+      ? "bottom-6 right-6 max-h-[600px] w-96 rounded-2xl border"
+      : "inset-0 h-[100dvh] max-h-[100dvh] w-full rounded-none border-0",
+    isMinimized && "h-16 max-h-16"
   )
 
   const panelAnimation = isMobile
@@ -506,11 +526,14 @@ export function AIAvatar({
     : { initial: { opacity: 0, scale: 0.95, y: 20 }, animate: { opacity: 1, scale: 1, y: 0 }, exit: { opacity: 0, scale: 0.95, y: 20 } }
 
   const fabClasses = cn(
-    "fixed z-50 p-3 rounded-full bg-primary text-primary-foreground shadow-lg",
-    "hover:shadow-xl transition-all duration-300",
+    "fixed z-40 rounded-full bg-primary p-3 text-primary-foreground shadow-lg",
+    "transition-all duration-300 hover:shadow-xl",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isOpen && "hidden",
-    isMobile ? "bottom-4 right-4" : "bottom-6 right-6"
+    // Sit above the fixed mobile bottom bar; keep clear of the home indicator.
+    isMobile
+      ? "bottom-[calc(var(--bottom-nav-height)+1rem)] right-4"
+      : "bottom-6 right-6"
   )
 
   // Get page context from URL
@@ -552,27 +575,30 @@ export function AIAvatar({
           </TooltipTrigger>
         </Tooltip>
 
+        {isOpen && isMobile && !isMinimized && (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
+            onClick={close}
+            aria-label="Close AI Assistant"
+          />
+        )}
+
         {isOpen && (
           <AnimatePresence>
             <motion.div
               ref={panelRef}
               {...panelAnimation}
-              transition={{ duration: isMobile ? 0.3 : 0.2, ease: "easeOut" }}
+              transition={{ duration: isMobile ? 0.25 : 0.2, ease: "easeOut" }}
               className={panelClasses}
+              role="dialog"
+              aria-modal={isMobile || undefined}
+              aria-label="ALEX AI Assistant"
             >
-              {/* Backdrop on mobile */}
-              {isMobile && !isMinimized && (
-                <div
-                  className="fixed inset-0 bg-black/50 z-[-1] lg:hidden"
-                  onClick={close}
-                  aria-hidden="true"
-                />
-              )}
-
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between p-4 border-b bg-primary/5"
+                className="flex shrink-0 items-center justify-between border-b bg-primary/5 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div className="relative flex-shrink-0">
@@ -597,7 +623,7 @@ export function AIAvatar({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="hidden h-9 w-9 sm:inline-flex"
                         onClick={() => {
                           const styles = ["bot", "cat", "robot", "orb"] as const
                           const idx = styles.indexOf(avatarStyle)
@@ -657,7 +683,7 @@ export function AIAvatar({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="hidden h-9 w-9 sm:inline-flex"
                         onClick={isMinimized ? maximize : minimize}
                         aria-label={isMinimized ? "Maximize" : "Minimize"}
                       >
@@ -692,7 +718,7 @@ export function AIAvatar({
                     exit={{ opacity: 0, height: 0 }}
                     className="flex-1 flex flex-col min-h-0"
                   >
-                    <div className="flex-1 p-4 overflow-y-auto">
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
                       <div className="space-y-4">
                         {messages.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
@@ -725,7 +751,7 @@ export function AIAvatar({
 
                     {/* Input area */}
                     <Separator />
-                    <form onSubmit={handleSubmit} className="p-4 space-y-2">
+                    <form onSubmit={handleSubmit} className="shrink-0 space-y-2 border-t border-border bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
                       <div className="flex gap-2">
                         <Textarea
                           placeholder="Ask a question..."

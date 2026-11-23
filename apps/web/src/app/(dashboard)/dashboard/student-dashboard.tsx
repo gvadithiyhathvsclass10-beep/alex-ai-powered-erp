@@ -27,6 +27,7 @@ import {
   UserCheck,
   ClipboardCheck,
   GraduationCap,
+  Cloud,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
 
@@ -45,7 +46,7 @@ const quickActions = [
   { label: "Study Studio", href: "/dashboard/study-studio", icon: Brain, description: "Generate flashcards & notes" },
   { label: "Smart Planner", href: "/dashboard/planner", icon: Calendar, description: "Plan your study schedule" },
   { label: "Research Lab", href: "/dashboard/research", icon: FlaskConical, description: "Collaborative research" },
-  { label: "Projects", href: "/dashboard/projects", icon: FolderKanban, description: "Manage team projects" },
+  { label: "Personal Drive", href: "/dashboard/drive", icon: Cloud, description: "Import files from Dropbox" },
 ]
 
 const stats = [
@@ -83,14 +84,14 @@ export function StudentDashboard({ user }: DashboardProps) {
     <div className="space-y-6 animate-in">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome back, {user.firstName}!</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Welcome back, {user.firstName}!</h1>
         <p className="text-muted-foreground mt-1">Here's what's happening with your studies today.</p>
       </div>
 
       {/* Error State */}
       {isError && (
         <Card className="panel border-destructive/30 bg-destructive/5">
-          <CardContent className="pt-6 flex items-center justify-between">
+          <CardContent className="flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
               <span>{error instanceof Error ? error.message : "Failed to load dashboard metrics"}</span>
@@ -103,7 +104,7 @@ export function StudentDashboard({ user }: DashboardProps) {
       )}
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {statValues.map((stat) => (
           <Card key={stat.label} className="panel-hover panel">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -116,7 +117,7 @@ export function StudentDashboard({ user }: DashboardProps) {
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
-                <div className="text-3xl font-bold text-foreground">{stat.value}</div>
+                <div className="text-2xl font-bold text-foreground sm:text-3xl">{stat.value}</div>
               )}
             </CardContent>
           </Card>
@@ -156,7 +157,7 @@ export function StudentDashboard({ user }: DashboardProps) {
       {/* Bottom Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Upcoming Deadlines */}
-        <Card className="panel h-full">
+        <Card className="panel h-full min-w-0">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
@@ -193,7 +194,7 @@ export function StudentDashboard({ user }: DashboardProps) {
         </Card>
 
         {/* Recent Documents */}
-        <Card className="panel h-full">
+        <Card className="panel h-full min-w-0">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
@@ -245,7 +246,7 @@ export function StudentDashboard({ user }: DashboardProps) {
         </Card>
 
         {/* Attendance Overview */}
-        <Card className="panel h-full">
+        <Card className="panel h-full min-w-0">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <UserCheck className="h-5 w-5 text-primary" />
@@ -266,11 +267,11 @@ export function StudentDashboard({ user }: DashboardProps) {
               <div className="space-y-4">
                 {attendanceSummary.map((subj: { subjectId: string; subjectCode: string; subjectName: string; percentage: number }) => (
                   <div key={subj.subjectId} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm truncate">{subj.subjectCode} - {subj.subjectName}</p>
                       </div>
-                      <Badge variant="outline" className={cn("text-xs font-medium", 
+                      <Badge variant="outline" className={cn("shrink-0 text-xs font-medium", 
                         subj.percentage >= 75 ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" :
                         subj.percentage >= 50 ? "text-amber-400 border-amber-500/30 bg-amber-500/10" :
                         "text-destructive border-destructive/30 bg-destructive/10"

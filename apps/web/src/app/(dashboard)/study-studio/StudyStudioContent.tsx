@@ -1129,7 +1129,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Study Studio</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Study Studio</h1>
           <p className="text-muted-foreground mt-1">Generate and manage your study materials</p>
         </div>
         <Card className="border-destructive/50">
@@ -1161,7 +1161,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Study Studio</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Study Studio</h1>
         <p className="text-muted-foreground mt-1">Generate and manage your study materials</p>
       </div>
 
@@ -1776,7 +1776,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
         {/* RESEARCH NOTEBOOK TAB */}
         <TabsContent value="research" className="mt-4 space-y-6">
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Research Notebook</h1>
                 <p className="text-muted-foreground mt-1">
@@ -2098,7 +2098,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
               <TabsContent value="synthesis" className="mt-4">
                 {selectedNotebook ? (
                   <div className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
                       {[
                         {
                           type: "summary" as const,

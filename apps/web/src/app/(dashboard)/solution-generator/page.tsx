@@ -250,7 +250,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl flex items-center gap-2">
           <FileQuestion className="h-8 w-8 text-primary" />
           Document-to-Solution Engine
         </h1>
@@ -274,7 +274,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
         <TabsContent value="generate" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Left Panel - Input */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="min-w-0 space-y-6 lg:col-span-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -317,7 +317,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
 
                   <div className="space-y-4">
                     <Label>Answer Mode</Label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
                       {[
                         { value: "short", label: "Short Answer", desc: "Concise, direct answer", icon: Type },
                         { value: "exam", label: "Exam Oriented", desc: "Structured for exam responses", icon: LayoutTemplate },
@@ -326,7 +326,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
                         <Button
                           key={mode.value}
                           variant={answerMode === mode.value ? "default" : "outline"}
-                          className="flex-1 flex flex-col items-start gap-1 text-left p-4"
+                          className="w-full flex-col items-start gap-1 whitespace-normal p-4 text-left sm:flex-1"
                           onClick={() => setAnswerMode(mode.value as any)}
                         >
                           <mode.icon className="h-5 w-5" />
@@ -471,7 +471,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
             </div>
 
             {/* Right Panel - Preview */}
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               {generatedSolution ? (
                 <Card className="h-full">
                   <CardHeader>
@@ -609,7 +609,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
                     </ScrollArea>
 
                     <Separator className="my-4" />
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Button onClick={handleExportPDF} variant="outline" className="flex-1">
                         <Download className="mr-2 h-4 w-4" />
                         Export PDF
@@ -633,7 +633,7 @@ ${generatedSolution.citations.map((c, i) => `[${i + 1}] ${c.documentTitle}${c.pa
                     <p className="text-muted-foreground mt-2 max-w-xs">
                       Enter a question, select source documents, and click Generate to create a structured solution.
                     </p>
-                    <div className="mt-6 flex gap-2">
+                    <div className="mt-6 flex flex-wrap justify-center gap-2">
                       <Badge variant="outline">Short Answer</Badge>
                       <Badge variant="outline">Exam Oriented</Badge>
                       <Badge variant="outline">Detailed</Badge>

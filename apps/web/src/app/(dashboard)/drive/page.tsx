@@ -118,7 +118,7 @@ export default function DrivePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Personal Drive</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Personal Drive</h1>
         <p className="mt-1 text-muted-foreground">Connect Dropbox to browse and import files into ALEX.</p>
       </div>
 

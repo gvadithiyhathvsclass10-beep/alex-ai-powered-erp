@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, FolderKanban, UserCheck, Book, Trash2 } from "lucide-react"
+import { Plus, MessageSquare, Bot, Search, Settings, Loader2, AlertCircle, ChevronRight, ChevronLeft, Sparkles, Brain, Zap, FileText, Upload, ExternalLink, Wifi, WifiOff, CheckCircle2, History, GraduationCap, LayoutDashboard, ClipboardCheck, Calendar, FlaskConical, UserCheck, Book, Trash2 } from "lucide-react"
 import { formatRelativeTime } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -247,11 +247,15 @@ export default function AssistantPage() {
       {leftPanelOpen && (
         <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setLeftPanelOpen(false)} />
       )}
+      {/* Right panel backdrop on phones: it is an overlay there. */}
+      {rightPanelOpen && (
+        <button type="button" aria-label="Close utility panel" className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setRightPanelOpen(false)} />
+      )}
       {/* LEFT PANEL - Navigation & Conversation History */}
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 h-[100dvh] min-h-0 border-r bg-sidebar transition-transform duration-300 ease-out flex flex-col w-[min(20rem,88vw)] lg:w-80",
-          leftPanelOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-16"
+          leftPanelOpen ? "translate-x-0 max-lg:visible" : "-translate-x-full max-lg:invisible lg:visible lg:translate-x-0 lg:w-16"
         )}
         aria-label="Navigation & conversations"
       >
@@ -317,7 +321,7 @@ export default function AssistantPage() {
 
             <NavSection title="Academic" collapsed={!leftPanelOpen}>
               <NavLink
-                href="/dashboard/dashboard"
+                href="/dashboard"
                 icon={LayoutDashboard}
                 label="Dashboard"
                 isActive={pathname === "/dashboard" || pathname === "/dashboard/dashboard"}
@@ -331,10 +335,10 @@ export default function AssistantPage() {
                 collapsed={!leftPanelOpen}
               />
               <NavLink
-                href="/dashboard/assignments"
+                href="/dashboard/assessments"
                 icon={ClipboardCheck}
-                label="Assignments"
-                isActive={pathname.startsWith("/dashboard/assignments")}
+                label="Assessments"
+                isActive={pathname.startsWith("/dashboard/assessments")}
                 collapsed={!leftPanelOpen}
               />
               <NavLink
@@ -366,13 +370,6 @@ export default function AssistantPage() {
                 icon={Brain}
                 label="Study Studio"
                 isActive={pathname.startsWith("/dashboard/study-studio")}
-                collapsed={!leftPanelOpen}
-              />
-              <NavLink
-                href="/dashboard/projects"
-                icon={FolderKanban}
-                label="Projects"
-                isActive={pathname.startsWith("/dashboard/projects")}
                 collapsed={!leftPanelOpen}
               />
             </NavSection>
@@ -494,79 +491,78 @@ export default function AssistantPage() {
         leftPanelOpen ? "lg:ml-80" : "lg:ml-16"
       )}>
         {/* Top Bar with Provider Selector */}
-        <div className="flex h-14 items-center justify-between border-b border-border/50 px-4 sm:px-6 bg-background/80 backdrop-blur">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-            <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setLeftPanelOpen(true)} aria-label="Open navigation"><MessageSquare className="h-5 w-5" /></Button>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <h1 className="text-xl font-semibold text-foreground">AI Assistant</h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full bg-primary/20 text-primary border border-primary/30">
-                {useDocuments ? "Document Context" : "General Chat"}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
+          <Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={() => setLeftPanelOpen(true)} aria-label="Open navigation"><MessageSquare className="h-5 w-5" /></Button>
+
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+            <h1 className="truncate text-lg font-semibold text-foreground sm:text-xl">AI Assistant</h1>
+            <span className="hidden shrink-0 rounded-full border border-primary/30 bg-primary/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary sm:inline-flex">
+              {useDocuments ? "Document Context" : "General Chat"}
+            </span>
+          </div>
+
+          <div className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:ml-auto sm:w-auto sm:gap-3">
+            {/* Provider Selector */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+              <Label htmlFor="provider-select" className="hidden text-xs text-muted-foreground sm:block">Model</Label>
+              <Select value={selectedProviderId || activeProvider?.id || ""} onValueChange={handleProviderChange}>
+                <SelectTrigger id="provider-select" className="h-9 min-w-0 flex-1 input-futuristic sm:w-[200px] sm:flex-none">
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-xs text-muted-foreground">{p.model}</span>
+                        {p.isDefault && (
+                          <CheckCircle2 className="h-3 w-3 text-primary" />
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {providers.length === 0 && (
+                    <SelectItem value="" disabled>
+                      No providers configured
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Connection Status */}
+            <div className="hidden items-center gap-2 rounded-full border border-border/50 bg-secondary px-3 py-1.5 md:flex">
+              <div className={cn(
+                "flex h-2 w-2 rounded-full",
+                activeProvider?.isActive ? "bg-neon-green" : "bg-muted-foreground"
+              )} />
+              <span className="text-xs font-medium text-muted-foreground">
+                {activeProvider?.isActive ? "Connected" : "Disconnected"}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Provider Selector */}
-              <div className="flex items-center gap-2">
-                <Label htmlFor="provider-select" className="text-xs text-muted-foreground hidden sm:block">Model</Label>
-                <Select value={selectedProviderId || activeProvider?.id || ""} onValueChange={handleProviderChange}>
-                  <SelectTrigger id="provider-select" className="w-[200px] h-9 input-futuristic">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{p.name}</span>
-                          <span className="text-xs text-muted-foreground">{p.model}</span>
-                          {p.isDefault && (
-                            <CheckCircle2 className="h-3 w-3 text-primary" />
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {providers.length === 0 && (
-                      <SelectItem value="" disabled>
-                        No providers configured
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Document Context Toggle */}
+            <Button
+              variant={useDocuments ? "default" : "outline"}
+              size="sm"
+              className="shrink-0 gap-1"
+              onClick={() => setUseDocuments(!useDocuments)}
+              aria-label={useDocuments ? "Disable document context" : "Enable document context"}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span className="hidden text-xs sm:inline">{useDocuments ? "Documents Active" : "Add Documents"}</span>
+            </Button>
 
-              {/* Connection Status */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50">
-                <div className={cn(
-                  "flex h-2 w-2 rounded-full",
-                  activeProvider?.isActive ? "bg-neon-green" : "bg-muted-foreground"
-                )} />
-                <span className="text-xs font-medium text-muted-foreground">
-                  {activeProvider?.isActive ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-
-              {/* Document Context Toggle */}
-              <Button
-                variant={useDocuments ? "default" : "outline"}
-                size="sm"
-                className="gap-1"
-                onClick={() => setUseDocuments(!useDocuments)}
-                aria-label={useDocuments ? "Disable document context" : "Enable document context"}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                <span className="text-xs">{useDocuments ? "Documents Active" : "Add Documents"}</span>
-              </Button>
-
-              {/* Right Panel Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setRightPanelOpen(!rightPanelOpen)}
-                className="h-9 w-9 rounded-lg hover:bg-secondary"
-                aria-label={rightPanelOpen ? "Hide utility panel" : "Show utility panel"}
-              >
-                {rightPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </Button>
-            </div>
+            {/* Right Panel Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setRightPanelOpen(!rightPanelOpen)}
+              className="h-9 w-9 shrink-0 rounded-lg hover:bg-secondary"
+              aria-label={rightPanelOpen ? "Hide utility panel" : "Show utility panel"}
+            >
+              {rightPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
 
