@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { User, Shield, Bell, Palette, Save, Loader2 } from "lucide-react"
+import { User, Shield, Bell, Palette, Save, Loader2, Bot, Sparkles } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 
@@ -85,6 +85,7 @@ export default function SettingsPage() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
+          <TabsTrigger value="ai">AI Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4 space-y-6">
@@ -267,6 +268,34 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="ai" className="mt-4 space-y-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold">AI Settings</h2>
+              <p className="text-sm text-muted-foreground">Manage AI providers, models, and credentials</p>
+            </div>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground text-center py-8">
+                AI Settings has moved to its own page for better organization.
+              </p>
+              <div className="flex justify-center">
+                <Button asChild variant="default">
+                  <a href="/dashboard/ai-settings">
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Open AI Settings
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
     </div>
   )

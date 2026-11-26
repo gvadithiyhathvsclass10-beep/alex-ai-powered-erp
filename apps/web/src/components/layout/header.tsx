@@ -179,12 +179,6 @@ export function Header({ user, menuOpen = false, onMenuClick }: HeaderProps) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/ai-settings" className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-secondary">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <span className="text-foreground">AI Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
                 <Link href="/dashboard/settings" className="flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-secondary">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-foreground">Profile</span>

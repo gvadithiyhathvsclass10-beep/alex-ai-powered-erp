@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       'MISTRAL',
       'OPENROUTER',
       'TOGETHER_AI',
+      'FREELLM',
       'OTHER',
     ]
 

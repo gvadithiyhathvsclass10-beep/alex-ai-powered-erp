@@ -219,9 +219,9 @@ export default function AssistantPage() {
     if (!provider.model || provider.model === "Choose a model in AI Settings") {
       toast({
         title: "Choose a model first",
-        description: `Open AI Settings to select a chat model for ${provider.name}.`,
+        description: `Open Settings → AI Settings to select a chat model for ${provider.name}.`,
       })
-      router.push("/dashboard/ai-settings")
+      router.push("/dashboard/settings?tab=ai")
       return
     }
 
@@ -308,13 +308,6 @@ export default function AssistantPage() {
                 icon={FileText}
                 label="Documents"
                 isActive={pathname === "/dashboard/documents"}
-                collapsed={!leftPanelOpen}
-              />
-              <NavLink
-                href="/dashboard/ai-settings"
-                icon={Settings}
-                label="AI Settings"
-                isActive={pathname === "/dashboard/ai-settings"}
                 collapsed={!leftPanelOpen}
               />
             </NavSection>
@@ -627,10 +620,10 @@ export default function AssistantPage() {
                     <p className="text-sm text-muted-foreground">
                       Configure your API keys in the Settings page to enable AI features.
                     </p>
-                    <Button asChild variant="default" className="btn-primary-gradient" onClick={() => router.push("/dashboard/ai-settings")}>
+                    <Button asChild variant="default" className="btn-primary-gradient" onClick={() => router.push("/dashboard/settings?tab=ai")}>
                       <span>
                         <ExternalLink className="mr-2 h-4 w-4" />
-                        Go to AI Settings
+                        Go to Settings → AI Settings
                       </span>
                     </Button>
                   </div>

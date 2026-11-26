@@ -21,6 +21,12 @@ import {
   FileText,
   Monitor,
   Expand,
+  Minus,
+  Plus,
+  RotateCcw,
+  Move,
+  ArrowUpLeft,
+  ArrowDownRight,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { exportDiagramAsSvg, exportDiagramAsPng, exportDiagramAsPdf, DiagramExportData } from "@/lib/study-studio/export"
@@ -43,13 +49,13 @@ interface DiagramViewerProps {
 interface DiagramRendererProps {
   definition: DiagramDefinition
   className?: string
+  onSvgLoad?: (svg: string) => void
 }
 
-function DiagramRenderer({ definition, className }: DiagramRendererProps) {
+function DiagramRenderer({ definition, className, onSvgLoad }: DiagramRendererProps) {
   const [svg, setSvg] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
-  const containerRef = React.useRef<HTMLDivElement>(null)
   
   React.useEffect(() => {
     let mounted = true
@@ -92,7 +98,10 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
         })
         
         const { svg } = await mermaid.default.render('diagram-' + Date.now(), safeCode)
-        if (mounted) setSvg(svg)
+        if (mounted) {
+          setSvg(svg)
+          onSvgLoad?.(svg)
+        }
         return
       } catch (mermaidError) {
         console.warn('[DiagramViewer] Mermaid render failed, trying fallback:', mermaidError)
@@ -108,7 +117,10 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
             })
             
             const { svg } = await mermaid.render('diagram-' + Date.now(), safeCode)
-            if (mounted) setSvg(svg)
+            if (mounted) {
+              setSvg(svg)
+              onSvgLoad?.(svg)
+            }
             return
           } catch {}
         }
@@ -124,6 +136,7 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
         const svg = instance.renderString(code, { format: 'svg', engine: 'dot' })
         if (mounted && svg && svg.includes('<svg')) {
           setSvg(svg)
+          onSvgLoad?.(svg)
           return
         }
         throw new Error('Graphviz rendering failed')
@@ -141,7 +154,7 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
     return () => {
       mounted = false
     }
-  }, [definition])
+  }, [definition, onSvgLoad])
   
   if (loading) {
     return (
@@ -176,17 +189,11 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
   }
   
   const sanitizedSvg = sanitizeSvg(svg)
-  const hasViewBox = sanitizedSvg.includes('viewBox=')
   
   return (
     <div 
-      className={cn("w-full h-full min-h-[300px] overflow-auto", className)}
-      ref={containerRef}
-      dangerouslySetInnerHTML={{ 
-        __html: hasViewBox 
-          ? sanitizedSvg 
-          : sanitizedSvg.replace(/<svg([^>]*)>/, '<svg$1 style="width: 100%; height: auto; max-width: 100%;" preserveAspectRatio="xMidYMid meet">')
-      }}
+      className={cn("w-full h-full min-h-[300px]", className)}
+      dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
     />
   )
 }
@@ -269,6 +276,361 @@ function escapeXml(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
+interface PanZoomState {
+  scale: number
+  translateX: number
+  translateY: number
+  isPanning: boolean
+  panStartX: number
+  panStartY: number
+  panStartTranslateX: number
+  panStartTranslateY: number
+}
+
+const MIN_SCALE = 0.1
+const MAX_SCALE = 5
+const SCALE_STEP = 0.2
+
+function PanZoomContainer({
+  children,
+  className,
+  onFitToView,
+  viewBox,
+  width,
+  height,
+}: {
+  children: React.ReactNode
+  className?: string
+  onFitToView?: () => void
+  viewBox?: { x: number; y: number; width: number; height: number }
+  width: number | string
+  height: number | string
+}) {
+  const [state, setState] = React.useState<PanZoomState>({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isPanning: false,
+    panStartX: 0,
+    panStartY: 0,
+    panStartTranslateX: 0,
+    panStartTranslateY: 0,
+  })
+  
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const contentRef = React.useRef<HTMLDivElement>(null)
+  
+  const applyTransform = React.useCallback(() => {
+    if (contentRef.current) {
+      contentRef.current.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`
+      contentRef.current.style.transformOrigin = '0 0'
+    }
+  }, [state.translateX, state.translateY, state.scale])
+  
+  React.useEffect(() => {
+    applyTransform()
+  }, [applyTransform])
+  
+  const handleWheel = React.useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom with Ctrl/Cmd + wheel
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+      
+      const oldScale = state.scale
+      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale - e.deltaY * 0.001))
+      
+      // Adjust translation to zoom towards mouse position
+      const scaleRatio = newScale / oldScale
+      const newTranslateX = mouseX - (mouseX - state.translateX) * scaleRatio
+      const newTranslateY = mouseY - (mouseY - state.translateY) * scaleRatio
+      
+      setState(prev => ({
+        ...prev,
+        scale: newScale,
+        translateX: newTranslateX,
+        translateY: newTranslateY,
+      }))
+    } else {
+      // Pan with wheel (shift + wheel for horizontal)
+      const deltaX = e.shiftKey ? e.deltaY : e.deltaX
+      const deltaY = e.shiftKey ? 0 : e.deltaY
+      
+      setState(prev => ({
+        ...prev,
+        translateX: prev.translateX - deltaX,
+        translateY: prev.translateY - deltaY,
+      }))
+    }
+  }, [state.scale, state.translateX, state.translateY])
+  
+  const handleMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    if ((e.target as HTMLElement).closest('button')) return
+    
+    setState(prev => ({
+      ...prev,
+      isPanning: true,
+      panStartX: e.clientX,
+      panStartY: e.clientY,
+      panStartTranslateX: prev.translateX,
+      panStartTranslateY: prev.translateY,
+    }))
+  }, [])
+  
+  const handleMouseMove = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!state.isPanning) return
+    
+    setState(prev => ({
+      ...prev,
+      translateX: prev.panStartTranslateX + (e.clientX - prev.panStartX),
+      translateY: prev.panStartTranslateY + (e.clientY - prev.panStartY),
+    }))
+  }, [state.isPanning])
+  
+  const handleMouseUp = React.useCallback(() => {
+    setState(prev => ({ ...prev, isPanning: false }))
+  }, [])
+  
+  const handleKeyDown = React.useCallback((e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    
+    const panAmount = 50 / state.scale
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault()
+        setState(prev => ({ ...prev, translateX: prev.translateX + panAmount }))
+        break
+      case 'ArrowRight':
+        e.preventDefault()
+        setState(prev => ({ ...prev, translateX: prev.translateX - panAmount }))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setState(prev => ({ ...prev, translateY: prev.translateY + panAmount }))
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        setState(prev => ({ ...prev, translateY: prev.translateY - panAmount }))
+        break
+      case '0':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          setState(prev => ({ ...prev, scale: 1, translateX: 0, translateY: 0 }))
+        }
+        break
+      case 'f':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          onFitToView?.()
+        }
+        break
+    }
+  }, [state.scale, onFitToView])
+  
+  const zoomIn = React.useCallback(() => {
+    setState(prev => ({ ...prev, scale: Math.min(MAX_SCALE, prev.scale + SCALE_STEP) }))
+  }, [])
+  
+  const zoomOut = React.useCallback(() => {
+    setState(prev => ({ ...prev, scale: Math.max(MIN_SCALE, prev.scale - SCALE_STEP) }))
+  }, [])
+  
+  const resetZoom = React.useCallback(() => {
+    setState(prev => ({ ...prev, scale: 1, translateX: 0, translateY: 0 }))
+  }, [])
+  
+  const fitToView = React.useCallback(() => {
+    if (!contentRef.current || !containerRef.current || !viewBox) return
+    
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const contentRect = contentRef.current.getBoundingClientRect()
+    
+    if (contentRect.width === 0 || contentRect.height === 0) return
+    
+    const padding = 40
+    const scaleX = (containerRect.width - padding) / contentRect.width
+    const scaleY = (containerRect.height - padding) / contentRect.height
+    const newScale = Math.min(scaleX, scaleY, 1)
+    
+    const newTranslateX = (containerRect.width - contentRect.width * newScale) / 2
+    const newTranslateY = (containerRect.height - contentRect.height * newScale) / 2
+    
+    setState(prev => ({
+      ...prev,
+      scale: Math.max(MIN_SCALE, newScale),
+      translateX: newTranslateX,
+      translateY: newTranslateY,
+    }))
+  }, [viewBox])
+  
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    
+    const handleMouseMoveNative = (e: MouseEvent) => {
+      if (!state.isPanning) return
+      
+      setState(prev => ({
+        ...prev,
+        translateX: prev.panStartTranslateX + (e.clientX - prev.panStartX),
+        translateY: prev.panStartTranslateY + (e.clientY - prev.panStartY),
+      }))
+    }
+    
+    const handleMouseUpNative = () => {
+      setState(prev => ({ ...prev, isPanning: false }))
+    }
+    
+    const handleKeyDownNative = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      
+      const panAmount = 50 / state.scale
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          setState(prev => ({ ...prev, translateX: prev.translateX + panAmount }))
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          setState(prev => ({ ...prev, translateX: prev.translateX - panAmount }))
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setState(prev => ({ ...prev, translateY: prev.translateY + panAmount }))
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          setState(prev => ({ ...prev, translateY: prev.translateY - panAmount }))
+          break
+        case '0':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+            setState(prev => ({ ...prev, scale: 1, translateX: 0, translateY: 0 }))
+          }
+          break
+        case 'f':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+            onFitToView?.()
+          }
+          break
+      }
+    }
+    
+    container.addEventListener('mousemove', handleMouseMoveNative)
+    container.addEventListener('mouseup', handleMouseUpNative)
+    container.addEventListener('mouseleave', handleMouseUpNative)
+    window.addEventListener('keydown', handleKeyDownNative)
+    
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMoveNative)
+      container.removeEventListener('mouseup', handleMouseUpNative)
+      container.removeEventListener('mouseleave', handleMouseUpNative)
+      window.removeEventListener('keydown', handleKeyDownNative)
+    }
+  }, [state.isPanning, state.scale, onFitToView])
+  
+  return (
+    <div
+      ref={containerRef}
+      className={cn("relative overflow-hidden touch-none", className)}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      style={{ width, height }}
+      tabIndex={0}
+    >
+      <div
+        ref={contentRef}
+        style={{
+          width: viewBox?.width || 'auto',
+          height: viewBox?.height || 'auto',
+          minWidth: viewBox?.width || 'auto',
+          minHeight: viewBox?.height || 'auto',
+        }}
+      >
+        {children}
+      </div>
+      
+      {/* Zoom controls overlay */}
+      <div className="absolute bottom-4 right-4 flex flex-col gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 z-10" role="toolbar" aria-label="Zoom controls">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg shadow-md" 
+                onClick={zoomIn}
+                aria-label="Zoom in (Ctrl+Mousewheel)"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Zoom in</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg shadow-md" 
+                onClick={zoomOut}
+                aria-label="Zoom out (Ctrl+Mousewheel)"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Zoom out</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg shadow-md" 
+                onClick={resetZoom}
+                aria-label="Reset zoom (0)"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Reset zoom</TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg shadow-md" 
+                onClick={fitToView}
+                aria-label="Fit to view (Ctrl+F)"
+              >
+                <Move className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Fit to view</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+      
+      {/* Zoom level indicator */}
+      <div className="absolute bottom-4 left-4 opacity-0 transition-opacity group-hover:opacity-100 z-10">
+        <div className="bg-background/90 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs font-mono text-muted-foreground shadow-md border">
+          {Math.round(state.scale * 100)}%
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps>(({
   definition, 
   title, 
@@ -280,6 +642,8 @@ export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps
   const [activeTab, setActiveTab] = React.useState<string>('diagram')
   const [copied, setCopied] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
+  const [svgContent, setSvgContent] = React.useState<string | null>(null)
+  const [viewBox, setViewBox] = React.useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   
   const handleCopyCode = async () => {
@@ -327,11 +691,27 @@ export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps
     }
   }
   
+  const handleSvgLoad = React.useCallback((svg: string) => {
+    setSvgContent(svg)
+    
+    // Extract viewBox from SVG
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/i)
+    if (viewBoxMatch) {
+      const [, viewBoxStr] = viewBoxMatch
+      const parts = viewBoxStr.split(/\s+/).map(Number)
+      if (parts.length === 4) {
+        setViewBox({ x: parts[0], y: parts[1], width: parts[2], height: parts[3] })
+      }
+    }
+  }, [])
+  
+  const computedHeight = typeof height === 'number' ? `${height}px` : height
+  
   return (
     <div 
       ref={ref}
       className={cn("relative rounded-xl border bg-card flex flex-col", className)}
-      style={{ height: typeof height === 'number' ? `${height}px` : height }}
+      style={{ height: computedHeight }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
@@ -442,9 +822,17 @@ export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps
           </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="diagram" className="flex-1 p-0">
-          <div className="diagram-viewer h-full w-full p-4" style={{ overflow: 'auto' }} ref={containerRef}>
-            <DiagramRenderer definition={definition} />
+        <TabsContent value="diagram" className="flex-1 p-0 relative">
+          <div className="diagram-viewer h-full w-full p-2" ref={containerRef}>
+            <PanZoomContainer
+              viewBox={viewBox || undefined}
+              width={100}
+              height={100}
+              onFitToView={() => {}}
+              className="h-full w-full"
+            >
+              <DiagramRenderer definition={definition} onSvgLoad={handleSvgLoad} />
+            </PanZoomContainer>
           </div>
         </TabsContent>
         
@@ -470,7 +858,14 @@ export const DiagramViewer = React.forwardRef<HTMLDivElement, DiagramViewerProps
             </Button>
           </div>
           <div className="flex-1 overflow-auto p-4" onClick={e => e.stopPropagation()}>
-            <DiagramRenderer definition={definition} className="w-full h-full min-h-[600px]" />
+            <PanZoomContainer
+              viewBox={viewBox || undefined}
+              width={100}
+              height={100}
+              className="h-full w-full min-h-[600px]"
+            >
+              <DiagramRenderer definition={definition} className="w-full h-full" />
+            </PanZoomContainer>
           </div>
         </div>
       )}

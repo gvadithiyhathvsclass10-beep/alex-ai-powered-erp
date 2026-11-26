@@ -767,6 +767,7 @@ model AICredential {
   providerName String
   encryptedKey String
   keyHash      String
+  baseUrl      String?
   isActive     Boolean        @default(true)
   isDefault    Boolean        @default(false)
   models       Json?

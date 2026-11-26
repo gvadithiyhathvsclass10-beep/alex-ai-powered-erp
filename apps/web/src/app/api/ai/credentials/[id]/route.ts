@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { validateProviderModel, formatAIServiceErrorResponse } from '@/lib/ai/service'
+import { validateProviderModel, normalizeProviderBaseUrl, formatAIServiceErrorResponse } from '@/lib/ai/service'
 
 export async function PATCH(
   request: Request,
@@ -17,7 +17,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const { isActive, isDefault, models, usageLimit, providerName } = body
+    const { isActive, isDefault, models, usageLimit, providerName, baseUrl } = body
 
     if (isDefault === true) {
       await prisma.aICredential.updateMany({
@@ -41,6 +41,9 @@ export async function PATCH(
         ...(validatedModels !== undefined ? { models: validatedModels } : {}),
         ...(usageLimit !== undefined ? { usageLimit: usageLimit ? Number(usageLimit) : null } : {}),
         ...(providerName !== undefined ? { providerName: String(providerName).trim() } : {}),
+        ...(baseUrl !== undefined
+          ? { baseUrl: normalizeProviderBaseUrl(credential.provider, baseUrl) || null }
+          : {}),
       },
     })
 
@@ -48,6 +51,7 @@ export async function PATCH(
       id: updated.id,
       provider: updated.provider,
       providerName: updated.providerName,
+      baseUrl: updated.baseUrl,
       isActive: updated.isActive,
       isDefault: updated.isDefault,
       models: updated.models,

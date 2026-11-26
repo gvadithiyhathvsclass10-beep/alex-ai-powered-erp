@@ -21,6 +21,7 @@ export async function GET() {
       id: c.id,
       provider: c.provider,
       providerName: c.providerName || SUPPORTED_AI_PROVIDERS[c.provider]?.name || c.provider,
+      baseUrl: c.baseUrl || null,
       isActive: c.isActive,
       isDefault: c.isDefault,
       models: Array.isArray(c.models) ? c.models : [],
@@ -49,10 +50,10 @@ export async function POST(request: Request) {
       provider,
       providerName,
       apiKey,
+      baseUrl,
       models,
       isDefault,
       usageLimit,
-      baseUrl,
     })
 
     return NextResponse.json(saved)

@@ -174,6 +174,8 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
     name: 'FreeLLM',
     defaultChatModel: process.env.FREELLM_DEFAULT_MODEL || 'openai/gpt-oss-120b',
     models: [
+      'auto',
+      'fusion',
       'openai/gpt-oss-120b',
       'openai/gpt-oss-20b',
       'qwen/qwen3.6-27b',
@@ -285,6 +287,9 @@ const PROVIDER_ALIASES: Record<string, PrismaAIProviderType> = {
   openrouter: 'OPENROUTER',
   together: 'TOGETHER_AI',
   together_ai: 'TOGETHER_AI',
+  freellm: 'FREELLM',
+  free_llm: 'FREELLM',
+  freellmapi: 'FREELLM',
   other: 'OTHER',
 }
 
@@ -414,6 +419,7 @@ export function validateProviderModel(
     (provider === 'ANTHROPIC' && /^claude-/.test(requested)) ||
     (provider === 'MISTRAL' && /^(mistral-|open-mistral|codestral|pixtral)/.test(requested)) ||
     (provider === 'GROQ' && /^(llama|mixtral|gemma|qwen|deepseek)/.test(requested)) ||
+    provider === 'FREELLM' ||
     provider === 'OTHER'
   ) {
     return requested
@@ -684,18 +690,90 @@ export interface ResolvedAIConfig {
   credential: AICredential | null
 }
 
-function getProviderBaseUrl(provider: PrismaAIProviderType, customBaseUrl?: string): string {
-  if (customBaseUrl && customBaseUrl.trim()) {
-    return customBaseUrl.trim().replace(/\/+$/, '')
+export function resolveProviderBaseUrl(
+  provider: PrismaAIProviderType,
+  customBaseUrl?: string | null
+): string {
+  const raw = customBaseUrl && customBaseUrl.trim()
+    ? customBaseUrl.trim()
+    : (() => {
+        const meta = SUPPORTED_AI_PROVIDERS[provider]
+        return (
+          process.env[meta.baseUrlEnv] ||
+          (provider === 'OTHER' ? process.env.CUSTOM_AI_BASE_URL || process.env.FREELLM_BASE_URL : undefined) ||
+          process.env.AI_BASE_URL ||
+          meta.defaultBaseUrl
+        )
+      })()
+  return normalizeResolvedBaseUrl(provider, raw)
+}
+
+function normalizeResolvedBaseUrl(provider: PrismaAIProviderType, raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '')
+  // On some Linux/Docker hosts `localhost` resolves to IPv6 first while the
+  // FreeLLM container only answers on IPv4, causing long hangs. The loopback
+  // address is equivalent and reliable for the self-hosted gateway.
+  if (provider === 'FREELLM') {
+    try {
+      const parsed = new URL(trimmed)
+      if (parsed.hostname === 'localhost') {
+        parsed.hostname = '127.0.0.1'
+        return parsed.toString().replace(/\/+$/, '')
+      }
+    } catch {
+      // Fall through to the raw value; callers validate user input separately.
+    }
   }
-  const meta = SUPPORTED_AI_PROVIDERS[provider]
-  const fromEnv = process.env[meta.baseUrlEnv] ||
-    (provider === 'OTHER' ? process.env.CUSTOM_AI_BASE_URL : undefined) ||
-    process.env.AI_BASE_URL
-  if (fromEnv && fromEnv.trim()) {
-    return fromEnv.trim().replace(/\/+$/, '')
+  return trimmed
+}
+
+/**
+ * Validates and normalizes a user-supplied OpenAI-compatible base URL.
+ * Returns undefined when no value was supplied so callers can fall back to
+ * provider defaults or environment configuration.
+ */
+export function normalizeProviderBaseUrl(
+  provider: string,
+  rawBaseUrl: unknown
+): string | undefined {
+  if (rawBaseUrl === undefined || rawBaseUrl === null) return undefined
+  const value = String(rawBaseUrl).trim()
+  if (!value) return undefined
+  if (value.length > 500) {
+    throw new AIConfigError('Base URL is too long (maximum 500 characters).', provider)
   }
-  return meta.defaultBaseUrl
+  if (/\s/.test(value)) {
+    throw new AIConfigError('Base URL must not contain spaces or whitespace.', provider)
+  }
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new AIConfigError(
+      'Base URL must be a valid absolute URL, for example http://localhost:3001/v1.',
+      provider
+    )
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new AIConfigError('Base URL must use http:// or https://.', provider)
+  }
+  if (parsed.username || parsed.password) {
+    throw new AIConfigError('Base URL must not contain embedded credentials.', provider)
+  }
+  const normalized = value.replace(/\/+$/, '')
+  if (normalizedProviderSafe(provider) === 'FREELLM' && parsed.hostname === 'localhost') {
+    parsed.hostname = '127.0.0.1'
+    return parsed.toString().replace(/\/+$/, '')
+  }
+  return normalized
+}
+
+function normalizedProviderSafe(provider: string): string {
+  try {
+    return normalizeProvider(provider)
+  } catch {
+    return provider
+  }
 }
 
 function isMockFallbackAllowed(explicitProvider?: string): boolean {
@@ -733,7 +811,7 @@ export async function resolveAIConfig(options: {
       provider: normalizedProvider,
       model: validatedModel,
       apiKey: cleanKey,
-      baseUrl: getProviderBaseUrl(normalizedProvider, options.baseUrl),
+      baseUrl: resolveProviderBaseUrl(normalizedProvider, options.baseUrl),
       credential: null,
     }
   }
@@ -773,7 +851,7 @@ export async function resolveAIConfig(options: {
       provider: cred.provider,
       model: validatedModel,
       apiKey,
-      baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
+      baseUrl: resolveProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
       credential: cred,
     }
   }
@@ -844,7 +922,7 @@ export async function resolveAIConfig(options: {
         provider: cred.provider,
         model: validatedModel,
         apiKey,
-        baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
+baseUrl: resolveProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
         credential: cred,
       }
     }
@@ -854,6 +932,7 @@ export async function resolveAIConfig(options: {
   const providerOrder: PrismaAIProviderType[] = requestedProvider
     ? [requestedProvider]
     : [
+        'FREELLM',
         'OPENAI',
         'GOOGLE_GEMINI',
         'ANTHROPIC',
@@ -876,7 +955,7 @@ export async function resolveAIConfig(options: {
         provider: prov,
         model: validatedModel,
         apiKey: envVal.trim(),
-        baseUrl: getProviderBaseUrl(prov, options.baseUrl),
+        baseUrl: resolveProviderBaseUrl(prov, options.baseUrl),
         credential: null,
       }
     }
@@ -947,6 +1026,7 @@ export interface TextGenerationOutput {
   model: string
   tokenUsage: TokenUsage
   latencyMs: number
+  finishReason?: string
 }
 
 export async function generateText(input: TextGenerationInput): Promise<TextGenerationOutput> {
@@ -983,6 +1063,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
 
   let text = ''
   let tokenUsage: TokenUsage = { prompt: 0, completion: 0, total: 0 }
+  let finishReason: string | undefined
 
   if (config.provider === 'GOOGLE_GEMINI') {
     const combinedSystem = input.systemPrompt ? `${input.systemPrompt}\n\n` : ''
@@ -1027,6 +1108,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
 
     const data = await res.json()
     text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    finishReason = data.candidates?.[0]?.finishReason
     tokenUsage = {
       prompt: data.usageMetadata?.promptTokenCount ?? 0,
       completion: data.usageMetadata?.candidatesTokenCount ?? 0,
@@ -1071,6 +1153,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
 
     const data = await res.json()
     text = data.content?.[0]?.text || ''
+    finishReason = data.stop_reason
     const promptTokens = data.usage?.input_tokens ?? 0
     const completionTokens = data.usage?.output_tokens ?? 0
     tokenUsage = {
@@ -1103,7 +1186,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       max_tokens: maxTokens,
       stream: false,
     }
-    if (input.jsonMode && ['OPENAI', 'GROQ', 'MISTRAL'].includes(config.provider)) {
+    if (input.jsonMode && ['OPENAI', 'GROQ', 'MISTRAL', 'FREELLM'].includes(config.provider)) {
       payload.response_format = { type: 'json_object' }
     }
 
@@ -1136,6 +1219,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
       : Array.isArray(content)
         ? content.map((part: any) => typeof part === 'string' ? part : part?.text || '').join('')
         : ''
+    finishReason = data.choices?.[0]?.finish_reason
     tokenUsage = {
       prompt: data.usage?.prompt_tokens ?? 0,
       completion: data.usage?.completion_tokens ?? 0,
@@ -1159,6 +1243,7 @@ export async function generateText(input: TextGenerationInput): Promise<TextGene
     model: config.model,
     tokenUsage,
     latencyMs: Date.now() - start,
+    finishReason,
   }
 }
 
@@ -1182,80 +1267,331 @@ export interface StructuredOutputInput<T> {
 }
 
 export function extractJsonFromModelOutput(rawText: string): any {
-  const trimmed = rawText.trim()
-  
-  // Strip ```json ... ``` fences if present
-  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  let candidate = fencedMatch ? fencedMatch[1].trim() : trimmed
+  if (typeof rawText !== 'string' || !rawText.trim()) {
+    throw new Error('Model returned an empty response instead of JSON')
+  }
 
-  // Try direct parse first
+  const text = rawText.replace(/^\uFEFF/, '').trim()
+  const candidates: string[] = []
+  const addCandidate = (value: string | undefined | null) => {
+    const candidate = value?.trim()
+    if (candidate && !candidates.includes(candidate)) candidates.push(candidate)
+  }
+
+  // Prefer fenced JSON blocks, but also handle a fence the model forgot to close.
+  const fencePattern = /```(?:json|JSON)?\s*\r?\n?([\s\S]*?)```/g
+  let fenceMatch: RegExpExecArray | null
+  while ((fenceMatch = fencePattern.exec(text)) !== null) {
+    addCandidate(fenceMatch[1])
+  }
+  const unclosedFence = text.match(/```(?:json|JSON)?\s*\r?\n?([\s\S]*)$/)
+  if (unclosedFence) addCandidate(unclosedFence[1])
+  addCandidate(text)
+
+  let lastError: Error | null = null
+  for (const candidate of candidates) {
+    const parsed = tryParseJsonCandidate(candidate)
+    if (parsed.ok) return parsed.value
+    lastError = parsed.error || lastError
+  }
+
+  throw new Error(
+    `Response did not contain valid JSON${lastError?.message ? ` (${lastError.message})` : ''}`
+  )
+}
+
+interface JsonParseResult {
+  ok: boolean
+  value?: any
+  error?: Error
+}
+
+function tryParseJsonCandidate(candidate: string): JsonParseResult {
+  const direct = tryParseJsonValue(candidate)
+  if (direct.ok) return direct
+
+  const cleaned = cleanJsonCandidate(candidate)
+  const cleanedDirect = tryParseJsonValue(cleaned)
+  if (cleanedDirect.ok) return cleanedDirect
+
+  const start = findJsonStart(cleaned)
+  if (start === -1) return cleanedDirect
+
+  const source = cleaned.slice(start)
+  const matchingEnd = findMatchingJsonEnd(source)
+  const balanced = matchingEnd === -1 ? source : source.slice(0, matchingEnd + 1)
+
+  const balancedParse = tryParseJsonValue(balanced)
+  if (balancedParse.ok) return balancedParse
+
+  // The model may have been cut off by the token limit. Close open strings and
+  // containers, then progressively drop an incomplete trailing property.
+  let truncated = balanced
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const repaired = closeOpenJson(truncated)
+    const repairedParse = tryParseJsonValue(repaired)
+    if (repairedParse.ok) return repairedParse
+
+    const cut = Math.max(
+      truncated.lastIndexOf(','),
+      truncated.lastIndexOf('{'),
+      truncated.lastIndexOf('[')
+    )
+    if (cut <= 0) break
+    truncated = truncated.slice(0, cut).replace(/,\s*$/, '')
+  }
+
+  return balancedParse
+}
+
+function tryParseJsonValue(text: string): JsonParseResult {
   try {
-    return JSON.parse(candidate)
-  } catch {
-    // Try to clean up common issues
-    candidate = cleanJsonCandidate(candidate)
-    
-    try {
-      return JSON.parse(candidate)
-    } catch {
-      // Try locating the outermost JSON object or array
-      const objStart = candidate.indexOf('{')
-      const objEnd = candidate.lastIndexOf('}')
-      const arrStart = candidate.indexOf('[')
-      const arrEnd = candidate.lastIndexOf(']')
-
-      if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
-        const jsonStr = candidate.slice(objStart, objEnd + 1)
-        try {
-          return JSON.parse(cleanJsonCandidate(jsonStr))
-        } catch {
-          // Continue to array attempt
-        }
-      }
-      if (arrStart !== -1 && arrEnd > arrStart) {
-        const jsonStr = candidate.slice(arrStart, arrEnd + 1)
-        try {
-          return JSON.parse(cleanJsonCandidate(jsonStr))
-        } catch {
-          // Continue to throw
-        }
-      }
-      throw new Error('Response did not contain valid JSON')
+    return { ok: true, value: JSON.parse(text) }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error(String(error)),
     }
   }
 }
 
-function cleanJsonCandidate(text: string): string {
-  let cleaned = text
-  
-  // Remove leading/trailing non-JSON text (explanatory text before/after JSON)
-  const firstBrace = cleaned.indexOf('{')
-  const firstBracket = cleaned.indexOf('[')
-  const firstJsonChar = firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket) ? firstBrace : firstBracket
-  if (firstJsonChar > 0) {
-    cleaned = cleaned.slice(firstJsonChar)
+function findJsonStart(text: string): number {
+  const objectStart = text.indexOf('{')
+  const arrayStart = text.indexOf('[')
+  if (objectStart === -1) return arrayStart
+  if (arrayStart === -1) return objectStart
+  return Math.min(objectStart, arrayStart)
+}
+
+/**
+ * Returns the index of the closing brace/bracket matching the JSON value that
+ * starts at index 0, or -1 when the value is truncated. Strings and escapes are
+ * respected so braces inside labels do not end the scan early.
+ */
+function findMatchingJsonEnd(text: string): number {
+  const stack: string[] = []
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '"') inString = false
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+    } else if (char === '{') {
+      stack.push('}')
+    } else if (char === '[') {
+      stack.push(']')
+    } else if (char === '}' || char === ']') {
+      if (stack[stack.length - 1] !== char) return -1
+      stack.pop()
+      if (stack.length === 0) return index
+    }
   }
-  
+
+  return -1
+}
+
+function closeOpenJson(text: string): string {
+  let repaired = ''
+  const stack: string[] = []
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+
+    if (inString) {
+      if (escaped) {
+        repaired += char
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        repaired += char
+        escaped = true
+        continue
+      }
+      if (char === '"') {
+        repaired += char
+        inString = false
+        continue
+      }
+      if (char === '\n') {
+        repaired += '\\n'
+        continue
+      }
+      if (char === '\r') {
+        repaired += '\\r'
+        continue
+      }
+      if (char === '\t') {
+        repaired += '\\t'
+        continue
+      }
+      if (char.charCodeAt(0) < 0x20) {
+        repaired += `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+        continue
+      }
+      repaired += char
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      repaired += char
+      continue
+    }
+    if (char === '{') {
+      stack.push('}')
+    } else if (char === '[') {
+      stack.push(']')
+    } else if (char === '}' || char === ']') {
+      if (stack[stack.length - 1] === char) stack.pop()
+    }
+    repaired += char
+  }
+
+  if (inString) repaired += '"'
+  repaired = repaired.trimEnd().replace(/,\s*$/, '')
+  if (/:\s*$/.test(repaired)) repaired += 'null'
+
+  return repaired + stack.reverse().join('')
+}
+
+function cleanJsonCandidate(text: string): string {
+  let cleaned = text.trim()
+
+  // Strip a BOM and any complete/unclosed code fence wrappers.
+  cleaned = cleaned.replace(/^\uFEFF/, '')
+  const fenced = cleaned.match(/```(?:json|JSON)?\s*\r?\n?([\s\S]*?)```/i)
+  if (fenced) cleaned = fenced[1].trim()
+  cleaned = cleaned.replace(/^```(?:json|JSON)?\s*/i, '').replace(/```\s*$/i, '').trim()
+
+  // Remove prose before/after the JSON payload.
+  const start = findJsonStart(cleaned)
+  if (start > 0) cleaned = cleaned.slice(start)
   const lastBrace = cleaned.lastIndexOf('}')
   const lastBracket = cleaned.lastIndexOf(']')
-  const lastJsonChar = lastBrace !== -1 && (lastBracket === -1 || lastBrace > lastBracket) ? lastBrace : lastBracket
+  const lastJsonChar = Math.max(lastBrace, lastBracket)
   if (lastJsonChar !== -1 && lastJsonChar < cleaned.length - 1) {
     cleaned = cleaned.slice(0, lastJsonChar + 1)
   }
-  
-  // Fix common issues:
-  // 1. Unescaped control characters in strings
-  // 2. Trailing commas
-  // 3. Single quotes instead of double quotes (for simple cases)
+
+  cleaned = removeJsonComments(cleaned)
+  cleaned = escapeControlCharsInStrings(cleaned)
   cleaned = cleaned
-    .replace(/,\s*}/g, '}')
-    .replace(/,\s*]/g, ']')
-    // Fix newlines in strings
-    .replace(/"([^"]*)\n([^"]*)"/g, '"$1\\n$2"')
-    // Fix unescaped quotes in strings (basic attempt)
-    .replace(/:"([^"]*?)([^\\])"([^",}\]\s])/g, ':"$1$2\\"$3')
-  
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/([{,]\s*)([A-Za-z_$][\w$.-]*)(\s*:)/g, '$1"$2"$3')
+
   return cleaned
+}
+
+function removeJsonComments(text: string): string {
+  let output = ''
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+    const next = text[index + 1]
+
+    if (inString) {
+      output += char
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      output += char
+      continue
+    }
+    if (char === '/' && next === '/') {
+      while (index < text.length && text[index] !== '\n') index++
+      output += '\n'
+      continue
+    }
+    if (char === '/' && next === '*') {
+      index += 2
+      while (index < text.length && !(text[index] === '*' && text[index + 1] === '/')) index++
+      index++
+      continue
+    }
+    output += char
+  }
+
+  return output
+}
+
+function escapeControlCharsInStrings(text: string): string {
+  let output = ''
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+
+    if (inString) {
+      if (escaped) {
+        output += char
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        output += char
+        escaped = true
+        continue
+      }
+      if (char === '"') {
+        output += char
+        inString = false
+        continue
+      }
+      if (char === '\n') {
+        output += '\\n'
+        continue
+      }
+      if (char === '\r') {
+        output += '\\r'
+        continue
+      }
+      if (char === '\t') {
+        output += '\\t'
+        continue
+      }
+      if (char.charCodeAt(0) < 0x20) {
+        output += `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+        continue
+      }
+      output += char
+      continue
+    }
+
+    if (char === '"') inString = true
+    output += char
+  }
+
+  return output
 }
 
 export async function generateStructuredOutput<T = any>(
@@ -1270,16 +1606,20 @@ export async function generateStructuredOutput<T = any>(
 }> {
   const fullSystemPrompt = `${input.systemPrompt}\n\nYou MUST respond with valid JSON only (no markdown prose outside JSON) matching this schema:\n${input.schemaDescription}`
 
-  // Increase maxTokens for providers known to produce verbose output (Nemotron, etc.)
-  let maxTokens = input.maxTokens ?? 3000
+  // Increase maxTokens for providers known to produce verbose output. FreeLLM
+  // routes to reasoning models whose thinking tokens count toward the limit, so
+  // structured responses need more headroom before they are cut off.
+  let maxTokens = input.maxTokens ?? 4000
   const providerUpper = (input.provider || '').toUpperCase()
   if (providerUpper === 'NVIDIA_NEMOTRON' || providerUpper === 'NEMOTRON') {
     maxTokens = Math.max(maxTokens, 8000)
   }
+  if (providerUpper === 'FREELLM' || providerUpper === 'FREELM') {
+    maxTokens = Math.max(maxTokens, 8000)
+  }
 
-  const result = await generateText({
+  const generationInput = {
     userId: input.userId,
-    prompt: input.prompt,
     systemPrompt: fullSystemPrompt,
     provider: input.provider,
     model: input.model,
@@ -1288,32 +1628,69 @@ export async function generateStructuredOutput<T = any>(
     baseUrl: input.baseUrl,
     temperature: input.temperature ?? 0.2,
     maxTokens,
-    taskType: 'structured',
+    taskType: 'structured' as const,
     jsonMode: true,
+  }
+
+  const result = await generateText({
+    ...generationInput,
+    prompt: input.prompt,
   })
 
   let parsed: any
-  let parseError: Error | null = null
-  
-  // Try parsing with retries for malformed JSON
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      parsed = extractJsonFromModelOutput(result.text)
-      parseError = null
-      break
-    } catch (err) {
-      parseError = err instanceof Error ? err : new Error(String(err))
-      if (attempt < 2) {
-        // On retry, we could try to fix the JSON, but for now just retry with same output
-        // In a more sophisticated version, we'd send the error back to the model
-        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)))
-      }
+  let validationError: Error | null = null
+
+  try {
+    parsed = extractJsonFromModelOutput(result.text)
+    parsed = input.validate ? input.validate(parsed) : parsed
+    return {
+      data: parsed as T,
+      rawText: result.text,
+      provider: result.provider,
+      model: result.model,
+      tokenUsage: result.tokenUsage,
+      latencyMs: result.latencyMs,
     }
+  } catch (error) {
+    validationError = error instanceof Error ? error : new Error(String(error))
   }
-  
-  if (parseError) {
+
+  // One bounded repair pass: send the malformed/truncated payload back to the
+  // model with the concrete validation error. Never return partially parsed data.
+  const repairMaxTokens = Math.min(Math.max(maxTokens * 2, 6000), 16000)
+  const truncated = result.finishReason === 'length'
+  const repairPrompt = [
+    'Your previous response could not be used as valid structured output.',
+    truncated ? 'It was cut off before the JSON value was complete.' : '',
+    `Validation error: ${(validationError?.message || 'Invalid JSON').slice(0, 2000)}`,
+    '',
+    'Original task:',
+    input.prompt.slice(0, 8000),
+    '',
+    'Previous response (may be truncated):',
+    '"""',
+    result.text.slice(0, 12000),
+    '"""',
+    '',
+    'Return the COMPLETE corrected JSON value for the original task. Output only JSON, with no prose or markdown fences.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  let repaired
+  try {
+    repaired = await generateText({
+      ...generationInput,
+      prompt: repairPrompt,
+      temperature: 0,
+      maxTokens: repairMaxTokens,
+    })
+    parsed = extractJsonFromModelOutput(repaired.text)
+    parsed = input.validate ? input.validate(parsed) : parsed
+  } catch (repairError) {
+    const repairMessage = repairError instanceof Error ? repairError.message : String(repairError)
     throw new AIServiceError(
-      `Failed to parse structured JSON output from ${result.provider} (${result.model}) after retries: ${parseError.message}`,
+      `Failed to parse structured JSON output from ${result.provider} (${result.model}) after an automatic repair attempt: ${validationError?.message || 'invalid JSON'}. Repair error: ${repairMessage}`,
       502,
       'INVALID_STRUCTURED_OUTPUT',
       result.provider,
@@ -1321,14 +1698,13 @@ export async function generateStructuredOutput<T = any>(
     )
   }
 
-  const validated = input.validate ? input.validate(parsed) : (parsed as T)
   return {
-    data: validated,
-    rawText: result.text,
-    provider: result.provider,
-    model: result.model,
-    tokenUsage: result.tokenUsage,
-    latencyMs: result.latencyMs,
+    data: parsed as T,
+    rawText: repaired.text,
+    provider: repaired.provider,
+    model: repaired.model,
+    tokenUsage: repaired.tokenUsage,
+    latencyMs: result.latencyMs + repaired.latencyMs,
   }
 }
 
@@ -1465,7 +1841,7 @@ export async function testProviderConnection(
       systemPrompt: 'You are an API connectivity health check assistant. Keep your reply concise.',
       maxTokens: 64,
       temperature: 0,
-      timeoutMs: 15000,
+      timeoutMs: 30000,
     })
   } catch (error) {
     // Re-throw with more context
@@ -1513,6 +1889,7 @@ export async function saveUserAICredential(input: {
   provider: string
   providerName?: string
   apiKey: string
+  baseUrl?: string | null
   models?: string[]
   isDefault?: boolean
   usageLimit?: number | null
@@ -1521,6 +1898,7 @@ export async function saveUserAICredential(input: {
   const normalizedProvider = normalizeProvider(input.provider)
   const cleanKey = validateApiKeyFormat(normalizedProvider, input.apiKey)
   const meta = SUPPORTED_AI_PROVIDERS[normalizedProvider]
+  const baseUrl = normalizeProviderBaseUrl(normalizedProvider, input.baseUrl)
 
   const validatedModels: string[] = []
   if (Array.isArray(input.models) && input.models.length > 0) {
@@ -1602,6 +1980,7 @@ export async function saveUserAICredential(input: {
     provider: credential.provider,
     providerName: credential.providerName,
     maskedKey: maskApiKey(cleanKey),
+    baseUrl: credential.baseUrl,
     isActive: credential.isActive,
     isDefault: credential.isDefault,
     models: credential.models,
