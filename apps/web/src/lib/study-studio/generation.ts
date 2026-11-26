@@ -303,7 +303,7 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
             provider: input.provider,
             model: input.model,
             systemPrompt:
-              'You are ALEX, an academic diagram generator. Create a clear Mermaid flowchart or sequence diagram illustrating the core process or architecture in the provided content. CRITICAL: Every element in the diagram MUST be grounded in the provided source text. Do not invent concepts, steps, or relationships not present in the source. Include sourceReferences array mapping diagram elements to source chunk indices.',
+              'You are ALEX, an academic diagram generator. Create a clear Mermaid flowchart or sequence diagram illustrating the core process or architecture in the provided content. CRITICAL: Every element in the diagram MUST be grounded in the provided source text. Do not invent concepts, steps, or relationships not present in the source. Include sourceReferences array mapping diagram elements to source chunk indices. Quote every flowchart node label with double quotes inside its shape, for example A["Architecture (Source 2)"]. Never place raw square brackets, quotation marks, or line breaks inside node labels; write citations as (Source 2), not [Source 2]. Return valid Mermaid syntax only in code.',
             schemaDescription: `{
   "type": "mermaid",
   "title": "Diagram title",
@@ -315,7 +315,8 @@ export async function generateStudyMaterial(context: GenerationContext): Promise
 }`,
             prompt: `Generate a ${input.customType || 'mermaid'} diagram for "${docTitle}" strictly based on the provided sources:\n\n${contextText}\n\nRequirements:
 - Only include concepts, steps, and relationships explicitly present in the source text
-- Cite source chunks using [Source X] references in node labels where possible
+- Cite source chunks using (Source X) references in node labels where possible
+- Quote node labels and keep citation brackets out of Mermaid node syntax
 - If the source does not contain enough information for a complete diagram, indicate this in the diagram (e.g., add a node "Insufficient source data for this section")
 - Return sourceReferences array mapping element IDs to source chunk numbers (1-indexed)`,
             validate: (parsed) => {

@@ -21,6 +21,28 @@ interface UseSpeechRecognitionReturn {
   isSupported: boolean
 }
 
+interface SpeechRecognitionResultEventLike {
+  resultIndex: number
+  results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>
+}
+
+interface SpeechRecognitionErrorEventLike { error: string }
+
+interface SpeechRecognitionLike {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null
+  onend: (() => void) | null
+  start(): void
+  stop(): void
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+type SpeechWindow = Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }
+
 export function useSpeechRecognition({
   onResult,
   onEnd,
@@ -33,12 +55,14 @@ export function useSpeechRecognition({
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSupported, setIsSupported] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const isListeningRef = useRef(false)
 
   // Check browser support
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognition = (window as SpeechWindow).SpeechRecognition || (window as SpeechWindow).webkitSpeechRecognition
+    // Browser capability is external state; update it once the client mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSupported(!!SpeechRecognition)
   }, [])
 
@@ -54,7 +78,7 @@ export function useSpeechRecognition({
 
     if (isListeningRef.current) return
 
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognition = (window as SpeechWindow).SpeechRecognition || (window as SpeechWindow).webkitSpeechRecognition
     const recognition = new SpeechRecognition()
     recognitionRef.current = recognition
 
@@ -68,7 +92,7 @@ export function useSpeechRecognition({
       setError(null)
     }
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: SpeechRecognitionResultEventLike) => {
       let finalTranscript = ""
       let interimTranscript = ""
 
@@ -89,7 +113,7 @@ export function useSpeechRecognition({
       }
     }
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       const errorMessage = getErrorMessage(event.error)
       setError(errorMessage)
       if (onError) onError(errorMessage)
@@ -105,7 +129,7 @@ export function useSpeechRecognition({
 
     try {
       recognition.start()
-    } catch (err) {
+    } catch {
       const errorMessage = "Failed to start speech recognition"
       setError(errorMessage)
       if (onError) onError(errorMessage)

@@ -19,6 +19,13 @@ const webRoot = path.resolve(__dirname, '..')
 const srcRoot = path.join(webRoot, 'src')
 const repoRoot = path.resolve(webRoot, '../..')
 
+test('Study Studio keeps the existing Important Questions workspace enabled', () => {
+  const content = fs.readFileSync(path.join(srcRoot, 'app/(dashboard)/study-studio/StudyStudioContent.tsx'), 'utf8')
+  assert.match(content, /import \{ ImportantQuestionsWorkspace \} from/)
+  assert.match(content, /<ImportantQuestionsWorkspace[\s\S]*?initialDocuments=\{iqDocuments\}/)
+  assert.doesNotMatch(content, /ImportantQuestionsComingSoon/)
+})
+
 // In-memory stateful database store for realistic route & integration testing
 const dbState = {
   currentUser: {
@@ -1106,6 +1113,7 @@ test('9. Document Studio, Solution Generator, DiagramRenderer, and PPTX Extracto
   const docGenRoute = require(path.join(srcRoot, 'app/api/documents/generate/route.ts'))
   const solGenRoute = require(path.join(srcRoot, 'app/api/solutions/generate/route.ts'))
   const diagramRendererMod = require(path.join(srcRoot, 'lib/diagrams/renderer.ts'))
+  const mermaidMod = require(path.join(srcRoot, 'lib/diagrams/mermaid.ts'))
   const extractorsMod = require(path.join(srcRoot, 'lib/document-processing/extractors.ts'))
 
   // Document Studio generation
@@ -1139,6 +1147,11 @@ test('9. Document Studio, Solution Generator, DiagramRenderer, and PPTX Extracto
   assert.ok(solRes.body.citations.length > 0)
 
   // DiagramRenderer in-process SVG rendering
+  const repairedMermaid = mermaidMod.prepareMermaidDefinition('```mermaid\nflowchart TD\n  K[Technical Architecture [Source 2]] --> W[Website & chat widget [Source 2]]\n  W --> P[Welcome Pop-up "Hello! I\'m Zeno"]\n```')
+  assert.match(repairedMermaid, /K\["Technical Architecture #91;Source 2#93;"\]/)
+  assert.match(repairedMermaid, /W\["Website #38; chat widget #91;Source 2#93;"\]/)
+  assert.match(repairedMermaid, /P\["Welcome Pop-up #quot;Hello! I\'m Zeno#quot;"\]/)
+  assert.equal(mermaidMod.prepareMermaidDefinition('flowchart TD\n A[[Database]]'), 'flowchart TD\n A[[Database]]')
   const mermaidSvg = await diagramRendererMod.DiagramRenderer.render('mermaid', 'flowchart TD\n  A[Start] --> B[End]')
   assert.equal(mermaidSvg.success, true)
   assert.ok(mermaidSvg.svg.includes('<svg'))

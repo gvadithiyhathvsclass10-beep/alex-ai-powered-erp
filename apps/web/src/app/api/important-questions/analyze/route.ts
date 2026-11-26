@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { serializeBigInt } from '@/lib/prisma'
 import { analyzeQuestionPapers } from '@/lib/important-questions/analyzer'
+import type { QuestionPaperWithQuestions } from '@/lib/important-questions/analyzer'
+import type { Prisma } from '@prisma/client'
 
 export async function POST(request: Request) {
   try {
@@ -44,7 +46,12 @@ export async function POST(request: Request) {
 
     // Collect additional instructions from papers
     const paperInstructions = papers
-      .map(p => p.metadata?.additionalInstructions)
+      .map(p => {
+        const metadata = p.metadata
+        return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+          ? metadata.additionalInstructions
+          : undefined
+      })
       .filter(Boolean)
       .join('\n\n')
     
@@ -54,7 +61,7 @@ export async function POST(request: Request) {
 
     // Perform comprehensive analysis
     const analysisResult = await analyzeQuestionPapers(
-      papersWithQuestions as any,
+      papersWithQuestions as unknown as QuestionPaperWithQuestions[],
       subjectId || papersWithQuestions[0]?.subjectId || null,
       user.id,
       {
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
         totalQuestions: analysisResult.totalQuestions,
         exactRepeats: analysisResult.exactRepeats,
         semanticRepeats: analysisResult.semanticRepeats,
-        analysisData: analysisResult as any,
+        analysisData: analysisResult as unknown as Prisma.InputJsonValue,
         priorityItems: {
           create: analysisResult.priorityItems.map(item => ({
             questionId: item.questionId,

@@ -886,7 +886,6 @@ export async function generateImportantQuestionsReportData(
     include: {
       subject: { select: { id: true, name: true, code: true } },
       priorityItems: true,
-      analysisData: true,
     },
   })
   

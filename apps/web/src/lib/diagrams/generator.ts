@@ -246,10 +246,10 @@ export async function renderPlantumlToSvg(code: string): Promise<string> {
 
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
 }
 

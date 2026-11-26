@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { generateImportantQuestionsPDF } from '@/lib/important-questions/pdf-generator'
+import type { ReportData } from '@/lib/important-questions/pdf-generator'
 
 export async function GET(
   request: Request,
@@ -44,19 +45,19 @@ export async function GET(
         exactRepeats: analysis.exactRepeats,
         semanticRepeats: analysis.semanticRepeats,
         paperIds: analysis.paperIds,
-        priorityItems: analysis.priorityItems,
+      priorityItems: ((analysis.analysisData as any)?.priorityItems || []) as ReportData['analysis']['priorityItems'],
         analysisData: analysis.analysisData,
         webResearch: (analysis.analysisData as any)?.webResearch,
       },
       papers: papers as any,
       generatedAt: new Date(),
-    }
+    } as ReportData
 
     // Generate PDF
     const pdfBuffer = await generateImportantQuestionsPDF(reportData)
 
     // Return PDF as download
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="important-questions-${analysis.title.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}.pdf"`,

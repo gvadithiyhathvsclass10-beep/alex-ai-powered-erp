@@ -68,13 +68,9 @@ function renderMath(text: string): React.ReactNode {
 }
 
 function KatexFormula({ formula, displayMode }: { formula: string; displayMode: boolean }) {
-  const containerRef = React.useRef<HTMLSpanElement>(null)
-  const [error, setError] = React.useState<Error | null>(null)
-  
-  React.useEffect(() => {
-    if (!containerRef.current) return
-    try {
-      katex.render(formula, containerRef.current, {
+  let html: string | null = null
+  try {
+    html = katex.renderToString(formula, {
         displayMode,
         throwOnError: false,
         strict: false,
@@ -87,17 +83,12 @@ function KatexFormula({ formula, displayMode }: { formula: string; displayMode: 
           '\\QQ': '\\mathbb{Q}',
         },
       })
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown KaTeX error'))
-    }
-  }, [formula, displayMode])
-  
-  if (error) {
-    return <span className="font-mono text-sm text-destructive" title={error.message}>{formula}</span>
+  } catch {
+    html = null
   }
-  
-  return <span ref={containerRef} className="katex-formula" />
+
+  if (!html) return <span className="font-mono text-sm text-destructive">{formula}</span>
+  return <span className="katex-formula" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 interface MarkdownBlock {
@@ -524,14 +515,15 @@ function processReactNodes(node: React.ReactNode): React.ReactNode {
   }
   
   if (React.isValidElement(node)) {
-    const children = node.props.children
+    const element = node as React.ReactElement<{ children?: React.ReactNode }>
+    const children = element.props.children
     if (Array.isArray(children)) {
-      return React.cloneElement(node, {}, ...children.map(processReactNodes))
+      return React.cloneElement(element, {}, ...children.map(processReactNodes))
     } else if (React.isValidElement(children)) {
-      return React.cloneElement(node, {}, processReactNodes(children))
+      return React.cloneElement(element, {}, processReactNodes(children))
     } else if (typeof children === 'string' || typeof children === 'number') {
       // Process inline formatting in text content
-      return React.cloneElement(node, {}, processInlineFormatting(children))
+      return React.cloneElement(element, {}, processInlineFormatting(String(children)))
     }
     return node
   }

@@ -68,13 +68,13 @@ export async function POST(request: Request) {
         provider,
         model,
         systemPrompt:
-          'You are ALEX, an academic diagram generator. Create a clear Mermaid flowchart or sequence diagram illustrating the core process or architecture in the provided content.',
+          'You are ALEX, an academic diagram generator. Create a clear Mermaid flowchart or sequence diagram illustrating the core process or architecture in the provided content. Quote every flowchart node label with double quotes inside its shape, for example A["Architecture (Source 2)"]. Never place raw square brackets, quotation marks, or line breaks inside node labels; write citations as (Source 2), not [Source 2]. Return valid Mermaid syntax only in code.',
         schemaDescription: `{
   "type": "mermaid",
   "title": "Diagram title",
   "code": "flowchart TD\\n  A[Step 1] --> B[Step 2]"
 }`,
-        prompt: `Generate a ${customType || 'mermaid'} diagram for "${docTitle}":\n\n${contextText}`,
+        prompt: `Generate a ${customType || 'mermaid'} diagram for "${docTitle}":\n\n${contextText}\n\nFor Mermaid, quote every node label and use parenthesized citations like (Source 2), never raw [Source 2] inside a node.`,
         validate: (parsed) => {
           if (!parsed || typeof parsed.code !== 'string' || !parsed.code.trim()) {
             throw new Error('Model did not return valid diagram code')

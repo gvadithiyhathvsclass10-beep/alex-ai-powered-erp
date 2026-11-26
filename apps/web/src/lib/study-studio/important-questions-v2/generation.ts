@@ -4,7 +4,7 @@
  * Uses generateStructuredOutput with proper schema validation
  */
 
-import { generateStructuredOutput, type GenerateStructuredOutputInput } from '@/lib/ai/service';
+import { generateStructuredOutput, type StructuredOutputInput } from '@/lib/ai/service';
 import { prisma } from '@/lib/prisma';
 import { canAccessDocument } from '@/lib/document-processing/access';
 import type { QuestionOccurrence, SourceDocument, RankedQuestion, AnalysisResult, RepeatGroup, UnitCoverage } from './types';
@@ -143,7 +143,7 @@ REQUIREMENTS:
 - If source doesn't contain enough for ${targetCount} questions, generate fewer but high quality
 `;
 
-    const structuredInput: GenerateStructuredOutputInput<{ questions: GeneratedQuestion[] }> = {
+    const structuredInput: StructuredOutputInput<{ questions: GeneratedQuestion[] }> = {
       userId,
       systemPrompt: 'You are ALEX, an expert academic examiner. Generate high-quality exam questions strictly from the provided study material. Every question must be answerable from the source. Do not invent concepts.',
       schemaDescription,
@@ -222,7 +222,7 @@ REQUIREMENTS:
         flags: [],
       }],
       repeatGroupIds: [],
-      source: 'ai_generated',
+      source: 'ai_enhanced',
     }));
 
     // Build minimal AnalysisResult for persistence

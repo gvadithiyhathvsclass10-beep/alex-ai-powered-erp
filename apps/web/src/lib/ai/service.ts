@@ -175,7 +175,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
     embeddingModels: [],
     capabilities: ['chat', 'structured', 'summarization'],
     envKey: 'CUSTOM_AI_API_KEY',
-    baseUrlEnv: 'CUSTOM_AI_BASE_URL',
+    baseUrlEnv: 'FREELLM_BASE_URL',
     defaultBaseUrl: 'http://localhost:11434/v1',
   },
 }
@@ -671,7 +671,9 @@ function getProviderBaseUrl(provider: PrismaAIProviderType, customBaseUrl?: stri
     return customBaseUrl.trim().replace(/\/+$/, '')
   }
   const meta = SUPPORTED_AI_PROVIDERS[provider]
-  const fromEnv = process.env[meta.baseUrlEnv] || process.env.AI_BASE_URL
+  const fromEnv = process.env[meta.baseUrlEnv] ||
+    (provider === 'OTHER' ? process.env.CUSTOM_AI_BASE_URL : undefined) ||
+    process.env.AI_BASE_URL
   if (fromEnv && fromEnv.trim()) {
     return fromEnv.trim().replace(/\/+$/, '')
   }

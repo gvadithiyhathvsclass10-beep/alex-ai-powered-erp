@@ -54,6 +54,7 @@ export function DiagramViewer({
             setError(null)
             
             const mermaid = await import("mermaid")
+            const { prepareMermaidDefinition } = await import("@/lib/diagrams/mermaid")
             mermaid.default.initialize({
               startOnLoad: false,
               theme: "default",
@@ -63,7 +64,7 @@ export function DiagramViewer({
   
             const { svg } = await mermaid.default.render(
               `diagram-${Date.now()}`,
-              definition.code
+              prepareMermaidDefinition(definition.code)
             )
             
             if (isMounted) {

@@ -74,6 +74,7 @@
 | `GROQ_API_KEY` | Optional | Groq | Groq API key |
 | `OPENROUTER_API_KEY` | Optional | OpenRouter | OpenRouter API key |
 | `TOGETHER_AI_API_KEY` | Optional | Together | Together AI API key |
+| `FREELLM_BASE_URL` | Optional | FreeLLM | OpenAI-compatible gateway URL ending in `/v1`; unified keys are stored per user in AI Settings. For Render, the gateway must be reachable from the Render service. |
 
 ### Storage
 

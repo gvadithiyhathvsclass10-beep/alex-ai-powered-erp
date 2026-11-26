@@ -891,7 +891,6 @@ export function ImportantQuestionsNewTab({
                                     <div className="space-y-1">
                                       <Label className="text-xs">Title</Label>
                                       <Input
-                                        size="sm"
                                         placeholder="Auto from filename"
                                         value={getFileMetadata(fileItem.id).title || ''}
                                         onChange={e => updateFileMetadata(fileItem.id, { title: e.target.value })}
@@ -915,20 +914,18 @@ export function ImportantQuestionsNewTab({
                                     <div className="space-y-1">
                                       <Label className="text-xs">Exam Year</Label>
                                       <NumberInput
-                                        size="sm"
                                         placeholder="2023"
                                         defaultValue={getFileMetadata(fileItem.id).examinationYear || ''}
-                                        onChange={v => updateFileMetadata(fileItem.id, { examinationYear: v })}
+                                        onChange={v => updateFileMetadata(fileItem.id, { examinationYear: String(v) })}
                                         disabled={fileItem.status === 'uploading' || fileItem.status === 'extracting'}
                                       />
                                     </div>
                                     <div className="space-y-1">
                                       <Label className="text-xs">Marks</Label>
                                       <NumberInput
-                                        size="sm"
                                         placeholder="100"
                                         defaultValue={getFileMetadata(fileItem.id).marks || ''}
-                                        onChange={v => updateFileMetadata(fileItem.id, { marks: v })}
+                                        onChange={v => updateFileMetadata(fileItem.id, { marks: String(v) })}
                                         disabled={fileItem.status === 'uploading' || fileItem.status === 'extracting'}
                                       />
                                     </div>

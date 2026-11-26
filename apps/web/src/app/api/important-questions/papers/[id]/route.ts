@@ -6,7 +6,7 @@ import {
   generateStructuredOutput,
   formatAIServiceErrorResponse,
 } from '@/lib/ai/service'
-import { extractContent } from '@/lib/document-processing/extractors'
+import { extractContent, resolveDocumentType } from '@/lib/document-processing/extractors'
 import { downloadFile } from '@/lib/storage/client'
 import { PDFDocument } from 'pdf-lib'
 import { createWorker } from 'tesseract.js'
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 // pdf-parse is CommonJS, use dynamic import
 async function getPdfParse() {
   const module = await import('pdf-parse')
-  return module.default || module
+  return module as unknown as (buffer: Buffer) => Promise<{ text?: string; numpages: number }>
 }
 
 /**
@@ -50,7 +50,7 @@ async function extractTextWithOCR(buffer: Buffer): Promise<{ text: string; pageC
     // We'll extract each page and render it (via a different approach since we don't have pdftoppm)
     // Instead, we use tesseract.js directly on the PDF buffer
     
-    const worker = await createWorker('eng')
+    const worker = await createWorker('eng', undefined, {})
     let fullText = ''
     
     try {
@@ -443,7 +443,11 @@ export async function POST(
           pageCount = Math.max(pageCount, ocrResult.pageCount)
         } else {
           // Use the existing extractContent function for other formats
-          const extracted = await extractContent(buffer, paper.mimeType ? paper.mimeType : 'application/octet-stream')
+          const extracted = await extractContent(
+            buffer,
+            resolveDocumentType(fileName, mimeType),
+            mimeType || 'application/octet-stream'
+          )
           textContent = extracted.text
           pageCount = Math.max(pageCount, extracted.pages.length)
         }

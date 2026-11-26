@@ -19,7 +19,7 @@ export async function POST(
 
     // Verify conversation belongs to user
     const conversation = await prisma.conversation.findFirst({
-      where: { id: params.id, userId: user.id }
+      where: { id, userId: user.id }
     })
 
     if (!conversation) {
@@ -29,7 +29,7 @@ export async function POST(
     // Save user message
     await prisma.message.create({
       data: {
-        conversationId: params.id,
+        conversationId: id,
         senderId: user.id,
         role: 'user',
         content: text.trim()
@@ -41,18 +41,15 @@ export async function POST(
 
     // Get conversation history for context
     const history = await prisma.message.findMany({
-      where: { conversationId: params.id },
+      where: { conversationId: id },
       orderBy: { createdAt: 'asc' },
       take: 20
     })
 
-    const historyMessages = history.map(m => ({
+    const historyMessages = history.slice(0, -1).map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content
     }))
-
-    // Add current user message
-    historyMessages.push({ role: 'user', content: text.trim() })
 
     // Build system prompt for academic assistant
     const systemPrompt = `You are ALEX, a personal AI academic mentor for a student.
@@ -80,7 +77,7 @@ Current conversation context: The student is using voice input for a natural con
     // Save assistant response
     await prisma.message.create({
       data: {
-        conversationId: params.id,
+        conversationId: id,
         senderId: user.id,
         role: 'assistant',
         content: response.answer
