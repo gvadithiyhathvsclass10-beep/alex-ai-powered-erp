@@ -38,7 +38,7 @@ const adminQuickActions = [
   { label: "Academic Calendar", href: "/dashboard/planner", icon: Calendar, description: "Set academic dates" },
   { label: "Institution Settings", href: "/dashboard/settings", icon: Building2, description: "Configure institution" },
   { label: "Audit Logs", href: "/dashboard/notifications", icon: Archive, description: "View system activity" },
-  { label: "System Settings", href: "/dashboard/ai-settings", icon: Settings, description: "Global configuration" },
+  { label: "System Settings", href: "/dashboard/settings", icon: Settings, description: "Global configuration" },
 ]
 
 export function AdminDashboard({ user: _user }: DashboardProps) {

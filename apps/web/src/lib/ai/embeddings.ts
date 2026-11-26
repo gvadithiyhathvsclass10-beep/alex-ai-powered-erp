@@ -9,6 +9,7 @@ const EMBEDDING_CAPABLE_PROVIDERS: PrismaAIProviderType[] = [
   'OPENAI',
   'GOOGLE_GEMINI',
   'MISTRAL',
+  'FREELLM',
 ]
 
 /**
@@ -202,6 +203,61 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
+/**
+ * OpenAI-compatible embeddings through the self-hosted FreeLLM gateway.
+ * FreeLLM accepts `auto` and routes to an available embedding family.
+ */
+export class FreeLLMEmbeddingProvider implements EmbeddingProvider {
+  private apiKey: string
+  private model: string
+  private baseUrl: string
+
+  constructor(apiKey: string, model = 'auto', baseUrl?: string) {
+    this.apiKey = apiKey
+    this.model = model || 'auto'
+    this.baseUrl = (
+      baseUrl ||
+      process.env.FREELLM_BASE_URL ||
+      'http://127.0.0.1:3001/v1'
+    ).replace(/\/+$/, '')
+  }
+
+  async generateEmbeddings(texts: string[]): Promise<EmbeddingResult> {
+    if (texts.length === 0) {
+      return { embeddings: [], tokenCount: 0, model: this.model }
+    }
+
+    const response = await fetchWithTimeout(`${this.baseUrl}/embeddings`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input: texts,
+        model: this.model,
+        encoding_format: 'float',
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error(`FreeLLM embeddings error: ${error.error?.message || response.statusText}`)
+    }
+
+    const data = await response.json()
+    if (!Array.isArray(data.data) || data.data.length !== texts.length) {
+      throw new Error('FreeLLM returned an unexpected embeddings response')
+    }
+
+    return {
+      embeddings: data.data.map((d: { embedding: number[] }) => d.embedding),
+      tokenCount: data.usage?.total_tokens ?? texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0),
+      model: this.model,
+    }
+  }
+}
+
 export class MistralEmbeddingProvider implements EmbeddingProvider {
   private apiKey: string
   private model: string
@@ -246,7 +302,8 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
 export function createEmbeddingProvider(
   provider: AIProviderType,
   apiKey: string,
-  model?: string
+  model?: string,
+  baseUrl?: string | null
 ): EmbeddingProvider {
   switch (provider) {
     case 'OPENAI':
@@ -255,6 +312,8 @@ export function createEmbeddingProvider(
       return new GoogleEmbeddingProvider(apiKey, model)
     case 'MISTRAL':
       return new MistralEmbeddingProvider(apiKey, model)
+    case 'FREELLM':
+      return new FreeLLMEmbeddingProvider(apiKey, model, baseUrl || undefined)
     case 'MOCK':
       return new MockEmbeddingProvider()
     case 'local':
@@ -402,7 +461,7 @@ export async function getUserEmbeddingProvider(
     const defaultModel = getDefaultEmbeddingModel(cred.provider)
 
     return {
-      provider: createEmbeddingProvider(cred.provider, apiKey, modelConfig?.modelId),
+      provider: createEmbeddingProvider(cred.provider, apiKey, modelConfig?.modelId, cred.baseUrl),
       model: modelConfig?.modelId || defaultModel,
       credential: cred,
       searchMode: 'semantic',
@@ -410,6 +469,7 @@ export async function getUserEmbeddingProvider(
   }
 
   const envProviders: Array<{ provider: PrismaAIProviderType; key?: string; model: string }> = [
+    { provider: 'FREELLM', key: process.env.FREELLM_API_KEY, model: 'auto' },
     { provider: 'OPENAI', key: process.env.OPENAI_API_KEY, model: 'text-embedding-3-small' },
     {
       provider: 'GOOGLE_GEMINI',
@@ -425,7 +485,12 @@ export async function getUserEmbeddingProvider(
 
   if (envCredential?.key) {
     return {
-      provider: createEmbeddingProvider(envCredential.provider, envCredential.key.trim()),
+      provider: createEmbeddingProvider(
+        envCredential.provider,
+        envCredential.key.trim(),
+        envCredential.model,
+        envCredential.provider === 'FREELLM' ? process.env.FREELLM_BASE_URL : undefined
+      ),
       model: envCredential.model,
       credential: null,
       searchMode: 'semantic',

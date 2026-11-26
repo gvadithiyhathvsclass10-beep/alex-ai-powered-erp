@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button"
 import {
   ArrowLeft, Bot, Check, CheckCircle2, ChevronDown, ExternalLink,
   Eye, EyeOff, KeyRound, Loader2, RefreshCw, Search, ShieldCheck,
-  Sparkles, Trash2, Unplug, WandSparkles, XCircle,
+  Sparkles, Trash2, WandSparkles, XCircle,
 } from "lucide-react"
 
 type Provider = {
@@ -31,13 +31,17 @@ type Credential = {
   id: string
   provider: string
   providerName: string
+  baseUrl?: string | null
   isActive: boolean
   isDefault: boolean
   models?: string[]
 }
 type Model = { id: string; name?: string; isDeprecated?: boolean; capabilities?: string[]; contextWindow?: number }
 
+const FREELLM_DEFAULT_BASE_URL = "http://127.0.0.1:3001/v1"
+
 const PROVIDERS: Provider[] = [
+  { id: "FREELLM", name: "FreeLLM", description: "Self-hosted unified gateway", defaultModel: "auto", keyUrl: "" },
   { id: "OPENAI", name: "OpenAI", description: "GPT models", defaultModel: "gpt-4o-mini", keyUrl: "https://platform.openai.com/api-keys" },
   { id: "GOOGLE_GEMINI", name: "Google Gemini", description: "Gemini models", defaultModel: "gemini-2.5-flash", keyUrl: "https://aistudio.google.com/apikey" },
   { id: "ANTHROPIC", name: "Anthropic", description: "Claude models", defaultModel: "claude-sonnet-4-5", keyUrl: "https://console.anthropic.com/settings/keys" },
@@ -46,13 +50,14 @@ const PROVIDERS: Provider[] = [
   { id: "MISTRAL", name: "Mistral AI", description: "Mistral models", defaultModel: "mistral-large-latest", keyUrl: "https://console.mistral.ai/api-keys/" },
   { id: "OPENROUTER", name: "OpenRouter", description: "Many model providers", defaultModel: "openrouter/auto", keyUrl: "https://openrouter.ai/keys" },
   { id: "TOGETHER_AI", name: "Together AI", description: "Open models", defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo", keyUrl: "https://api.together.ai/settings/api-keys" },
-  { id: "OTHER", name: "FreeLLM / Compatible API", description: "Unified key for an OpenAI-compatible gateway", defaultModel: "auto", keyUrl: "" },
+  { id: "OTHER", name: "Custom OpenAI-compatible", description: "Any OpenAI-compatible endpoint", defaultModel: "default", keyUrl: "" },
 ]
 
 export default function AISettingsPage() {
   const router = useRouter()
-  const [providerId, setProviderId] = React.useState("GOOGLE_GEMINI")
+  const [providerId, setProviderId] = React.useState("FREELLM")
   const [apiKey, setApiKey] = React.useState("")
+  const [baseUrl, setBaseUrl] = React.useState(FREELLM_DEFAULT_BASE_URL)
   const [showKey, setShowKey] = React.useState(false)
   const [credentials, setCredentials] = React.useState<Credential[]>([])
   const [models, setModels] = React.useState<Model[]>([])
@@ -80,6 +85,7 @@ export default function AISettingsPage() {
         if (active) {
           setConnectedCredentialId(active.id)
           setProviderId(active.provider)
+          setBaseUrl(active.baseUrl || (active.provider === "FREELLM" ? FREELLM_DEFAULT_BASE_URL : ""))
         }
       } else {
         console.error("Failed to load credentials:", response.status)
@@ -91,7 +97,36 @@ export default function AISettingsPage() {
     }
   }, [])
 
-  React.useEffect(() => { void loadCredentials() }, [loadCredentials])
+  // Load credentials on mount
+  React.useEffect(() => {
+    let mounted = true
+    const fetchCredentials = async () => {
+      try {
+        const response = await fetch("/api/ai/credentials")
+        if (response.ok) {
+          const data = await response.json()
+          const list = Array.isArray(data) ? data : []
+          if (mounted) {
+            setCredentials(list)
+            const active = list.find((item: Credential) => item.isDefault && item.isActive) || list.find((item: Credential) => item.isActive)
+            if (active) {
+              setConnectedCredentialId(active.id)
+              setProviderId(active.provider)
+              setBaseUrl(active.baseUrl || (active.provider === "FREELLM" ? FREELLM_DEFAULT_BASE_URL : ""))
+            }
+          }
+        } else {
+          console.error("Failed to load credentials:", response.status)
+          if (mounted) setCredentials([])
+        }
+      } catch (error) {
+        console.error("Error loading credentials:", error)
+        if (mounted) setCredentials([])
+      }
+    }
+    fetchCredentials()
+    return () => { mounted = false }
+  }, [])
 
   const discoverModels = async (credentialId: string, forceRefresh = false) => {
     setLoadingModels(true)
@@ -122,8 +157,15 @@ export default function AISettingsPage() {
   // Existing credentials must populate the model list too; discovery previously ran
   // only immediately after saving a brand-new key, leaving this selector blank on return.
   React.useEffect(() => {
+    let mounted = true
     if (!connectedCredentialId || loadingModels || models.length > 0) return
-    void discoverModels(connectedCredentialId)
+    const runDiscovery = async () => {
+      if (!mounted) return
+      const discovered = await discoverModels(connectedCredentialId)
+      // State updates happen inside discoverModels
+    }
+    runDiscovery()
+    return () => { mounted = false }
     // Discovery is intentionally triggered only when the selected provider/credential changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectedCredentialId, providerId])
@@ -140,7 +182,12 @@ export default function AISettingsPage() {
       const connectionResponse = await fetch("/api/ai/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: providerId, apiKey: apiKey.trim(), model: provider.defaultModel || undefined }),
+        body: JSON.stringify({
+          provider: providerId,
+          apiKey: apiKey.trim(),
+          model: provider.defaultModel || undefined,
+          ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
+        }),
       })
       const connection = await connectionResponse.json().catch(() => ({}))
       if (!connectionResponse.ok || connection.success !== true) {
@@ -149,7 +196,13 @@ export default function AISettingsPage() {
       const response = await fetch("/api/ai/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: providerId, providerName: provider.name, apiKey: apiKey.trim(), isDefault: true }),
+        body: JSON.stringify({
+          provider: providerId,
+          providerName: provider.name,
+          apiKey: apiKey.trim(),
+          ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
+          isDefault: true,
+        }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || "Could not save this API key")
@@ -158,7 +211,7 @@ export default function AISettingsPage() {
       setShowKey(false)
       setConnectedCredentialId(credentialId || "")
       await loadCredentials()
-      const providerSupportsEmbeddings = ["OPENAI", "GOOGLE_GEMINI", "MISTRAL"].includes(providerId)
+      const providerSupportsEmbeddings = ["OPENAI", "GOOGLE_GEMINI", "MISTRAL", "FREELLM"].includes(providerId)
       if (providerSupportsEmbeddings) {
         setMessage({ type: "success", text: `${provider.name} key saved securely. Embeddings model configured automatically. Finding available chat models…` })
       } else {
@@ -276,8 +329,29 @@ export default function AISettingsPage() {
       <section className="rounded-2xl border border-border bg-card shadow-sm">
         <div className="border-b border-border p-5 sm:p-6"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600"><KeyRound className="h-5 w-5" /></div><div><h2 className="font-semibold">Connect an AI provider</h2><p className="text-sm text-muted-foreground">Paste your key once. We’ll load the models available to it.</p></div></div></div>
         <form onSubmit={connectProvider} className="space-y-5 p-5 sm:p-6">
-          <div className="space-y-2"><label htmlFor="provider" className="text-sm font-medium">Provider</label><div className="relative"><select id="provider" value={providerId} onChange={(event) => { const nextProvider = event.target.value; setProviderId(nextProvider); setConnectedCredentialId(credentials.find((item) => item.provider === nextProvider && item.isActive)?.id || ""); setModels([]); setModelId(""); setMessage(null) }} className="h-12 w-full appearance-none rounded-xl border border-input bg-background px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-cyan-500">{PROVIDERS.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.description}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-4 h-4 w-4 text-muted-foreground" /></div>{provider.keyUrl && <a href={provider.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-cyan-600 hover:underline">Get an API key from {provider.name}<ExternalLink className="h-3 w-3" /></a>}{providerId === "OTHER" && <p className="text-xs text-muted-foreground">Set the server-side FREELLM_BASE_URL to your gateway’s OpenAI-compatible /v1 URL before connecting. Keys are tested before they are saved.</p>}</div>
-          <div className="space-y-2"><label htmlFor="api-key" className="text-sm font-medium">API key</label><div className="flex gap-2"><div className="relative flex-1"><input id="api-key" autoComplete="off" spellCheck={false} type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste your API key here" className="h-12 w-full rounded-xl border border-input bg-background px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-cyan-500"/><button type="button" onClick={() => setShowKey((value) => !value)} className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground" aria-label={showKey ? "Hide API key" : "Show API key"}>{showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><button type="submit" disabled={loading || !apiKey.trim()} className="inline-flex h-12 min-w-32 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{loading ? "Connecting…" : "Connect"}</button></div><p className="text-xs text-muted-foreground">Your key is sent to the authenticated server over HTTPS and is never shown again after saving.</p></div>
+          <div className="space-y-2"><label htmlFor="provider" className="text-sm font-medium">Provider</label><div className="relative"><select id="provider" value={providerId} onChange={(event) => { const nextProvider = event.target.value; const saved = credentials.find((item) => item.provider === nextProvider && item.isActive); setProviderId(nextProvider); setConnectedCredentialId(saved?.id || ""); setBaseUrl(saved?.baseUrl || (nextProvider === "FREELLM" ? FREELLM_DEFAULT_BASE_URL : "")); setModels([]); setModelId(""); setMessage(null) }} className="h-12 w-full appearance-none rounded-xl border border-input bg-background px-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-cyan-500">{PROVIDERS.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.description}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-4 h-4 w-4 text-muted-foreground" /></div>{provider.keyUrl && <a href={provider.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-cyan-600 hover:underline">Get an API key from {provider.name}<ExternalLink className="h-3 w-3" /></a>}
+          {(providerId === "FREELLM" || providerId === "OTHER") && (
+            <div className="space-y-1.5 pt-1">
+              <label htmlFor="base-url" className="text-sm font-medium">Gateway base URL</label>
+              <input
+                id="base-url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+                placeholder={FREELLM_DEFAULT_BASE_URL}
+                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <p className="text-xs text-muted-foreground">
+                Must be reachable from the ERP server and include the OpenAI-compatible <code>/v1</code> path.
+                On Render, use a tunnel URL to your self-hosted FreeLLM instance, or set <code>FREELLM_BASE_URL</code>.
+              </p>
+            </div>
+          )}
+          {providerId === "FREELLM" && <p className="text-xs text-muted-foreground">Paste the unified key from your FreeLLM dashboard (starts with <code>freellmapi-</code>). The default <code>auto</code> model routes each request to an available provider.</p>}</div>
+          <div className="space-y-2"><label htmlFor="api-key" className="text-sm font-medium">API key</label><div className="flex gap-2"><div className="relative flex-1"><input id="api-key" autoComplete="off" spellCheck={false} type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={providerId === "FREELLM" ? "freellmapi-…" : "Paste your API key here"} className="h-12 w-full rounded-xl border border-input bg-background px-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-cyan-500"/><button type="button" onClick={() => setShowKey((value) => !value)} className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground" aria-label={showKey ? "Hide API key" : "Show API key"}>{showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><button type="submit" disabled={loading || !apiKey.trim()} className="inline-flex h-12 min-w-32 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{loading ? "Connecting…" : "Connect"}</button></div><p className="text-xs text-muted-foreground">Your key is sent to the authenticated server over HTTPS and is never shown again after saving.</p></div>
         </form>
       </section>
 
@@ -324,6 +398,9 @@ export default function AISettingsPage() {
                         <span>Models: {credential.models.slice(0, 3).join(", ")}{credential.models.length > 3 ? "…" : ""}</span>
                       )}
                     </div>
+                    {credential.baseUrl && (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{credential.baseUrl}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

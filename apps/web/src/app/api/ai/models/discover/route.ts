@@ -35,6 +35,7 @@ export async function GET(request: Request) {
       'MISTRAL',
       'OPENROUTER',
       'TOGETHER_AI',
+      'FREELLM',
       'OTHER',
     ]
 
@@ -109,10 +110,11 @@ export async function POST(request: Request) {
       'MISTRAL',
       'OPENROUTER',
       'TOGETHER_AI',
+      'FREELLM',
       'OTHER',
     ]
 
-    if (!['OPENAI', 'GOOGLE_GEMINI', 'ANTHROPIC', 'NVIDIA_NEMOTRON', 'GROQ', 'MISTRAL', 'OPENROUTER', 'TOGETHER_AI', 'OTHER'].includes(provider)) {
+    if (!['OPENAI', 'GOOGLE_GEMINI', 'ANTHROPIC', 'NVIDIA_NEMOTRON', 'GROQ', 'MISTRAL', 'OPENROUTER', 'TOGETHER_AI', 'FREELLM', 'OTHER'].includes(provider)) {
       return NextResponse.json(
         { error: `Invalid provider: ${provider}` },
         { status: 400 }

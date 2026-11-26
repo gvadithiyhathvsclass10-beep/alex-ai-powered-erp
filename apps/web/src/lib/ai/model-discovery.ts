@@ -1,7 +1,7 @@
 import { AICredential, AIProviderType as PrismaAIProviderType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
-import { normalizeProvider, type AITaskType, SUPPORTED_AI_PROVIDERS, type ProviderMetadata } from './service'
+import { normalizeProvider, resolveProviderBaseUrl, type AITaskType, SUPPORTED_AI_PROVIDERS, type ProviderMetadata } from './service'
 
 export type AIProviderType = PrismaAIProviderType | 'MOCK'
 
@@ -119,6 +119,18 @@ export const PROVIDER_CAPABILITIES: Record<PrismaAIProviderType, ProviderCapabil
     defaultContextWindow: 4096,
     rateLimit: { requestsPerMinute: 100, tokensPerMinute: 2000000 },
   },
+  FREELLM: {
+    supportsDiscovery: true,
+    supportsPagination: false,
+    supportsEmbeddings: true,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStructuredOutput: true,
+    supportsFunctionCalling: true,
+    maxContextWindow: 800000,
+    defaultContextWindow: 104857,
+    rateLimit: { requestsPerMinute: 60, tokensPerMinute: 1000000 },
+  },
   OTHER: {
     supportsDiscovery: true,
     supportsPagination: false,
@@ -220,10 +232,9 @@ async function resolveCredentialForDiscovery(
 
   // 1. Explicit API key
   if (options.apiKey) {
-    const meta = SUPPORTED_AI_PROVIDERS[provider]
     return {
       apiKey: options.apiKey,
-      baseUrl: options.baseUrl || meta.defaultBaseUrl,
+      baseUrl: resolveProviderBaseUrl(provider as PrismaAIProviderType, options.baseUrl),
       credential: null,
     }
   }
@@ -242,10 +253,9 @@ async function resolveCredentialForDiscovery(
       throw new Error('Failed to decrypt credential')
     }
 
-    const meta = SUPPORTED_AI_PROVIDERS[provider]
     return {
       apiKey,
-      baseUrl: options.baseUrl || meta.defaultBaseUrl,
+      baseUrl: resolveProviderBaseUrl(provider as PrismaAIProviderType, options.baseUrl || cred.baseUrl),
       credential: cred,
     }
   }
@@ -269,10 +279,9 @@ async function resolveCredentialForDiscovery(
         throw new Error('Failed to decrypt credential')
       }
 
-      const meta = SUPPORTED_AI_PROVIDERS[provider]
       return {
         apiKey,
-        baseUrl: options.baseUrl || meta.defaultBaseUrl,
+        baseUrl: resolveProviderBaseUrl(provider as PrismaAIProviderType, options.baseUrl || cred.baseUrl),
         credential: cred,
       }
     }
@@ -284,7 +293,7 @@ async function resolveCredentialForDiscovery(
   if (envVal && envVal.trim().length >= 8) {
     return {
       apiKey: envVal.trim(),
-      baseUrl: options.baseUrl || meta.defaultBaseUrl,
+      baseUrl: resolveProviderBaseUrl(provider as PrismaAIProviderType, options.baseUrl),
       credential: null,
     }
   }
@@ -550,6 +559,46 @@ async function fetchModelsFromProvider(
       })),
       hasMore: data.pagination?.has_more || false,
       nextCursor: data.pagination?.next_cursor,
+    }
+  }
+
+  if (provider === 'FREELLM') {
+    const url = normalizedBaseUrl + '/models'
+    const response = await fetchWithRetry(url, {
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const data = await response.json()
+    const list = Array.isArray(data.data) ? data.data : []
+    const models = list.length > 0
+      ? list.map((m: any) => ({
+          id: m.id,
+          name: m.name || m.id,
+          object: m.object || 'model',
+          ownedBy: m.owned_by || 'freellmapi',
+          created: m.created,
+          capabilities: ['chat'],
+          contextWindow: m.context_window || m.context_length,
+          maxOutputTokens: m.max_output_tokens,
+          provider: 'FREELLM',
+        }))
+      : SUPPORTED_AI_PROVIDERS.FREELLM.models.map(modelId => ({
+          id: modelId,
+          name: modelId === 'auto' ? 'Auto (router picks the best available model)' : modelId,
+          object: 'model',
+          ownedBy: 'freellmapi',
+          capabilities: ['chat'],
+          contextWindow: 104857,
+          provider: 'FREELLM',
+        }))
+
+    return {
+      models: models.filter((model: { id?: string }) => Boolean(model.id)),
+      hasMore: false,
+      nextCursor: undefined,
     }
   }
 

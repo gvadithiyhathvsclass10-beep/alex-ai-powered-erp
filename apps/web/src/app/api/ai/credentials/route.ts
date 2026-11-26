@@ -21,6 +21,7 @@ export async function GET() {
       id: c.id,
       provider: c.provider,
       providerName: c.providerName || SUPPORTED_AI_PROVIDERS[c.provider]?.name || c.provider,
+      baseUrl: c.baseUrl || null,
       isActive: c.isActive,
       isDefault: c.isDefault,
       models: Array.isArray(c.models) ? c.models : [],
@@ -41,13 +42,14 @@ export async function POST(request: Request) {
   try {
     const user = await requireAuth()
     const body = await request.json()
-    const { provider, providerName, apiKey, models, isDefault, usageLimit } = body
+    const { provider, providerName, apiKey, baseUrl, models, isDefault, usageLimit } = body
 
     const saved = await saveUserAICredential({
       userId: user.id,
       provider,
       providerName,
       apiKey,
+      baseUrl,
       models,
       isDefault,
       usageLimit,

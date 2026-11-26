@@ -139,7 +139,7 @@ export function AssistantRightPanel({
                 icon={Settings}
                 label="AI Settings"
                 description="Configure providers & models"
-                onClick={() => handleNavigate("/dashboard/ai-settings")}
+                onClick={() => handleNavigate("/dashboard/settings?tab=ai")}
               />
               <QuickActionButton
                 icon={FileText}
