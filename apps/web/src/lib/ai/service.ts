@@ -689,7 +689,9 @@ function getProviderBaseUrl(provider: PrismaAIProviderType, customBaseUrl?: stri
     return customBaseUrl.trim().replace(/\/+$/, '')
   }
   const meta = SUPPORTED_AI_PROVIDERS[provider]
-  const fromEnv = process.env[meta.baseUrlEnv] || process.env.AI_BASE_URL
+  const fromEnv = process.env[meta.baseUrlEnv] ||
+    (provider === 'OTHER' ? process.env.CUSTOM_AI_BASE_URL : undefined) ||
+    process.env.AI_BASE_URL
   if (fromEnv && fromEnv.trim()) {
     return fromEnv.trim().replace(/\/+$/, '')
   }

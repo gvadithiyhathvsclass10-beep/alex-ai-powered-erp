@@ -179,7 +179,7 @@ export async function POST(request: Request) {
           fileName: file.name, 
           status: 'uploaded',
           processingStatus: finalStatus,
-          error: processingStats.status === 'FAILED' ? processingStats.errorMessage : undefined
+          error: processingStats.status === 'FAILED' ? 'Document processing failed' : undefined
         });
       } catch (error) {
         console.error('[ImportantQuestionsV2] Upload error:', error);

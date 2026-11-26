@@ -79,8 +79,11 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
     }
     
     const renderMermaid = async (code: string) => {
+      let safeCode = code
       try {
         const mermaid = await import('mermaid')
+        const { prepareMermaidDefinition } = await import('@/lib/diagrams/mermaid')
+        safeCode = prepareMermaidDefinition(code)
         mermaid.default.initialize({ 
           startOnLoad: false, 
           theme: 'default',
@@ -88,7 +91,7 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
           fontFamily: 'system-ui, sans-serif',
         })
         
-        const { svg } = await mermaid.default.render('diagram-' + Date.now(), code)
+        const { svg } = await mermaid.default.render('diagram-' + Date.now(), safeCode)
         if (mounted) setSvg(svg)
         return
       } catch (mermaidError) {
@@ -104,7 +107,7 @@ function DiagramRenderer({ definition, className }: DiagramRendererProps) {
               fontFamily: 'system-ui, sans-serif',
             })
             
-            const { svg } = await mermaid.render('diagram-' + Date.now(), code)
+            const { svg } = await mermaid.render('diagram-' + Date.now(), safeCode)
             if (mounted) setSvg(svg)
             return
           } catch {}

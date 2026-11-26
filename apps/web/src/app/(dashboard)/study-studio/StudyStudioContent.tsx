@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { RAGChat } from "@/components/rag/rag-chat"
-import { ImportantQuestionsComingSoon } from "@/components/study-studio/important-questions/ImportantQuestionsComingSoon"
+import { ImportantQuestionsWorkspace } from "@/components/study-studio/important-questions/ImportantQuestionsWorkspace"
 import { EmptyState, LoadingState } from "@/components/ui/empty-state"
 
 interface StudyMaterial {
@@ -102,6 +102,17 @@ interface Document {
   fileName: string
   status: string
   subjectId?: string | null
+}
+
+interface QuestionPaper {
+  id: string
+  questions?: Array<Record<string, unknown>>
+  [key: string]: unknown
+}
+
+interface QuestionAnalysis {
+  id: string
+  [key: string]: unknown
 }
 
 interface StudyJob {
@@ -843,7 +854,7 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
       setExtractingPaper(null)
       toast({ title: `Extracted ${data.extractedCount} questions`, description: `Provider: ${data.provider} (${data.model})` })
       // Auto-select the paper to show extracted questions
-      const paper = questionPapers.find(p => p.id === variables.paperId)
+      const paper = iqPapers.find(p => p.id === variables.paperId)
       if (paper) setSelectedIqPaper({ ...paper, questions: data.questions })
     },
     onError: (err: Error) => {
@@ -2405,9 +2416,13 @@ export function StudyStudioContent({ initialTab }: StudyStudioContentProps) {
           </div>
         </TabsContent>
 
-        {/* IMPORTANT QUESTIONS TAB - Coming Soon */}
+        {/* IMPORTANT QUESTIONS TAB - Existing workspace */}
         <TabsContent value="important-questions" className="mt-4 space-y-6">
-          <ImportantQuestionsComingSoon />
+          <ImportantQuestionsWorkspace
+            initialDocuments={iqDocuments}
+            initialAnalyses={iqSavedAnalyses}
+            iqSubjects={iqSubjects}
+          />
         </TabsContent>
       </Tabs>
     </div>

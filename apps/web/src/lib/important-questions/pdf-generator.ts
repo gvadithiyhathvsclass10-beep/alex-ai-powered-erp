@@ -120,7 +120,7 @@ function generatePDFContent(doc: PDFKit.PDFDocument, data: ReportData) {
   const subjectCode = subject?.code || ''
   
   // ============ COVER PAGE ============
-  addCoverPage(doc, subjectName, subjectCode, semester, academicYear, papers.length, generatedAt)
+  addCoverPage(doc, subjectName, subjectCode, semester, academicYear, papers.length, analysis.totalQuestions, generatedAt)
   
   // ============ TABLE OF CONTENTS ============
   doc.addPage()
@@ -185,6 +185,7 @@ function addCoverPage(
   semester: string | null,
   academicYear: string | null,
   paperCount: number,
+  questionCount: number,
   generatedAt: Date
 ) {
   // Background accent
@@ -217,7 +218,7 @@ function addCoverPage(
   if (semester) details.push(`Semester: ${semester}`)
   if (academicYear) details.push(`Academic Year: ${academicYear}`)
   details.push(`Papers Analyzed: ${paperCount}`)
-  details.push(`Questions Processed: ${analysis.totalQuestions}`)
+  details.push(`Questions Processed: ${questionCount}`)
   details.push(`Report Generated: ${generatedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`)
   
   details.forEach(detail => {
@@ -279,12 +280,12 @@ function addExecutiveSummary(
   
   // Key Statistics
   addSection(doc, 'Key Statistics', [
-    { label: 'Total Questions Analyzed', value: analysis.totalQuestions.toString() },
-    { label: 'Question Papers Processed', value: analysis.totalPapers.toString() },
-    { label: 'Exact Repeated Questions', value: analysis.exactRepeats.toString() },
-    { label: 'Semantically Similar Questions', value: analysis.semanticRepeats.toString() },
-    { label: 'High-Priority Topics', value: analysis.priorityItems.filter((p: any) => p.priority === 'HIGH').length.toString() },
-    { label: 'Medium-Priority Topics', value: analysis.priorityItems.filter((p: any) => p.priority === 'MEDIUM').length.toString() },
+    `Total Questions Analyzed: ${analysis.totalQuestions}`,
+    `Question Papers Processed: ${papers.length}`,
+    `Exact Repeated Questions: ${analysis.exactRepeats}`,
+    `Semantically Similar Questions: ${analysis.semanticRepeats}`,
+    `High-Priority Topics: ${analysis.priorityItems.filter((p: any) => p.priority === 'HIGH').length}`,
+    `Medium-Priority Topics: ${analysis.priorityItems.filter((p: any) => p.priority === 'MEDIUM').length}`,
   ])
   
   doc.moveDown(1)
@@ -400,7 +401,7 @@ function addUnitWiseQuestions(doc: PDFKit.PDFDocument, analysis: any) {
   })
   
   // Sort units by question count
-  const sortedUnits = Object.entries(unitDist).sort(([,a], [,b]) => b - a)
+  const sortedUnits = Object.entries(unitDist).sort(([, a], [, b]) => Number(b) - Number(a))
   
   sortedUnits.forEach(([unit, count]) => {
     if (doc.y > doc.page.height - 100) doc.addPage()
@@ -604,7 +605,7 @@ function addRecommendations(doc: PDFKit.PDFDocument, analysis: any, papers: any[
     {
       title: 'Unit-Wise Preparation Strategy',
       items: Object.entries(analysis.analysisData?.unitDistribution || {})
-        .sort(([,a], [,b]) => b - a)
+        .sort(([, a], [, b]) => Number(b) - Number(a))
         .slice(0, 5)
         .map(([unit, count]) => `${unit}: ${count} questions — allocate proportional study time`)
     },

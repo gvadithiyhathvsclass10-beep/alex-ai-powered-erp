@@ -365,7 +365,12 @@ export function ImportantQuestionsWorkspace({
       const data = await res.json()
 
       // Always process individual file results, even on non-2xx responses
-      const uploadedDocs = data.documents || []
+      const uploadedDocs = (Array.isArray(data.documents) ? data.documents : []) as Array<{
+        uploadId: string
+        status: string
+        id?: string
+        error?: string
+      }>
       let successCount = 0
       let failCount = 0
 

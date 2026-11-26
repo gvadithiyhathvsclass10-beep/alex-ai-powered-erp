@@ -729,6 +729,17 @@ test('AIService E2E: connection test, text generation, document summarization, R
       }
 
       // 4. OpenAI / Groq / Mistral / Nemotron /chat/completions endpoint
+      if (req.url.startsWith('/freellm/v1/chat/completions')) {
+        if (req.headers.authorization !== 'Bearer freellmapi-liveTestKey12345') {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: { message: 'Invalid FreeLLM unified key' } }))
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ choices: [{ message: { content: 'FreeLLM gateway connection verified: OK' } }], usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 } }))
+        return
+      }
+
       if (req.headers.authorization !== 'Bearer sk-proj-liveOpenAIKey12345') {
         res.writeHead(401, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: { message: 'Invalid Bearer token' } }))
@@ -831,6 +842,7 @@ test('AIService E2E: connection test, text generation, document summarization, R
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${port}/openai`
   process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}/anthropic`
   process.env.GOOGLE_GEMINI_BASE_URL = `http://127.0.0.1:${port}/gemini`
+  process.env.FREELLM_BASE_URL = `http://127.0.0.1:${port}/freellm/v1`
 
   try {
     store.credentials = []
@@ -896,6 +908,18 @@ test('AIService E2E: connection test, text generation, document summarization, R
     assert.equal(connGeminiRes.status, 200)
     assert.equal(connGeminiRes.body.provider, 'GOOGLE_GEMINI')
     assert.ok(connGeminiRes.body.response.includes('Gemini 1.5 Flash connection verified'))
+
+    // 3b. FreeLLM unified key uses the existing OpenAI-compatible provider path.
+    const connFreeLlmRes = await testConnRoute.POST({
+      json: async () => ({
+        provider: 'OTHER',
+        apiKey: 'freellmapi-liveTestKey12345',
+        model: 'auto',
+      }),
+    })
+    assert.equal(connFreeLlmRes.status, 200)
+    assert.equal(connFreeLlmRes.body.provider, 'OTHER')
+    assert.ok(connFreeLlmRes.body.response.includes('FreeLLM gateway connection verified'))
 
     // 4. RAG Question Answering (POST /api/rag/query) uses configured OPENAI gpt-4o & extracts citations
     const ragRes = await ragQueryRoute.POST({
@@ -1003,6 +1027,7 @@ test('AIService E2E: connection test, text generation, document summarization, R
     delete process.env.OPENAI_BASE_URL
     delete process.env.ANTHROPIC_BASE_URL
     delete process.env.GOOGLE_GEMINI_BASE_URL
+    delete process.env.FREELLM_BASE_URL
     await new Promise(resolve => server.close(resolve))
   }
 })

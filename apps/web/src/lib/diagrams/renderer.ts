@@ -2,6 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync, unlinkSyn
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { execSync } from 'child_process'
+import { prepareMermaidDefinition } from './mermaid'
 
 export interface DiagramRenderResult {
   success: boolean
@@ -11,10 +12,10 @@ export interface DiagramRenderResult {
 
 function escapeXml(text: string): string {
   return text
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 }
 
@@ -95,12 +96,13 @@ export class DiagramRenderer {
       return { success: false, error: 'Diagram code is empty' }
     }
     const cliPath = join(process.cwd(), 'node_modules', '.bin', 'mmdc')
+    const safeCode = prepareMermaidDefinition(code)
     if (existsSync(cliPath)) {
       const tempDir = this.getTempDir()
       const inputFile = join(tempDir, `mermaid-${Date.now()}.mmd`)
       const outputFile = join(tempDir, `mermaid-${Date.now()}.svg`)
       try {
-        writeFileSync(inputFile, code)
+        writeFileSync(inputFile, safeCode)
         execSync(`"${cliPath}" -i "${inputFile}" -o "${outputFile}" -b transparent`, {
           stdio: 'pipe',
           timeout: 15000,

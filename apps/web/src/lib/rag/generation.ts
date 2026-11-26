@@ -45,6 +45,7 @@ export interface GenerationOptions {
   temperature?: number
   maxTokens?: number
   stream?: boolean
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }
 
 export function extractCitationsFromText(answer: string, context: SearchResult[]): Citation[] {
@@ -126,6 +127,7 @@ export class OpenAIChatProvider {
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
+      ...(options.history || []),
       { role: 'user', content: `Question: ${options.query}\n\nSources:\n${contextText}` },
     ]
 
@@ -188,6 +190,7 @@ export class OpenAIChatProvider {
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
+      ...(options.history || []),
       { role: 'user', content: `Question: ${options.query}\n\nSources:\n${contextText}` },
     ]
 
