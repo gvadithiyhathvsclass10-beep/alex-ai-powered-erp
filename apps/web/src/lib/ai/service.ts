@@ -1893,7 +1893,6 @@ export async function saveUserAICredential(input: {
   models?: string[]
   isDefault?: boolean
   usageLimit?: number | null
-  baseUrl?: string
 }) {
   const normalizedProvider = normalizeProvider(input.provider)
   const cleanKey = validateApiKeyFormat(normalizedProvider, input.apiKey)

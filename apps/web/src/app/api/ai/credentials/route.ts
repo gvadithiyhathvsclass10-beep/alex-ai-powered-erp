@@ -25,7 +25,6 @@ export async function GET() {
       isActive: c.isActive,
       isDefault: c.isDefault,
       models: Array.isArray(c.models) ? c.models : [],
-      baseUrl: c.baseUrl || null,
       usageLimit: c.usageLimit,
       usageCount: c.usageCount,
       lastUsedAt: c.lastUsedAt,
