@@ -140,6 +140,7 @@ enum AIProviderType {
   GROQ
   OPENROUTER
   TOGETHER_AI
+  FREELLM
   OTHER
 }
 
@@ -769,6 +770,7 @@ model AICredential {
   isActive     Boolean        @default(true)
   isDefault    Boolean        @default(false)
   models       Json?
+  baseUrl      String?
   usageLimit   Int?
   usageCount   Int            @default(0)
   lastUsedAt   DateTime?

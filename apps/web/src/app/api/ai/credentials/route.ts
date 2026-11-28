@@ -24,6 +24,7 @@ export async function GET() {
       isActive: c.isActive,
       isDefault: c.isDefault,
       models: Array.isArray(c.models) ? c.models : [],
+      baseUrl: c.baseUrl || null,
       usageLimit: c.usageLimit,
       usageCount: c.usageCount,
       lastUsedAt: c.lastUsedAt,
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireAuth()
     const body = await request.json()
-    const { provider, providerName, apiKey, models, isDefault, usageLimit } = body
+    const { provider, providerName, apiKey, models, isDefault, usageLimit, baseUrl } = body
 
     const saved = await saveUserAICredential({
       userId: user.id,
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       models,
       isDefault,
       usageLimit,
+      baseUrl,
     })
 
     return NextResponse.json(saved)

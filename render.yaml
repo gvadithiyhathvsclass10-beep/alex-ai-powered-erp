@@ -16,6 +16,7 @@ services:
     region: oregon
     healthCheckPath: /api/health
     autoDeploy: false
+    preDeployCommand: cd apps/web && pnpm run db:migrate:deploy
     envVars:
       - key: NODE_ENV
         value: production
@@ -139,6 +140,7 @@ services:
     plan: starter
     region: oregon
     autoDeploy: false
+    preDeployCommand: cd apps/web && pnpm run db:migrate:deploy
     envVars:
       - key: NODE_ENV
         value: production

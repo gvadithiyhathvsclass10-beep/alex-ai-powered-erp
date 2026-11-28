@@ -35,6 +35,7 @@ export async function GET(request: Request) {
       'MISTRAL',
       'OPENROUTER',
       'TOGETHER_AI',
+      'FREELLM',
       'OTHER',
     ]
 
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
       'MISTRAL',
       'OPENROUTER',
       'TOGETHER_AI',
+      'FREELLM',
       'OTHER',
     ]
 

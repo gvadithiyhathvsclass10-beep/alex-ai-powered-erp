@@ -7,6 +7,7 @@ import {
   generateText,
   resolveAIConfig,
   type AITaskType,
+  SUPPORTED_AI_PROVIDERS,
 } from '@/lib/ai/service'
 import { SearchResult } from './vector-search'
 
@@ -517,61 +518,74 @@ export function createChatProvider(
   model?: string,
   baseUrl?: string
 ) {
+  const meta = SUPPORTED_AI_PROVIDERS[provider as PrismaAIProviderType]
+  const defaultBaseUrl = meta?.defaultBaseUrl || 'https://api.openai.com/v1'
+  const defaultModel = meta?.defaultChatModel || 'gpt-4o-mini'
+  const baseUrlEnv = meta?.baseUrlEnv || 'OPENAI_BASE_URL'
+
   switch (provider) {
     case 'OPENAI':
       return new OpenAIChatProvider(
         apiKey,
-        model || 'gpt-4o-mini',
-        baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
         {},
         'OPENAI'
       )
     case 'GROQ':
       return new OpenAIChatProvider(
         apiKey,
-        model || 'llama-3.3-70b-versatile',
-        baseUrl || process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
         {},
         'GROQ'
       )
     case 'MISTRAL':
       return new OpenAIChatProvider(
         apiKey,
-        model || 'mistral-small-latest',
-        baseUrl || process.env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1',
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
         {},
         'MISTRAL'
       )
     case 'OPENROUTER':
       return new OpenAIChatProvider(
         apiKey,
-        model || 'openrouter/auto',
-        baseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
         { 'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000', 'X-Title': 'ALEX' },
         'OPENROUTER'
       )
     case 'TOGETHER_AI':
       return new OpenAIChatProvider(
         apiKey,
-        model || 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-        baseUrl || process.env.TOGETHER_AI_BASE_URL || 'https://api.together.xyz/v1',
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
         {},
         'TOGETHER_AI'
+      )
+    case 'FREELLM':
+      return new OpenAIChatProvider(
+        apiKey,
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl,
+        {},
+        'FREELLM'
       )
     case 'GOOGLE_GEMINI':
       return new GoogleChatProvider(
         apiKey,
-        model || 'gemini-1.5-flash',
-        baseUrl || process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta'
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl
       )
     case 'ANTHROPIC':
       return new AnthropicChatProvider(
         apiKey,
-        model || 'claude-3-5-sonnet-20241022',
-        baseUrl || process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1'
+        model || defaultModel,
+        baseUrl || process.env[baseUrlEnv] || defaultBaseUrl
       )
     case 'NVIDIA_NEMOTRON':
-      return new NemotronChatProvider(apiKey, model || 'nvidia/nemotron-3-ultra', baseUrl)
+      return new NemotronChatProvider(apiKey, model || defaultModel, baseUrl || process.env[baseUrlEnv] || defaultBaseUrl)
     case 'MOCK':
       return new MockChatProvider()
     default:

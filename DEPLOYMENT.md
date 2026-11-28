@@ -54,6 +54,8 @@ cd apps/web
 pnpm run db:migrate:deploy
 ```
 
+> **Important:** The Render `render.yaml` includes a `preDeployCommand` that runs `prisma migrate deploy` automatically on each deploy (using `DIRECT_URL`). Ensure `DIRECT_URL` is set in your Render environment variables for both the web service and worker. If the pre-deploy step is not active or fails, you must run `prisma migrate deploy` manually against the Neon database before the application will work correctly.
+
 ---
 
 ## 2. Configure Cloudflare R2 (or S3-compatible Storage)

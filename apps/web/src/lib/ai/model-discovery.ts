@@ -119,6 +119,18 @@ export const PROVIDER_CAPABILITIES: Record<PrismaAIProviderType, ProviderCapabil
     defaultContextWindow: 4096,
     rateLimit: { requestsPerMinute: 100, tokensPerMinute: 2000000 },
   },
+  FREELLM: {
+    supportsDiscovery: true,
+    supportsPagination: false,
+    supportsEmbeddings: false,
+    supportsVision: false,
+    supportsReasoning: true,
+    supportsStructuredOutput: true,
+    supportsFunctionCalling: true,
+    maxContextWindow: 131072,
+    defaultContextWindow: 8192,
+    rateLimit: { requestsPerMinute: 30, tokensPerMinute: 500000 },
+  },
   OTHER: {
     supportsDiscovery: true,
     supportsPagination: false,
@@ -245,7 +257,7 @@ async function resolveCredentialForDiscovery(
     const meta = SUPPORTED_AI_PROVIDERS[provider]
     return {
       apiKey,
-      baseUrl: options.baseUrl || meta.defaultBaseUrl,
+      baseUrl: options.baseUrl || cred.baseUrl || meta.defaultBaseUrl,
       credential: cred,
     }
   }
@@ -272,7 +284,7 @@ async function resolveCredentialForDiscovery(
       const meta = SUPPORTED_AI_PROVIDERS[provider]
       return {
         apiKey,
-        baseUrl: options.baseUrl || meta.defaultBaseUrl,
+        baseUrl: options.baseUrl || cred.baseUrl || meta.defaultBaseUrl,
         credential: cred,
       }
     }
@@ -427,6 +439,34 @@ async function fetchModelsFromProvider(
         ownedBy: 'nvidia',
         capabilities: ['chat', 'reasoning'],
         provider: 'NVIDIA_NEMOTRON',
+      })),
+      hasMore: false,
+      nextCursor: undefined,
+    }
+  }
+
+  if (provider === 'FREELLM') {
+    // FreeLLM is an OpenAI-compatible gateway - use /models endpoint
+    const url = normalizedBaseUrl + '/models'
+    const response = await fetchWithRetry(url, {
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const data = await response.json()
+    return {
+      models: (data.data || []).map((m: any) => ({
+        id: m.id,
+        name: m.id,
+        object: m.object,
+        ownedBy: m.owned_by,
+        created: m.created,
+        capabilities: ['chat'],
+        contextWindow: m.context_window,
+        maxOutputTokens: m.max_tokens,
+        provider: 'FREELLM',
       })),
       hasMore: false,
       nextCursor: undefined,

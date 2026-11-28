@@ -32,7 +32,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   OPENAI: {
     id: 'OPENAI',
     name: 'OpenAI',
-    defaultChatModel: 'gpt-4o-mini',
+    defaultChatModel: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o-mini',
     defaultEmbeddingModel: 'text-embedding-3-small',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1-mini', 'o3-mini'],
     embeddingModels: ['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002'],
@@ -45,9 +45,9 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   GOOGLE_GEMINI: {
     id: 'GOOGLE_GEMINI',
     name: 'Google Gemini',
-    defaultChatModel: 'gemini-2.5-flash',
+    defaultChatModel: process.env.GOOGLE_GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash',
     defaultEmbeddingModel: 'gemini-embedding-001',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3.8-flash'],
     embeddingModels: ['gemini-embedding-001', 'text-embedding-004', 'embedding-001'],
     capabilities: ['chat', 'embeddings', 'reasoning', 'vision', 'structured', 'summarization'],
     envKey: 'GOOGLE_GEMINI_API_KEY',
@@ -57,7 +57,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   ANTHROPIC: {
     id: 'ANTHROPIC',
     name: 'Anthropic',
-    defaultChatModel: 'claude-3-5-sonnet-20241022',
+    defaultChatModel: process.env.ANTHROPIC_DEFAULT_MODEL || 'claude-3-5-sonnet-20241022',
     models: [
       'claude-3-5-sonnet-20241022',
       'claude-3-5-sonnet',
@@ -65,6 +65,8 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
       'claude-3-opus',
       'claude-3-haiku-20240307',
       'claude-3-5-haiku-20241022',
+      'claude-sonnet-4-5-20250219',
+      'claude-haiku-4-5-20251001',
     ],
     embeddingModels: [],
     capabilities: ['chat', 'reasoning', 'vision', 'structured', 'summarization'],
@@ -76,7 +78,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   NVIDIA_NEMOTRON: {
     id: 'NVIDIA_NEMOTRON',
     name: 'NVIDIA Nemotron',
-    defaultChatModel: 'nvidia/nemotron-3-ultra',
+    defaultChatModel: process.env.NVIDIA_NEMOTRON_DEFAULT_MODEL || 'nvidia/nemotron-3-ultra',
     models: [
       'nvidia/nemotron-3-ultra',
       'nvidia/nemotron-3-ultra-550b-a55b',
@@ -94,15 +96,14 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   GROQ: {
     id: 'GROQ',
     name: 'Groq',
-    defaultChatModel: 'llama-3.3-70b-versatile',
+    defaultChatModel: process.env.GROQ_DEFAULT_MODEL || 'openai/gpt-oss-120b',
     models: [
-      'llama-3.3-70b-versatile',
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.6-27b',
       'llama-3.1-70b-versatile',
-      'llama-3.1-8b-instant',
       'mixtral-8x7b-32768',
       'gemma2-9b-it',
-      'qwen/qwen3.8-27b',
-      'openai/gpt-oss-20b',
     ],
     embeddingModels: [],
     capabilities: ['chat', 'reasoning', 'structured', 'summarization'],
@@ -114,7 +115,7 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   MISTRAL: {
     id: 'MISTRAL',
     name: 'Mistral AI',
-    defaultChatModel: 'mistral-small-latest',
+    defaultChatModel: process.env.MISTRAL_DEFAULT_MODEL || 'mistral-small-latest',
     defaultEmbeddingModel: 'mistral-embed',
     models: [
       'mistral-large-latest',
@@ -134,13 +135,13 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   OPENROUTER: {
     id: 'OPENROUTER',
     name: 'OpenRouter',
-    defaultChatModel: 'openrouter/auto',
+    defaultChatModel: process.env.OPENROUTER_DEFAULT_MODEL || 'openrouter/auto',
     models: [
       'openrouter/auto',
+      'openrouter/auto-code',
       'anthropic/claude-3.5-sonnet',
-      'google/gemini-pro',
-      'google/gemini-flash-1.5',
-      'meta-llama/llama-3.1-70b-instruct',
+      'google/gemini-2.5-flash',
+      'meta-llama/llama-3.3-70b-instruct',
       'openai/gpt-4o-mini',
     ],
     embeddingModels: [],
@@ -153,10 +154,11 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
   TOGETHER_AI: {
     id: 'TOGETHER_AI',
     name: 'Together AI',
-    defaultChatModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+    defaultChatModel: process.env.TOGETHER_AI_DEFAULT_MODEL || 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo',
     models: [
-      'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-      'meta-llama/Meta-Llama-3.1-70B',
+      'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo',
+      'meta-llama/Meta-Llama-3.2-90B-Vision-Instruct-Turbo',
+      'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo',
       'mistralai/Mixtral-8x7B-Instruct-v0.1',
       'mistralai/Mixtral-8x7B',
       'Qwen/Qwen2.5-72B-Instruct-Turbo',
@@ -166,6 +168,22 @@ export const SUPPORTED_AI_PROVIDERS: Record<PrismaAIProviderType, ProviderMetada
     envKey: 'TOGETHER_AI_API_KEY',
     baseUrlEnv: 'TOGETHER_AI_BASE_URL',
     defaultBaseUrl: 'https://api.together.xyz/v1',
+  },
+  FREELLM: {
+    id: 'FREELLM',
+    name: 'FreeLLM',
+    defaultChatModel: process.env.FREELLM_DEFAULT_MODEL || 'openai/gpt-oss-120b',
+    models: [
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.6-27b',
+    ],
+    embeddingModels: [],
+    capabilities: ['chat', 'reasoning', 'structured', 'summarization'],
+    envKey: 'FREELLM_API_KEY',
+    baseUrlEnv: 'FREELLM_BASE_URL',
+    defaultBaseUrl: 'http://localhost:3001/v1',
+    keyPrefixHint: 'flm_',
   },
   OTHER: {
     id: 'OTHER',
@@ -753,7 +771,7 @@ export async function resolveAIConfig(options: {
       provider: cred.provider,
       model: validatedModel,
       apiKey,
-      baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl),
+      baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
       credential: cred,
     }
   }
@@ -824,7 +842,7 @@ export async function resolveAIConfig(options: {
         provider: cred.provider,
         model: validatedModel,
         apiKey,
-        baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl),
+        baseUrl: getProviderBaseUrl(cred.provider, options.baseUrl || cred.baseUrl),
         credential: cred,
       }
     }
@@ -1496,6 +1514,7 @@ export async function saveUserAICredential(input: {
   models?: string[]
   isDefault?: boolean
   usageLimit?: number | null
+  baseUrl?: string
 }) {
   const normalizedProvider = normalizeProvider(input.provider)
   const cleanKey = validateApiKeyFormat(normalizedProvider, input.apiKey)
@@ -1522,19 +1541,34 @@ export async function saveUserAICredential(input: {
   const encryptedKey = await encrypt(cleanKey)
   const keyHash = generateKeyHash(cleanKey)
 
-  const credential = await prisma.aICredential.create({
-    data: {
-      userId: input.userId,
-      provider: normalizedProvider,
-      providerName: input.providerName?.trim() || meta.name,
-      encryptedKey,
-      keyHash,
-      models: validatedModels,
-      isDefault: Boolean(input.isDefault),
-      usageLimit: input.usageLimit ? Number(input.usageLimit) : null,
-      isActive: true,
-    },
-  })
+  // Build data object with optional baseUrl
+  const createData = {
+    userId: input.userId,
+    provider: normalizedProvider,
+    providerName: input.providerName?.trim() || meta.name,
+    encryptedKey,
+    keyHash,
+    models: validatedModels,
+    isDefault: Boolean(input.isDefault),
+    usageLimit: input.usageLimit ? Number(input.usageLimit) : null,
+    isActive: true,
+    ...(input.baseUrl && input.baseUrl.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
+  }
+
+  let credential: AICredential
+  try {
+    credential = await prisma.aICredential.create({ data: createData })
+  } catch (error) {
+    // Check if error is about missing baseUrl column (P2003 or similar Prisma error)
+    if (error instanceof Error && (error.message.includes('baseUrl') || error.message.includes('Unknown column') || error.message.includes('column') && error.message.includes('baseUrl'))) {
+      throw new Error(
+        'Database migration required: The `baseUrl` column is missing from the `ai_credentials` table. ' +
+        'Please run `prisma migrate deploy` (using DIRECT_URL) to apply the latest migrations. ' +
+        'See DEPLOYMENT.md for instructions.'
+      )
+    }
+    throw error
+  }
 
   // Auto-create default model configs for chat and embeddings if not already set
   const taskTypes: Array<{ taskType: AITaskType; defaultModel: string }> = [
